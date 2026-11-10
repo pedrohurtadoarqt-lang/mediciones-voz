@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14532d">
+<title>Medición por voz</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-title">
+    <strong id="visitaNombre">Visita</strong>
+    <small id="catalogName">Sin base de precios</small>
+  </div>
+  <div id="voiceStatus" class="voice-status" data-state="idle"><span class="dot"></span><span id="voiceStatusText">Micro apagado</span></div>
+</header>
+
+<main>
+  <!-- ======================= MEDIR ======================= -->
+  <section id="view-medir" class="view active">
+    <div id="noPartida" class="empty">
+      <h2>Elige una partida</h2>
+      <p>Búscala en <b>Catálogo</b> o di <i>«buscar enfoscado maestreado»</i> con el micro activo.</p>
+    </div>
+
+    <div id="partidaCard" class="card partida-card hidden">
+      <div class="partida-head">
+        <div>
+          <div class="crumbs" id="pCrumbs"></div>
+          <div class="pcode"><span id="pCode"></span> <span class="unit" id="pUnit"></span></div>
+          <h2 id="pSummary"></h2>
+        </div>
+        <div class="ptotal"><span id="pTotal">0,00</span><small id="pTotalUnit"></small></div>
+      </div>
+      <details><summary>Descripción</summary><p id="pText" class="ptext"></p></details>
+    </div>
+
+    <div id="searchOverlay" class="card hidden">
+      <div class="row-between"><b id="searchOverlayTitle">Resultados</b><button class="btn-link" id="closeOverlay">Cerrar</button></div>
+      <ol id="searchOverlayList" class="result-list numbered"></ol>
+    </div>
+
+    <div id="linesWrap" class="card hidden">
+      <div class="lines">
+        <div class="lrow lhead"><span class="c-label">Comentario</span><span>Uds</span><span>Largo</span><span>Ancho</span><span>Alto</span><span>Parcial</span><span></span></div>
+        <div id="linesBody"></div>
+      </div>
+      <div class="row-between">
+        <button class="btn" id="addLine">+ Línea</button>
+        <span class="hint">Celdas vacías no multiplican</span>
+      </div>
+    </div>
+
+    <div class="card manual">
+      <label for="manualInput" class="hint">Dictado o escritura rápida</label>
+      <div class="manual-row">
+        <input id="manualInput" type="text" autocomplete="off" placeholder="Salón 4 con 50 por 3 con 20">
+        <button class="btn" id="manualSend">Añadir</button>
+      </div>
+      <div id="interim" class="interim"></div>
+    </div>
+
+    <div class="card">
+      <b>Registro de voz</b>
+      <ul id="voiceLog" class="voice-log"></ul>
+    </div>
+  </section>
+
+  <!-- ======================= CATÁLOGO ======================= -->
+  <section id="view-catalogo" class="view">
+    <div class="search-bar">
+      <input id="searchInput" type="search" placeholder="Buscar partida: código o palabras (ej. enfoscado maestreado)" autocomplete="off">
+    </div>
+    <div id="catalogEmpty" class="empty hidden">
+      <h2>No hay base de precios</h2>
+      <p>Carga un archivo <b>.bc3</b> en <b>Ajustes</b>.</p>
+    </div>
+    <ul id="searchResults" class="result-list hidden"></ul>
+    <div id="tree" class="tree"></div>
+  </section>
+
+  <!-- ======================= VISITA ======================= -->
+  <section id="view-visita" class="view">
+    <div class="card">
+      <div class="row-between"><b>Datos de la visita</b>
+        <select id="visitaSelect" aria-label="Cambiar de visita"></select>
+      </div>
+      <div class="form">
+        <label>Obra / visita<input id="vNombre" type="text"></label>
+        <label>Dirección<input id="vDireccion" type="text"></label>
+        <label>Técnico<input id="vTecnico" type="text"></label>
+        <label>Fecha<input id="vFecha" type="date"></label>
+        <label>Notas<textarea id="vNotas" rows="2"></textarea></label>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="newVisita">Nueva visita</button>
+        <button class="btn danger" id="delVisita">Eliminar visita</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <b>Exportar</b>
+      <div class="btn-row">
+        <button class="btn primary" id="exportPdf">PDF de mediciones</button>
+        <button class="btn" id="exportBc3">BC3 con mediciones</button>
+        <button class="btn" id="exportJson">Copia JSON</button>
+        <label class="btn">Importar JSON<input type="file" id="importJson" accept=".json,application/json" hidden></label>
+      </div>
+      <label class="check"><input type="checkbox" id="optLongText"> Incluir descripción larga en el PDF</label>
+    </div>
+
+    <div class="card">
+      <b>Resumen de la visita</b>
+      <div id="summary" class="summary"></div>
+    </div>
+  </section>
+
+  <!-- ======================= AJUSTES ======================= -->
+  <section id="view-ajustes" class="view">
+    <div class="card">
+      <b>Base de precios (BC3)</b>
+      <p id="catalogInfo" class="hint">Ninguna cargada.</p>
+      <label class="btn primary">Cargar archivo .bc3<input type="file" id="bc3File" accept=".bc3,.BC3" hidden></label>
+      <progress id="bc3Progress" class="hidden"></progress>
+    </div>
+    <div class="card">
+      <b>Reconocimiento de voz</b>
+      <div class="form">
+        <label>Motor
+          <select id="setEngine">
+            <option value="webspeech">Nativo del navegador (rápido, necesita conexión en Chrome)</option>
+            <option value="whisper-tiny">Whisper tiny · offline (~40 MB, rápido)</option>
+            <option value="whisper-base">Whisper base · offline (~80 MB, más preciso)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="setTts" checked> Confirmar en voz alta cada línea</label>
+        <label class="check"><input type="checkbox" id="setWake" checked> Mantener la pantalla encendida mientras escucha</label>
+      </div>
+      <button class="btn" id="preloadWhisper">Descargar modelo Whisper ahora</button>
+      <progress id="whisperProgress" class="hidden" max="1" value="0"></progress>
+      <p class="hint" id="engineHint"></p>
+    </div>
+    <div class="card">
+      <b>Cómo dictar</b>
+      <ul class="howto">
+        <li><i>«Dormitorio principal 4 con 50 por 3 con 20»</i> → Largo 4,50 · Ancho 3,20</li>
+        <li><i>«Largo 12 con 45, alto 2 con 60»</i> → campos con nombre</li>
+        <li><i>«Salón dos veces 5 metros 50»</i> → Uds 2 · Largo 5,50</li>
+        <li><i>«2 por 4 por 3 por 2,60»</i> → con 4 números: Uds · Largo · Ancho · Alto</li>
+        <li><i>«Menos puerta 0,80 por 2,10»</i> → deducción (Uds −1)</li>
+        <li><i>«Dormitorio 2: 3 por 4»</i> → di «dos puntos» para separar el comentario</li>
+        <li>Órdenes: <i>«buscar …»</i>, <i>«opción 2»</i>, <i>«borrar»</i>, <i>«repetir»</i>, <i>«total»</i>, <i>«comentario …»</i>, <i>«pausa»</i></li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>Datos</b>
+      <p class="hint">Todo se guarda en este navegador (IndexedDB). Haz copias JSON de las visitas importantes.</p>
+      <p class="hint" id="storageInfo"></p>
+    </div>
+  </section>
+</main>
+
+<button id="micBtn" class="mic" aria-label="Activar micrófono" data-state="idle">
+  <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+</button>
+
+<nav class="tabs">
+  <button data-view="medir" class="active">Medir</button>
+  <button data-view="catalogo">Catálogo</button>
+  <button data-view="visita">Visita</button>
+  <button data-view="ajustes">Ajustes</button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/jspdf.plugin.autotable.min.js"></script>
+<script src="js/bc3-parser.js"></script>
+<script src="js/voice-parser.js"></script>
+<script src="js/db.js"></script>
+<script src="js/speech.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
