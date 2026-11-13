@@ -1,0 +1,21 @@
+#chip 0
+dormitorio 1
+eliminar papel pintado
+crear nueva
+metros cuadrados
+#chip 0
+3,40
+2,80
+la altura es 2,50
+siguiente partida
+rascar gotelé
+crear nueva
+m2
+Rascado de gotelé
+4
+quitar moqueta
+crear nueva
+m2
+Retirada de moqueta
+4 por 3
+es de paredes

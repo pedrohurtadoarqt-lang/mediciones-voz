@@ -260,6 +260,8 @@
   const COVER_IGNORE = new Set(('techo techos suelo suelos pared paredes paramento paramentos interior exterior cocina bano aseo salon comedor dormitorio habitacion pasillo terraza ' +
     'toda todo zona estancia obra casa piso vivienda metro metros cuadrado cuadrados lineal lineales unidad unidades mismo misma medida medidas nueva nuevo hacer poner quitar ' +
     'tipo normal general completo completa tambien').split(' ').map((w) => stem(w)));
+  const DEM_Q = /\b(demol|derrib|tirar|quitar|quita|retirar|retira|retirada|levantar|levantado|arrancar|arranque|picar|picado|pica|eliminar|eliminacion|desmontar|desmontaje|rascar|rascado|decapar|decapado|vaciar|vaciado de)/;
+  const DEM_DOC = /\b(demolicion|derribo|levantado|desmontaje|eliminacion|arranque|picado|rascado|decapado|retirada|demolido|vaciado de|corte de)/;
   /* ---------------- Índice de búsqueda ---------------- */
   class Index {
     /** docs: [{key, r, t, chapTitle, subTitle, path}] */
@@ -468,8 +470,16 @@
   }
 
   /* ---------------- Inteligencia dimensional ---------------- */
-  const RE_H = /\b(suelo|solado|pavimento|solera|techo|falso techo|forjado|cubierta|horizontal|cielo raso|tarima|parquet|losa|azotea|terraza|recrecido|autonivelante|capa de compresion|placa alveolar|zahorra|explanada|desbroce)\b/;
-  const RE_V = /\b(alicatado|paramento vertical|pared|tabique|tabiqueria|fachada|enlucido|guarnecido|enfoscado|vertical|muro|cerramiento|aplacado|trasdosado|hoja de|fabrica de|medianera|revestimiento vertical|celosia|mampara|tapia)\b/;
+  const RE_H = /\b(moqueta|linoleo|vinilico|baldosa|terrazo|suelo|solado|pavimento|solera|techo|falso techo|forjado|cubierta|horizontal|cielo raso|tarima|parquet|losa|azotea|terraza|recrecido|autonivelante|capa de compresion|placa alveolar|zahorra|explanada|desbroce)\b/;
+  const RE_V = /\b(papel pintado|empapelado|papel|gotele|estuco|friso|alicatado|paramento vertical|pared|tabique|tabiqueria|fachada|enlucido|guarnecido|enfoscado|vertical|muro|cerramiento|aplacado|trasdosado|hoja de|fabrica de|medianera|revestimiento vertical|celosia|mampara|tapia)\b/;
+  /** 'V' (paredes), 'H' (suelo/techo) o null si no se puede saber por el texto. */
+  function guessOrient(t) {
+    const n = norm(t);
+    const v = RE_V.test(n) || /papel|empapelad|gotele|estuco|friso|pintura de paredes|paramento/.test(n);
+    const h = RE_H.test(n);
+    if (v && !h) return 'V'; if (h && !v) return 'H';
+    return null;
+  }
   function orientOf(d) {
     const r = norm(d.r), s = norm(d.subTitle || ''), t = norm((d.t || '').slice(0, 300));
     if (/pintura|empapelado|estuco|barniz/.test(r) && !/techo|suelo|pavimento|horizontal/.test(r)) return 'V';
@@ -811,6 +821,7 @@
       }
       if (/^(seguir midiendo|seguimos midiendo|continuar|continuamos|seguimos)$/.test(n)) { const a = this.active(); return this.ask(a ? 'Seguimos con ' + a.r + '. ' + this.dimsAsk(a) : 'Seguimos' + (this.obra.estActiva ? ' en ' + art(this.obra.estActiva) : '') + '. Dime el trabajo a medir.', this.idleChips()); }
       if (/^(crear( una)?( nueva)?( partida)?( nueva)?|crea( una)?( nueva)?( partida)?|crear nueva|partida nueva|creamos una( partida)? nueva)$/.test(n)) return this.createStart(this.pendingQuery || this.lastQuery || '', [], true);
+      if ((m = n.match(/^(?:no[, ]+)?(?:es|son|se mide|mide|medimos|va)?\s*(?:en|de|por)?\s*(?:las|los|el|la)?\s*(paredes|pared|paramentos|vertical|suelo|suelos|techo|techos|horizontal)$/)) && act && act.u === 'm2' && !/^(paredes|pared|suelo|techo)$/.test(n)) return this.setOrient(/pared|paramento|vertical/.test(m[1]) ? 'V' : 'H');
       // Corregir la partida elegida ("no es esa", "cambia la partida por…")
       if ((m = n.match(/^(?:no[, ]+)?(?:cambia|cambiar|cambiamos|corrige|corregir|cambio de)\s+(?:la\s+|de\s+|esta\s+)?partida(?:\s+(?:por|a|a la de|que es|es)\s+(.+))?$/))
         || (m = n.match(/^(?:no[, ]+)?(?:no es esa|esa no es|esa no|no es esta|no es la correcta|no era esa|esa no era|partida equivocada|te has equivocado|te equivocaste|me he equivocado|me equivoque|equivocada|otra partida distinta|no es eso|eso no es|esa no me vale)(?:\s+de partida)?(?:[, ]+(?:es|era|quiero|queria|pon|ponme|mejor)?\s*(.+))?$/))
@@ -965,6 +976,17 @@
     }
     funnelStart(query, res, exclude) {
       res = res.filter((r) => !exclude.includes(r.doc.c));
+      // Demolición/retirada frente a obra nueva: "quitar moqueta" no es "colocar moqueta"
+      const qDem = DEM_Q.test(norm(query));
+      const isDemDoc = (r) => DEM_DOC.test(norm(r.doc.r)) || /DEMOLIC/i.test(r.doc.chapTitle || '');
+      if (qDem) {
+        const f = res.filter(isDemDoc);
+        if (!f.length || f[0].s < 0.3) return this.lowConfidence(query, []);
+        res = f;
+      } else {
+        const f = res.filter((r) => !isDemDoc(r));
+        if (f.length && f[0].s >= (res[0] ? res[0].s * 0.6 : 0)) res = f;
+      }
       // Cobertura: ¿hay partidas cuyo resumen contenga todo lo importante que se ha dicho?
       const top = res.slice(0, 120);
       const minMiss = top.length ? Math.min(...top.map((r) => r.miss || 0)) : 0;
@@ -981,6 +1003,10 @@
     }
     /** No hay partida que encaje del todo: ofrece las más parecidas o crear una nueva. */
     lowConfidence(query, near) {
+      if (!near.length) {
+        this.state = { mode: 'none', query };
+        return this.ask('No encuentro «' + query + '» en la base de datos. ¿Creamos una partida nueva, o me la dices con otras palabras?', [{ label: 'Crear partida nueva', value: 'crear nueva', act: { create: true } }, { label: 'Cancelar', value: 'cancela' }]);
+      }
       this.state = { mode: 'list', query, listed: near, low: true };
       const sh = shortLabels(near.map((x) => x.doc.r));
       near.forEach((x, i) => { x.short = sh[i]; });
@@ -1447,6 +1473,12 @@
       const st = this.state;
       const desc = cap(input && input.act && input.act.useq ? st.query : text);
       if (!desc) return;
+      // En m², si no está claro si es de paredes o de suelo/techo, se pregunta
+      if (st.u === 'm2' && !st.orient) {
+        const g = guessOrient(desc + ' ' + (st.query || ''));
+        if (!g) { this.state = Object.assign({}, st, { mode: 'create_orient', desc }); return this.ask('¿Se mide en paredes, en suelo o en techo?', [{ label: 'Paredes', value: 'paredes', act: { o: 'V' } }, { label: 'Suelo', value: 'suelo', act: { o: 'H' } }, { label: 'Techo', value: 'techo', act: { o: 'H', techo: true } }]); }
+        st.orient = g;
+      }
       this.obra.propiaSeq = (this.obra.propiaSeq || 0) + 1;
       const code = 'PROPIA.' + String(this.obra.propiaSeq).padStart(3, '0');
       // Capítulo: el de la partida del catálogo más parecida (aunque no llegue al umbral)
@@ -1458,9 +1490,29 @@
         uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ref: code, propia: true, u: st.u, r: desc, t: desc,
         chap: g ? g.chap : 'PROPIAS', chapTitle: g ? g.chapTitle : 'PARTIDAS PROPIAS', chapOrder: g ? g.chapOrder : 9999, subTitle: g ? g.subTitle : '', lineas: [], creada: Date.now()
       };
-      p.orient = orientOf(p);
+      p.orient = st.orient || orientOf(p);
       this.obra.partidas.push(p);
       this.activate(p, 'Creada la partida ' + code + ', ' + desc + ', en el capítulo ' + p.chapTitle.toLowerCase() + '.', st.query);
+    }
+
+    st_create_orient(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      let o = a && a.o;
+      if (!o) { if (/pared|paramento|vertical|muro|tabique|fachada/.test(n)) o = 'V'; else if (/suelo|techo|horizontal|pavimento|cielo|forjado|cubierta/.test(n)) o = 'H'; }
+      if (!o) { if (this.escape(text, n)) return; return this.ask('¿Paredes, suelo o techo?', this.lastPrompt.chips); }
+      st.orient = o; st.mode = 'create_desc';
+      return this.st_create_desc(st.desc, norm(st.desc), null);
+    }
+    /** "Es de paredes" / "es de techo": cambia cómo se mide la partida activa. */
+    setOrient(o) {
+      const p = this.active();
+      if (!p || p.u !== 'm2') return this.ask('Eso solo se aplica a partidas en metros cuadrados.', this.idleChips());
+      if (p.orient === o) return this.ask('Ya se mide en ' + (o === 'V' ? 'paredes' : 'suelo o techo') + '. ' + this.dimsAsk(p), this.idleChips());
+      this.snapshot();
+      p.orient = o;
+      p.lineas.forEach((l) => { const sec = l.a != null ? l.a : l.h; if (o === 'V') { l.h = sec; l.a = null; } else { l.a = sec; l.h = null; } });
+      this.touch();
+      this.ask('De acuerdo, ' + p.r + ' se mide en ' + (o === 'V' ? 'paredes.' : 'suelo o techo.') + ' ' + this.dimsAsk(p), this.idleChips());
     }
 
     /* ---- Mediciones ---- */
