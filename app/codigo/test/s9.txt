@@ -1,0 +1,14 @@
+#chip 4
+demolición de pavimento de madera
+la primera
+5 por 4
+no es esa
+crear nueva
+metros cuadrados
+Demolición de parquet encolado sobre solera
+lee las líneas
+siguiente partida
+montaje de mampara de cristal templado
+#chip 0
+#chip 0
+#chip 0

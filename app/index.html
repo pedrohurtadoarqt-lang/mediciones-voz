@@ -1008,9 +1008,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   const SYN_RAW = {
     picado: 'demolicion picado levantado eliminacion', picar: 'demolicion picado eliminacion', pica: 'demolicion picado eliminacion', eliminar: 'eliminacion demolicion', rascar: 'eliminacion rascado', lijar: 'lijado',
     quitar: 'demolicion desmontaje levantado arranque eliminacion', retirar: 'demolicion desmontaje levantado retirada', arrancar: 'demolicion arranque levantado',
-    tirar: 'demolicion derribo', derribar: 'demolicion derribo', demoler: 'demolicion', derribo: 'demolicion derribo', desmontar: 'desmontaje', levantar: 'levantado demolicion',
+    tirar: 'demolicion derribo', derribar: 'demolicion derribo', demoler: 'demolicion', derribo: 'demolicion derribo', desmontar: 'desmontaje', levantar: 'levantado demolicion desmontaje', demolicion: 'demolicion levantado desmontaje eliminacion arranque', demoler: 'demolicion levantado',
     azulejo: 'alicatado azulejo', azulejos: 'alicatado azulejo', alicatar: 'alicatado', alicatados: 'alicatado', baldosa: 'baldosa solado pavimento', baldosas: 'baldosa solado pavimento',
-    suelo: 'suelo solado pavimento', suelos: 'suelo solado pavimento', pavimento: 'pavimento solado', solar: 'solado pavimento', solado: 'solado pavimento',
+    suelo: 'suelo solado pavimento entarimado', suelos: 'suelo solado pavimento entarimado', pavimento: 'pavimento solado entarimado suelo', pavimentos: 'pavimento solado entarimado suelo', solar: 'solado pavimento', solado: 'solado pavimento',
     pintar: 'pintura', pinto: 'pintura', pared: 'paramento pared vertical', paredes: 'paramento pared vertical',
     techo: 'techo horizontal', techos: 'techo horizontal', pladur: 'yeso laminado placa', escayola: 'escayola', yeso: 'yeso guarnecido enlucido',
     enlucir: 'enlucido', enlucido: 'enlucido guarnecido', guarnecer: 'guarnecido', enfoscar: 'enfoscado', revocar: 'revoco', tabicar: 'tabique tabiqueria', tabique: 'tabique tabiqueria',
@@ -1020,7 +1020,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     split: 'split aire acondicionado', aire: 'aire acondicionado split', clima: 'climatizacion aire acondicionado', climatizacion: 'climatizacion aire',
     cristal: 'vidrio acristalamiento', cristales: 'vidrio acristalamiento', escombro: 'residuo escombro contenedor', escombros: 'residuo escombro contenedor',
     impermeabilizar: 'impermeabilizacion', aislar: 'aislamiento', roza: 'roza', rozas: 'roza', regata: 'roza', regatas: 'roza',
-    zocalo: 'rodapie zocalo', rodapie: 'rodapie', tarima: 'tarima madera parquet', parquet: 'parquet tarima', barandilla: 'barandilla', reja: 'reja cerrajeria',
+    zocalo: 'rodapie zocalo', rodapie: 'rodapie', tarima: 'tarima entarimado madera parquet', parquet: 'parquet tarima entarimado pavimento laminado', parket: 'parquet tarima entarimado pavimento laminado', parque: 'parquet tarima entarimado', entarimado: 'entarimado tarima parquet',  tarimas: 'tarima entarimado', barandilla: 'barandilla', reja: 'reja cerrajeria',
     canalon: 'canalon', bajante: 'bajante', desague: 'desague evacuacion', tuberia: 'tuberia tubo', tuberias: 'tuberia tubo', cable: 'cable conductor circuito', cableado: 'cable conductor circuito',
     ventana: 'ventana carpinteria', ventanas: 'ventana carpinteria', puerta: 'puerta block carpinteria', puertas: 'puerta block carpinteria',
     hormigonar: 'hormigon', solera: 'solera', fachada: 'fachada', tejado: 'cubierta teja', tejas: 'teja cubierta', mampara: 'mampara',
@@ -1028,7 +1028,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   };
   const SYN = {};
   // Cada sinónimo es una palabra o frase: 'yeso laminado' exige ambas palabras.
-  const PHRASES = { 'toma de corriente': 1, 'yeso laminado': 1, 'aire acondicionado': 1, 'punto de luz': 1, 'falso techo': 1, 'plato ducha': 1 };
+  const PHRASES = { 'pavimento laminado': 1, 'toma de corriente': 1, 'yeso laminado': 1, 'aire acondicionado': 1, 'punto de luz': 1, 'falso techo': 1, 'plato ducha': 1 };
   for (const k in SYN_RAW) {
     const raw = SYN_RAW[k]; const out = []; let rest = ' ' + raw + ' ';
     Object.keys(PHRASES).forEach((ph) => { if (rest.includes(' ' + ph + ' ')) { out.push(words(ph).filter((w) => !STOP.has(w)).map(stem)); rest = rest.replace(' ' + ph + ' ', ' '); } });
@@ -1036,6 +1036,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     SYN[stem(norm(k))] = out;
   }
 
+  // Palabras de contexto que no tienen por qué aparecer en el resumen de la partida
+  const COVER_IGNORE = new Set(('techo techos suelo suelos pared paredes paramento paramentos interior exterior cocina bano aseo salon comedor dormitorio habitacion pasillo terraza ' +
+    'toda todo zona estancia obra casa piso vivienda metro metros cuadrado cuadrados lineal lineales unidad unidades mismo misma medida medidas nueva nuevo hacer poner quitar ' +
+    'tipo normal general completo completa tambien').split(' ').map((w) => stem(w)));
   /* ---------------- Índice de búsqueda ---------------- */
   class Index {
     /** docs: [{key, r, t, chapTitle, subTitle, path}] */
@@ -1081,7 +1085,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           if (t === v) continue;
           if (t.startsWith(v) && t.length - v.length <= 5) res.push({ stem: t, q: 0.82 });
           else if (v.startsWith(t) && t.length >= 5) res.push({ stem: t, q: 0.75 });
-          else if (v.length >= 5 && lev1(t, v)) res.push({ stem: t, q: 0.7 });
+          else if (v.length >= 6 && t[0] === v[0] && lev1(t, v)) res.push({ stem: t, q: 0.7 });
         }
       }
       return res;
@@ -1092,19 +1096,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       if (!qw.length) return [];
       const perTerm = qw.map((w) => {
         const acc = new Map(); // docIdx -> best
+        const strong = new Set(); // docs donde el término está en el resumen o subcapítulo
         for (const v of this.variants(w)) {
           const maps = v.ph.map((x) => this.termMap(x));
           for (const [di, sc0] of maps[0]) {
             let sc = sc0;
             for (let k = 1; k < maps.length && sc > 0; k++) sc = Math.min(sc, maps[k].get(di) || 0);
+            if (sc >= 0.56) strong.add(di);
             sc *= v.w;
             if (sc > 0 && (acc.get(di) || 0) < sc) acc.set(di, sc);
           }
         }
+        const key = !COVER_IGNORE.has(stem(w)) && !/^\d/.test(w);
         const df = acc.size;
         const imp = df === 0 ? 0.25 : Math.log(1 + this.N / df);
-        return { acc, imp };
+        return { acc, imp, strong, key };
       });
+      const nKey = perTerm.filter((t) => t.key).length;
       const totImp = perTerm.reduce((a, b) => a + b.imp, 0);
       const scores = new Map();
       perTerm.forEach(({ acc, imp }) => {
@@ -1114,7 +1122,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       for (const [di, sc] of scores) {
         let s = sc / totImp;
         if (boost) s *= boost(this.docs[di]);
-        out.push({ i: di, doc: this.docs[di], s });
+        const miss = perTerm.filter((t) => t.key && !t.strong.has(di)).length;
+        out.push({ i: di, doc: this.docs[di], s, miss, nKey });
       }
       out.sort((a, b) => b.s - a.s || a.doc.r.length - b.doc.r.length);
       return out;
@@ -1286,9 +1295,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (p.u === 'ud' || !['m', 'm2', 'm3'].includes(p.u)) {
       if (pm.n !== null) {
         line.uds = pm.n;
-        if (p.u === 'ud' && dims.length >= 2) { line.hueco = { a: dims[0], h: dims[1] }; dims = dims.slice(2); }
+        if (p.u === 'ud' && dims.length >= 2) { line.hueco = { a: cm(dims[0]), h: cm(dims[1]) }; dims = dims.slice(2); }
       } else if (dims.length) {
-        if (p.u === 'ud' && dims.length >= 2 && isCarpinteria(p)) { line.uds = 1; line.hueco = { a: dims[0], h: dims[1] }; dims = dims.slice(2); }
+        if (p.u === 'ud' && dims.length >= 2 && isCarpinteria(p)) { line.uds = 1; line.hueco = { a: cm(dims[0]), h: cm(dims[1]) }; dims = dims.slice(2); }
         else { line.uds = dims.shift(); }
       }
       if (dims.length) warn.push(p.u === 'ud' ? 'Esta partida es por unidades, descarto las medidas sobrantes.' : 'Solo necesito la cantidad, descarto el resto.');
@@ -1316,6 +1325,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (line.uds === null) line.uds = 1;
     return { line, warn };
   }
+  /** Un hueco de más de 10 m es casi seguro un dictado en centímetros ("120 por 210"). */
+  function cm(v) { return v > 10 ? round2(v / 100) : v; }
   function parcial(l) {
     if (l.hPend && (l.h === null || l.h === undefined)) return 0;
     let v = l.uds === null || l.uds === undefined ? 1 : l.uds;
@@ -1722,6 +1733,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       return this.funnelStart(st.query, res, st.exclude.filter(Boolean));
     }
     funnelStart(query, res, exclude) {
+      res = res.filter((r) => !exclude.includes(r.doc.c));
+      // Cobertura: ¿hay partidas cuyo resumen contenga todo lo importante que se ha dicho?
+      const top = res.slice(0, 120);
+      const minMiss = top.length ? Math.min(...top.map((r) => r.miss || 0)) : 0;
+      if (top.length && minMiss > 0 && top[0].nKey >= 2 && !this.forceCands) return this.lowConfidence(query, top.filter((r) => r.miss === minMiss).slice(0, 4));
+      this.forceCands = false;
+      if (top.length && top[0].nKey) res = res.filter((r) => (r.miss || 0) === minMiss);
       const best = res.length ? res[0].s : 0;
       if (best < 0.34) return this.createStart(query, res);
       let cands = res.filter((r) => r.s >= best * 0.8 && !exclude.includes(r.doc.c)).slice(0, 60);
@@ -1729,6 +1747,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       cands = prefilter(cands, query);
       this.state = { mode: 'funnel', query, cands, asked: new Set(), all: res.filter((r) => r.s >= best * 0.55 && !exclude.includes(r.doc.c)).slice(0, 40) };
       return this.funnelStep();
+    }
+    /** No hay partida que encaje del todo: ofrece las más parecidas o crear una nueva. */
+    lowConfidence(query, near) {
+      this.state = { mode: 'list', query, listed: near, low: true };
+      const sh = shortLabels(near.map((x) => x.doc.r));
+      near.forEach((x, i) => { x.short = sh[i]; });
+      const chips = [{ label: 'Crear partida nueva', value: 'crear nueva', act: { create: true } }].concat(near.map((x, i) => ({ label: (i + 1) + '. ' + x.doc.r + ' (' + unitLabel(x.doc.u) + ')', value: x.doc.r, act: { pick: i } })));
+      this.ask('No encuentro «' + query + '» en la base de datos. Lo más parecido es: ' + near.slice(0, 3).map((x, i) => (i + 1) + ', ' + x.doc.r).join('; ') + '. ¿Es alguna de estas, o creamos una partida nueva?', chips, { long: true });
     }
     funnelStep(prefix) {
       const st = this.state;
@@ -1776,18 +1802,18 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       const short = shortLabels(c.map((x) => x.doc.r));
       c.forEach((x, i) => { x.short = short[i]; });
       const chips = c.map((x, i) => ({ label: (i + 1) + '. ' + x.doc.r + ' (' + unitLabel(x.doc.u) + ')', value: x.doc.r, act: { pick: i } }));
-      chips.push({ label: 'Ninguna, crear nueva', value: 'ninguna', act: { create: true } });
-      this.ask(text, chips, { long: true });
+      chips.push({ label: 'Ninguna: crear partida nueva', value: 'ninguna', act: { create: true } });
+      this.ask(text + ' Si no es ninguna, di «crear nueva».', chips, { long: true });
     }
     st_funnel(text, n, input) {
       const st = this.state;
       const a = input && input.act;
       if (a && a.list) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
-      if ((a && a.create) || /^(ninguna|ninguno|ninguna de esas|crear( una)?( nueva)?( partida)?|crea( una)?( nueva)?( partida)?|nueva|no esta|no es ninguna)$/.test(n)) return this.createStart(st.query, []);
+      if ((a && a.create) || /^(no[, ]+)?(ninguna|ninguno|ninguna de (esas|estas|ellas)|no es ninguna( de (esas|estas|ellas))?|no esta|no esta en la lista|crear|crea|crear nueva|crea nueva|crear( una)?( nueva)? partida( nueva)?|crea( una)?( nueva)? partida( nueva)?|partida nueva|nueva|nueva partida|creamos( una)?( nueva| partida nueva| una partida nueva)?|creala|la creamos|vamos a crearla|dictar( una)?( partida)? nueva|dictar nueva partida|otra nueva)$/.test(n)) return this.createStart(st.query, [], true);
       if (/^(ver lista|lista|leeme|lee las opciones|cuales hay|todas)/.test(n)) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
       if (/^(me da igual|cualquiera|la normal|la habitual|la que sea)/.test(n)) return this.pickDoc(st.cands[0].doc, 'Pongo la más habitual.', st.query);
-      if (!a && this.measureDuringChoice(text, n, st.cands)) return;
       let i = a && a.opt !== undefined ? a.opt : matchOption(text, st.splitOpts.map(optLabel));
+      if (i < 0 && !a && this.measureDuringChoice(text, n, st.cands)) return;
       if (i < 0 && this.escape(text, n)) return;
       if (i < 0) {
         // ¿Ha nombrado directamente una partida o un valor de otro atributo?
@@ -1807,10 +1833,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     st_list(text, n, input) {
       const st = this.state; const a = input && input.act;
-      if ((a && a.create) || /^(ninguna|ninguno|ninguna de esas|crear( una)?( nueva)?( partida)?|crea( una)?( nueva)?( partida)?|nueva|no esta|no es ninguna)$/.test(n)) return this.createStart(st.query, []);
-      if (!a && !/\b(opcion|primera|segunda|tercera|cuarta|numero|la \d)\b/.test(n) && this.measureDuringChoice(text, n, st.listed)) return;
+      if ((a && a.create) || /^(no[, ]+)?(ninguna|ninguno|ninguna de (esas|estas|ellas)|no es ninguna( de (esas|estas|ellas))?|no esta|no esta en la lista|crear|crea|crear nueva|crea nueva|crear( una)?( nueva)? partida( nueva)?|crea( una)?( nueva)? partida( nueva)?|partida nueva|nueva|nueva partida|creamos( una)?( nueva| partida nueva| una partida nueva)?|creala|la creamos|vamos a crearla|dictar( una)?( partida)? nueva|dictar nueva partida|otra nueva)$/.test(n)) return this.createStart(st.query, [], true);
       let i = a && a.pick !== undefined ? a.pick : matchOption(text, st.listed.map((x) => x.short || x.doc.r));
       if (i < 0) i = matchOption(text, st.listed.map((x) => x.doc.r));
+      if (i < 0 && !a && !/\b(opcion|primera|segunda|tercera|cuarta|numero|la \d)\b/.test(n) && this.measureDuringChoice(text, n, st.listed)) return;
       if (i < 0 && this.escape(text, n)) return;
       if (i < 0) {
         const res = this.cat.index.search(text, this.boostFn());
@@ -2106,9 +2132,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
 
     /* ---- Creación de partida propia ---- */
-    createStart(query, res) {
+    createStart(query, res, fromList) {
       this.state = { mode: 'create_unit', query, guess: res && res.length ? res[0].doc : null };
-      this.ask('No encuentro esa partida en la base de datos. Vamos a crearla. ¿En qué unidad se mide? Unidades, metros, metros cuadrados o metros cúbicos.',
+      this.ask((fromList ? 'Vamos a crear la partida nueva.' : 'No encuentro esa partida en la base de datos. Vamos a crearla.') + ' ¿En qué unidad se mide? Unidades, metros, metros cuadrados o metros cúbicos.',
         [{ label: 'ud', value: 'unidades', act: { u: 'ud' } }, { label: 'm', value: 'metros', act: { u: 'm' } }, { label: 'm²', value: 'metros cuadrados', act: { u: 'm2' } }, { label: 'm³', value: 'metros cúbicos', act: { u: 'm3' } }]);
     }
     st_create_unit(text, n, input) {
@@ -2134,7 +2160,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       const code = 'PROPIA.' + String(this.obra.propiaSeq).padStart(3, '0');
       // Capítulo: el de la partida del catálogo más parecida (aunque no llegue al umbral)
       const res = this.cat.index.search(st.query + ' ' + desc, this.boostFn());
-      const g = res.length && res[0].s > 0.12 ? res[0].doc : null;
+      const isDem = /demol|levant|picad|picar|quitar|retir|arranc|desmont|elimin|derrib|tirar/.test(norm(st.query + ' ' + desc));
+      const g = (isDem && (res.find((r) => /DEMOLIC/i.test(r.doc.chapTitle)) || {}).doc) || (res.length && res[0].s > 0.12 ? res[0].doc : null);
       this.snapshot();
       const p = {
         uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ref: code, propia: true, u: st.u, r: desc, t: desc,
@@ -2211,7 +2238,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       const txt = p.lineas.map((l, i) => {
         const dims = ['l', 'a', 'h'].filter((k) => l[k] !== null && l[k] !== undefined).map((k) => fmt(l[k])).join(' por ');
         const u = l.uds !== null && l.uds !== 1 ? (l.uds < 0 ? 'menos ' + fmtUds(Math.abs(l.uds)) : fmtUds(l.uds)) + (dims ? ' de ' : ' unidades') : '';
-        return 'Línea ' + (i + 1) + ', ' + [l.est, l.com].filter(Boolean).join(' ') + ': ' + u + dims + ', parcial ' + fmt(parcial(l));
+        const lab = [l.est, l.com].filter(Boolean).join(' ');
+        return 'Línea ' + (i + 1) + (lab ? ', ' + lab : '') + ': ' + u + dims + ', parcial ' + fmt(parcial(l));
       }).join('. ');
       this.ask(txt + '. Total ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '.', this.idleChips(), { long: true });
     }
