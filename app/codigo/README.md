@@ -3,7 +3,8 @@
 App de **Estado de Mediciones** por diálogo de voz, 100 % local, con la base **Precios de Mallorca 2026 (COAATMCA)** embebida (1.744 partidas, sin precios).
 
 ## Archivos
-- `dist/mediciones-voz.html` — **app completa en un solo archivo** (catálogo, motor, jsPDF incluidos; funciona sin conexión).
+- `../index.html` (carpeta `app/`) — **la app publicada** en GitHub Pages: un solo archivo con catálogo, motor, jsPDF y fuente del PDF, más `sw.js` y `manifest.webmanifest` para instalarla y usarla sin conexión.
+- El BC3 original no se sube al repositorio: para regenerar, `node build.js ruta/Palma48_2026_COAATMCA.bc3` y copiar `dist/pwa/*` a `app/`.
 - `src/bc3.js` — parser FIEBDC-3: descarta precios, rendimientos e importes; conserva código, unidad, resumen, texto y capítulos.
 - `src/engine.js` — motor determinista: búsqueda difusa + sinónimos de obra, atributos semánticos (medios, espesor, material, formato…), embudo de preguntas, partidas propias, control dimensional, herencia suelo/techo/paredes, comandos de revisión. Sin DOM: se prueba en Node.
 - `src/app.js` — interfaz Modo Obra / Luz Solar, `StorageAdapter` (IndexedDB), `VoiceAdapter`, `BillingGuard`, exportador PDF tipo Presto/Arquímedes.
