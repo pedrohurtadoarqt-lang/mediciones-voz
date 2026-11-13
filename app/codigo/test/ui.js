@@ -1,0 +1,25 @@
+const { chromium } = require('playwright');
+(async () => {
+  const b = await chromium.launch(); const pg = await b.newPage({ viewport: { width: 400, height: 860 }, acceptDownloads: true });
+  const errs = []; pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html');
+  await pg.waitForTimeout(1500);
+  await pg.screenshot({ path: 'test/s_home.png' });
+  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Reforma Piso Avenida'); await pg.fill('#fcli', 'Ana P.'); await pg.click('text=Crear y empezar');
+  await pg.waitForTimeout(500);
+  const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
+  await pg.click('.chip >> nth=0'); await pg.waitForTimeout(200);
+  for (const t of ['cocina','picado de azulejos','pared frontal 3,40 por 2,50','pared lateral 3,20 por 2,50','pasamos al baño 1','quitar azulejos']) await say(t);
+  await pg.click('.chip >> nth=0'); await pg.waitForTimeout(200);
+  for (const t of ['pared ducha 1,80 por 2,50','descuenta puerta de 0,72 por 2,03']) await say(t);
+  await pg.screenshot({ path: 'test/s_obra.png' });
+  const dl = pg.waitForEvent('download');
+  await pg.click('#btnMenu'); await pg.click('text=Exportar PDF de mediciones');
+  const d = await dl; await d.saveAs('test/out.pdf');
+  await pg.click('#btnMenu'); await pg.click('text=Resumen de la obra'); await pg.waitForTimeout(200);
+  await pg.screenshot({ path: 'test/s_resumen.png' });
+  await pg.click('#btnSol'); await pg.click('#btnMenu'); await pg.click('.sheet >> text=Medir:'); await pg.waitForTimeout(200);
+  await pg.screenshot({ path: 'test/s_sol.png' });
+  console.log('ERRORS', errs);
+  await b.close();
+})();

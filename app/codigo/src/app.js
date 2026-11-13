@@ -247,7 +247,8 @@
     getCatalog: () => catFor(S.obra),
     exportPdf: () => exportPdf(S.obra),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
-    filterEst: (e) => { S.filterEst = e; }
+    filterEst: (e) => { S.filterEst = e; },
+    note: (t) => { S.log.push({ who: 'app', text: t }); renderTalk(); }
   });
 
   function catFor(obra) {

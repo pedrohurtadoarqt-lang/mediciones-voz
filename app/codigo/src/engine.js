@@ -213,7 +213,7 @@
     { id: 'recup', p: 0.9, q: () => '¿Con recuperación del material o sin recuperación?', vals: [['sin recuperación', /sin recuperacion/], ['con recuperación', /recuperacion|recuperar/]] },
     { id: 'carga', p: 0.7, q: () => '¿Con carga manual, mecánica o sin carga?', vals: [['carga manual', /carga manual/], ['carga mecánica', /carga mecanica/]] },
     { id: 'ambiente', p: 1.0, q: () => '¿Interior o exterior?', src: 'r', vals: [['interior', /\binterior/], ['exterior', /\bexterior/]] },
-    { id: 'orient', p: 1.0, q: () => '¿En paramento vertical u horizontal?', src: 'r', vals: [['vertical', /vertical|pared|paramento/], ['horizontal', /horizontal|techo|cielo/]] },
+    { id: 'orient', p: 1.0, q: () => '¿Es en paredes o en techo?', src: 'r', vals: [['vertical', /vertical|pared|paramento/], ['horizontal', /horizontal|techo|cielo/]] },
     { id: 'material', p: 1.15, q: (o) => '¿De qué material? ' + o.slice(0, 4).join(', ') + '.', fn: (d) => { for (const [lab, re] of MATERIALES) if (re.test(d.nr)) return lab; for (const [lab, re] of MATERIALES) if (re.test(d.nt.slice(0, 260))) return lab; return null; } },
     { id: 'espesor', p: 1.1, q: (o) => '¿Qué espesor? ' + o.slice(0, 4).join(', ') + '.', fn: (d) => { const m = d.nr.match(/(\d+(?:[.,]\d+)?)\s*(cm|mm)\s+de espesor|espesor(?: total)?(?: de| nominal)?\s+(\d+(?:[.,]\d+)?)\s*(cm|mm)|\bde\s+(\d+(?:[.,]\d+)?)\s*cm\b(?!\s+de (ancho|alto|largo|diametro))/) || d.nt.match(/(\d+(?:[.,]\d+)?)\s*(cm|mm)\s+de espesor|espesor(?: total)?(?: de| nominal)?\s+(\d+(?:[.,]\d+)?)\s*(cm|mm)/); if (!m) return null; const v = m[1] || m[3] || m[5]; const u = m[2] || m[4] || 'cm'; return v.replace('.', ',') + ' ' + u; } },
     { id: 'formato', p: 0.9, q: (o) => '¿Qué formato? ' + o.slice(0, 4).join(', ') + '.', fn: (d) => { const m = d.nr.match(/(\(?\d+(?:[.,]\d+)?(?:\+\d+)?\)?\s*x\s*\d+(?:[.,]\d+)?(?:\s*x\s*\d+(?:[.,]\d+)?)?)\s*(cm|mm)?/); return m ? m[1].replace(/\s+/g, '') + ' ' + (m[2] || 'cm') : null; } },
@@ -226,8 +226,8 @@
 
   /* ---------------- Sinónimos de obra (coloquial → BC3) ---------------- */
   const SYN_RAW = {
-    picado: 'demolicion picado levantado', picar: 'demolicion picado', pica: 'demolicion picado',
-    quitar: 'demolicion desmontaje levantado arranque', retirar: 'demolicion desmontaje levantado retirada', arrancar: 'demolicion arranque levantado',
+    picado: 'demolicion picado levantado eliminacion', picar: 'demolicion picado eliminacion', pica: 'demolicion picado eliminacion', eliminar: 'eliminacion demolicion', rascar: 'eliminacion rascado', lijar: 'lijado',
+    quitar: 'demolicion desmontaje levantado arranque eliminacion', retirar: 'demolicion desmontaje levantado retirada', arrancar: 'demolicion arranque levantado',
     tirar: 'demolicion derribo', derribar: 'demolicion derribo', demoler: 'demolicion', derribo: 'demolicion derribo', desmontar: 'desmontaje', levantar: 'levantado demolicion',
     azulejo: 'alicatado azulejo', azulejos: 'alicatado azulejo', alicatar: 'alicatado', alicatados: 'alicatado', baldosa: 'baldosa solado pavimento', baldosas: 'baldosa solado pavimento',
     suelo: 'suelo solado pavimento', suelos: 'suelo solado pavimento', pavimento: 'pavimento solado', solar: 'solado pavimento', solado: 'solado pavimento',
@@ -784,9 +784,17 @@
         if (e && this.obra.ambito !== 'libre') return this.ask('Partida cerrada. ¿Qué más hay que hacer en ' + art(e) + '? Si aquí no hay nada más, di "siguiente estancia" o "terminar".', [{ label: 'Siguiente estancia', value: 'siguiente estancia' }, { label: 'Terminar medición', value: 'terminar' }]);
         return this.ask('Partida cerrada. Dime el siguiente trabajo.', this.idleChips());
       }
+      if (act && /^(las )?(mismas|mismas medidas|las mismas medidas|mismas mediciones|copia las medidas|copia las mismas|igual que la anterior|las de antes|lo mismo)$/.test(n)) {
+        const srcs = this.sameEstSources(act);
+        if (!srcs.length) return this.ask('No tengo otra partida medida en ' + art(this.obra.estActiva || 'esta estancia') + ' con medidas compatibles. ' + this.dimsAsk(act), this.idleChips());
+        return this.doSame(act, srcs[0], '');
+      }
       if (/^(seguir midiendo|seguimos midiendo|continuar|continuamos|seguimos)$/.test(n)) { const a = this.active(); return this.ask(a ? 'Seguimos con ' + a.r + '. ' + this.dimsAsk(a) : 'Seguimos' + (this.obra.estActiva ? ' en ' + art(this.obra.estActiva) : '') + '. Dime el trabajo a medir.', this.idleChips()); }
-      // Búsqueda forzada
-      if ((m = text.match(/^(?:nueva partida|partida|busca|buscar|añade partida|anade partida)\s*:?\s+(.+)$/i))) return this.selectWork(m[1]);
+      // Nueva partida en la misma estancia ("ahora guarnecido", "siguiente partida pintura", "añade…")
+      if ((m = n.match(/^(?:y\s+)?(?:siguiente partida|nueva partida|otra partida|partida|ahora|despues|luego|añade|anade|añadir|anadir|añade partida|anade partida|metemos|mete|pon|ponemos|vamos con|seguimos con|busca|buscar|tambien)\s*:?\s+(?:la\s+partida\s+(?:de\s+)?|una\s+partida\s+de\s+|partida\s+de\s+|partida\s+|la\s+|el\s+)?(.+)$/)) && contentWords(m[1]).length >= 1 && !EST_VOCAB.test(m[1])) {
+        if (this.guardHeightsNeeded()) return this.guardHeights(text);
+        return this.selectWork(m[1]);
+      }
 
       return false;
     }
@@ -881,6 +889,10 @@
       return (d) => kw.test(norm(d.path || d.chapTitle || '')) ? 1.12 : 1;
     }
     selectWork(query) {
+      const sm = norm(query).match(/^(.*?)\s*,?\s*(?:con\s+)?(?:las\s+)?(?:mismas medidas|mismas mediciones|mismas superficies|lo mismo|igual que antes|con las mismas)(?:\s+que\s+.*)?$/);
+      if (sm && sm[1]) { query = sm[1]; this.autoSame = true; }
+      const cw = contentWords(query).filter((w) => !(w in ORD) && !/^(si|no|vale|ok|igual|mismas?|eso|esa|bien|bueno|perfecto|venga|gracias)$/.test(w));
+      if (!cw.length) { const a = this.active(); return this.ask('No te he entendido. ' + (a ? this.dimsAsk(a) : 'Dime el trabajo a medir.'), this.idleChips()); }
       const cat = this.cat;
       const res = cat.index.search(query, this.boostFn());
       const best = res.length ? res[0].s : 0;
@@ -932,9 +944,33 @@
       return this.funnelStep();
     }
     funnelStep(prefix) {
-      const st = this.state; const c = st.cands;
+      const st = this.state;
+      // Contexto: si en esta estancia estamos con paredes (o techo/suelo), filtra por orientación
+      if (!st.ctxDone) {
+        st.ctxDone = true;
+        const vals = new Set(st.cands.map((c) => c.doc.attrs.orient).filter(Boolean));
+        if (vals.size > 1) {
+          const q = norm(st.query);
+          let want = /techo|cielo|horizontal|suelo/.test(q) ? 'horizontal' : /pared|vertical|paramento/.test(q) ? 'vertical' : null;
+          if (!want) { const prev = this.lastPartidaHere(); if (prev && prev.u === 'm2') want = prev.orient === 'V' ? 'vertical' : 'horizontal'; }
+          if (want) { const f = st.cands.filter((c) => c.doc.attrs.orient !== (want === 'vertical' ? 'horizontal' : 'vertical')); if (f.length) st.cands = f.sort((a, b) => (b.doc.attrs.orient === want) - (a.doc.attrs.orient === want) || b.s - a.s); st.asked.add('orient'); }
+        }
+      }
+      const c = st.cands;
       prefix = prefix ? prefix + ' ' : '';
       if (c.length === 1) return this.pickDoc(c[0].doc, prefix, st.query);
+      // Si lo dicho casi coincide con el resumen de una partida, la tomamos sin preguntar
+      const qs = new Set(contentWords(st.query).map(stem));
+      if (qs.size >= 2) {
+        const cov = c.map((x) => { const rw = contentWords(x.doc.r).map(stem); const hit = rw.filter((w) => qs.has(w)).length; return { x, cov: rw.length ? hit / rw.length : 0, all: [...qs].every((q) => rw.includes(q)) }; }).filter((o) => o.all).sort((a, b) => b.cov - a.cov);
+        if (cov.length && cov[0].cov >= 0.75 && (!cov[1] || cov[0].cov - cov[1].cov >= 0.1)) return this.pickDoc(cov[0].x.doc, prefix, st.query);
+      }
+      if (c.length <= 4 && !st.asked.has('orient') && new Set(c.map((x) => x.doc.attrs.orient).filter(Boolean)).size > 1) {
+        st.split = { a: ATTRS.find((x) => x.id === 'orient'), opts: ['vertical', 'horizontal'] }; st.asked.add('orient');
+        st.splitOpts = ['vertical', 'horizontal'];
+        if (c.some((x) => !x.doc.attrs.orient)) st.splitOpts.push('Otra / sin especificar');
+        return this.ask(prefix + '¿Es en paredes o en techo?', st.splitOpts.map((o, i) => ({ label: optLabel(o), value: o, act: { opt: i } })));
+      }
       if (c.length <= 4) { const sh = shortLabels(c.map((x) => x.doc.r)); return this.askList(c, prefix + 'Tengo ' + c.length + ' opciones: ' + sh.map((x, i) => (i + 1) + ', ' + x).join('; ') + '. ¿Cuál?'); }
       const sp = bestSplit(c, st.asked);
       if (!sp) { const sh = shortLabels(c.slice(0, 4).map((x) => x.doc.r)); return this.askList(c.slice(0, 6), prefix + 'Hay ' + c.length + ' opciones parecidas. Te leo las más probables: ' + sh.map((x, i) => (i + 1) + ', ' + x).join('; ') + '. ¿Cuál?'); }
@@ -942,7 +978,7 @@
       const opts = sp.opts.slice(0, 6);
       if (sp.nulls && opts.length < 7) opts.push('Otra / sin especificar');
       st.splitOpts = opts;
-      const chips = opts.map((o, i) => ({ label: cap(o), value: o, act: { opt: i } }));
+      const chips = opts.map((o, i) => ({ label: optLabel(o), value: o, act: { opt: i } }));
       chips.push({ label: 'Ver lista (' + c.length + ')', value: 'ver lista', act: { list: true } }, { label: 'Ninguna, crear nueva', value: 'ninguna', act: { create: true } });
       let q = sp.a.q(opts.map(cap));
       if (sp.a.id === 'sub' || sp.a.id === 'capitulo' || (sp.a.id === 'medios' && opts.length > 2)) q += ' ' + opts.slice(0, 5).map(cap).join(', ') + '.';
@@ -960,17 +996,17 @@
       const st = this.state;
       const a = input && input.act;
       if (a && a.list) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
-      if ((a && a.create) || /^(ninguna|ninguno|crear|crea|nueva|no esta|no es ninguna)/.test(n)) return this.createStart(st.query, []);
+      if ((a && a.create) || /^(ninguna|ninguno|ninguna de esas|crear( una)?( nueva)?( partida)?|crea( una)?( nueva)?( partida)?|nueva|no esta|no es ninguna)$/.test(n)) return this.createStart(st.query, []);
       if (/^(ver lista|lista|leeme|lee las opciones|cuales hay|todas)/.test(n)) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
       if (/^(me da igual|cualquiera|la normal|la habitual|la que sea)/.test(n)) return this.pickDoc(st.cands[0].doc, 'Pongo la más habitual.', st.query);
-      if (!a) { const pm = parseMeasure(text); if (pm.count + (pm.n !== null ? 1 : 0) >= 2) return this.ask('Antes de medir necesito saber la partida. ' + st.split.a.q(st.splitOpts.map(cap)), this.lastPrompt.chips); }
-      let i = a && a.opt !== undefined ? a.opt : matchOption(text, st.splitOpts);
+      if (!a && this.measureDuringChoice(text, n, st.cands)) return;
+      let i = a && a.opt !== undefined ? a.opt : matchOption(text, st.splitOpts.map(optLabel));
       if (i < 0 && this.escape(text, n)) return;
       if (i < 0) {
         // ¿Ha nombrado directamente una partida o un valor de otro atributo?
         const f = prefilter(st.cands, text);
         if (f.length < st.cands.length && f.length) { st.cands = f; return this.funnelStep(); }
-        if (!contentWords(text).length) return this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)), this.lastPrompt.chips);
+        if (!contentWords(text).length || /^(si|no|vale|ok|igual|eso|esa|esta|la misma|lo mismo)\b/.test(n)) return this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)) + ' Puedes tocar una opción.', this.lastPrompt.chips);
         const res = this.cat.index.search(st.query + ' ' + text, this.boostFn());
         const inC = res.filter((r) => st.cands.some((c) => c.doc.c === r.doc.c));
         if (inC.length && inC[0].s > (inC[1] ? inC[1].s * 1.15 : 0)) return this.pickDoc(inC[0].doc, '', st.query);
@@ -984,8 +1020,8 @@
     }
     st_list(text, n, input) {
       const st = this.state; const a = input && input.act;
-      if ((a && a.create) || /^(ninguna|ninguno|crear|crea|nueva|no esta)/.test(n)) return this.createStart(st.query, []);
-      if (!a) { const pm = parseMeasure(text); if (pm.count >= 2 && !/\b(opcion|primera|segunda|tercera|cuarta|numero)\b/.test(n)) return this.ask('Antes de medir, elige la partida: dime el número de la opción.', this.lastPrompt.chips); }
+      if ((a && a.create) || /^(ninguna|ninguno|ninguna de esas|crear( una)?( nueva)?( partida)?|crea( una)?( nueva)?( partida)?|nueva|no esta|no es ninguna)$/.test(n)) return this.createStart(st.query, []);
+      if (!a && !/\b(opcion|primera|segunda|tercera|cuarta|numero|la \d)\b/.test(n) && this.measureDuringChoice(text, n, st.listed)) return;
       let i = a && a.pick !== undefined ? a.pick : matchOption(text, st.listed.map((x) => x.short || x.doc.r));
       if (i < 0) i = matchOption(text, st.listed.map((x) => x.doc.r));
       if (i < 0 && this.escape(text, n)) return;
@@ -1018,17 +1054,90 @@
       if (query) this.lastQuery = query;
       this.state = { mode: 'idle' };
       this.touch();
+      // ¿Mismas medidas que otra partida de esta estancia?
+      const est = this.obra.estActiva;
+      const auto = this.autoSame; this.autoSame = false;
+      if (est && !p.lineas.some((l) => norm(l.est || '') === norm(est))) {
+        const srcs = this.sameEstSources(p);
+        if (srcs.length) {
+          if (auto) return this.doSame(p, srcs[0], msg);
+          this.state = { mode: 'same', p, srcs };
+          const s0 = srcs[0];
+          const tot = round2(s0.lineas.filter((l) => norm(l.est || '') === norm(est)).reduce((a, l) => a + parcial(l), 0));
+          const chips = [{ label: 'Mismas medidas', value: 'mismas medidas', act: { same: 0 } }];
+          if (srcs[1]) chips.push({ label: 'Las de ' + shortName(srcs[1].r), value: 'las de ' + srcs[1].r, act: { same: 1 } });
+          chips.push({ label: 'Medidas nuevas', value: 'medidas nuevas', act: { same: -1 } });
+          return this.ask(msg + ' ¿Mismas medidas que ' + shortName(s0.r) + ' en ' + art(est) + ' (' + fmt(tot) + ' ' + unitSpoken(s0.u) + '), o medidas nuevas?', chips);
+        }
+      }
       // Herencia proactiva
       const sug = this.inheritSuggestion(p, query);
       if (sug) return sug(msg);
       this.ask(msg + ' ' + this.dimsAsk(p), this.idleChips());
     }
 
+    /** Partida medida más reciente en la estancia activa (distinta de la activa). */
+    lastPartidaHere(excl) {
+      const est = norm(this.obra.estActiva || '');
+      return this.obra.partidas.filter((x) => x !== excl && x.lineas.some((l) => norm(l.est || '') === est)).sort((a, b) => (b.mod || 0) - (a.mod || 0))[0] || null;
+    }
+    /** Fuentes compatibles en la estancia activa: misma unidad y, en m², misma orientación. */
+    sameEstSources(p) {
+      const est = norm(this.obra.estActiva || '');
+      const ok = (x) => x.uid !== p.uid && x.lineas.some((l) => norm(l.est || '') === est) && (x.u === p.u || (['m2'].includes(x.u) && ['m2'].includes(p.u))) && (p.u !== 'm2' || (x.orient || 'H') === (p.orient || 'H') || /pintura/.test(norm(p.r)));
+      return this.obra.partidas.filter(ok).sort((a, b) => (b.mod || 0) - (a.mod || 0)).slice(0, 2);
+    }
+    doSame(p, src, msg) {
+      const est = this.obra.estActiva;
+      const k = this.copyLines(src, p, { est });
+      this.state = { mode: 'idle' };
+      const pend = p.lineas.some((l) => l.hPend && l.h == null);
+      this.ask((msg ? msg + ' ' : '') + (k === 1 ? 'Copiada 1 línea' : 'Copiadas ' + k + ' líneas') + ' de ' + shortName(src.r) + '. Total ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '.' + (pend ? ' Faltan alturas.' : '') + ' ¿Siguiente partida?', [{ label: 'Añadir otra medida', value: 'otra medida' }, { label: 'Siguiente estancia', value: 'siguiente estancia' }, { label: 'Terminar', value: 'terminar' }]);
+    }
+    st_same(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      let i = a && a.same !== undefined ? a.same : null;
+      if (i === null) {
+        if (/^(si|mismas|las mismas|iguales|igual|vale|ok|de acuerdo|copia|copialas|las mismas medidas|mismas medidas)\b/.test(n)) i = 0;
+        else if (/^(no|nuevas|otras|distintas|diferentes|aparte|medidas nuevas|nueva medicion|mido|medir)\b/.test(n)) i = -1;
+        else if (st.srcs[1] && /^las (de|del)\b/.test(n)) i = 1;
+        else if (/^(la )?(primera|primero)$/.test(n)) i = 0;
+        else if (/^(la )?(segunda|segundo)$/.test(n)) i = st.srcs[1] ? 1 : -1;
+      }
+      if (i === null) {
+        const pm = parseMeasure(text);
+        if (pm.count >= 1 && this.looksLikeMeasure(pm, text, st.p)) { this.state = { mode: 'idle' }; return this.addMeasure(pm, text); }
+        if (this.escape(text, n)) return;
+        if (contentWords(text).length >= 1) { const r = this.cat.index.search(text, this.boostFn()); if (r.length && r[0].s >= 0.45) { this.state = { mode: 'idle' }; return this.selectWork(text); } }
+        return this.ask('¿Mismas medidas o nuevas?', this.lastPrompt.chips);
+      }
+      if (i < 0) { this.state = { mode: 'idle' }; return this.ask('Vale, medidas nuevas. ' + this.dimsAsk(st.p), this.idleChips()); }
+      return this.doSame(st.p, st.srcs[i] || st.srcs[0], '');
+    }
+    /** Si el usuario dicta medidas mientras elige partida: tomamos la más probable y anotamos. */
+    measureDuringChoice(text, n, cands) {
+      const pm = parseMeasure(text);
+      if (!(pm.count >= 1 && contentWords(text).length <= 3 && (pm.count >= 2 || pm.ded || /^[\d\s,.]+$|^(tres|dos|cuatro|cinco|seis|uno|un|siete|ocho|nueve|diez)\b/.test(n.trim())))) return false;
+      const walls = !/\bpor\b/.test(n);
+      const best = (walls && cands.find((c) => c.doc.attrs.orient === 'vertical')) || cands[0];
+      const d = best.doc;
+      let p = this.obra.partidas.find((x) => x.ref === d.c);
+      if (!p) {
+        this.snapshot();
+        p = { uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ref: d.c, u: d.u, r: d.r, t: d.t, chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder, subTitle: d.subTitle, lineas: [], creada: Date.now() };
+        p.orient = orientOf(p); this.obra.partidas.push(p);
+      }
+      this.obra.activa = p.uid; p.mod = Date.now(); this.state = { mode: 'idle' };
+      this.io.note && this.io.note('Uso «' + d.r + '». Si no es la correcta, di "borra esta partida".');
+      this.addMeasure(pm, text);
+      return true;
+    }
+
     /* ---- Herencia ---- */
     inheritSuggestion(p, query) {
       if (!['m2'].includes(p.u)) return null;
       const g = inheritGroup(p, query);
-      if (!g) return null;
+      if (g !== 'H' || p.lineas.length) return null; // paredes: se trabaja estancia a estancia ("¿mismas medidas?")
       const DEM = /demolic|levantado|desmontaje|picado|arranque/;
       const src = this.obra.partidas.filter((x) => x.uid !== p.uid && x.u === 'm2' && x.lineas.some((l) => lineGroup(x, l) === g && (l.uds || 1) > 0));
       if (!src.length) return null;
@@ -1160,6 +1269,7 @@
         else if (/metro|lineal|^m$|^ml$/.test(n)) u = 'm';
       }
       if (!u && this.escape(text, n)) return;
+      if (!u && contentWords(text).length >= 1) { const r = this.cat.index.search(text, this.boostFn()); if (r.length && r[0].s >= 0.34) return this.selectWork(text); }
       if (!u) return this.ask('¿Unidades, metros, metros cuadrados o metros cúbicos?', this.lastPrompt.chips);
       this.state.u = u; this.state.mode = 'create_desc';
       const q = cap(this.state.query);
@@ -1224,7 +1334,8 @@
       const ls = (pm.labeled.l !== undefined ? [pm.labeled.l] : []).concat(pm.dims);
       this.snapshot();
       const added = ls.map((len, i) => {
-        const nl = { id: this.nextId(p), est, com: ls.length === 1 ? pm.comment : (pm.comment ? pm.comment + ' ' : 'Pared ') + (i + 1), uds: pm.n !== null && ls.length === 1 ? pm.n : 1, l: len, a: null, h: h };
+        const nPrev = p.lineas.filter((l) => (l.est || '') === est && (l.uds || 1) > 0).length;
+        const nl = { id: this.nextId(p), est, com: ls.length === 1 ? (pm.comment || 'Pared ' + (nPrev + 1)) : (pm.comment ? pm.comment + ' ' + (i + 1) : 'Pared ' + (nPrev + 1)), uds: pm.n !== null && ls.length === 1 ? pm.n : 1, l: len, a: null, h: h };
         if (!h) nl.hPend = true;
         p.lineas.push(nl); return nl;
       });
@@ -1325,6 +1436,7 @@
     }
   }
   /** Quita las palabras comunes al principio/final para leer solo lo que diferencia las opciones. */
+  function optLabel(o) { return o === 'vertical' ? 'Paredes (vertical)' : o === 'horizontal' ? 'Techo (horizontal)' : cap(o); }
   function shortLabels(list) {
     if (list.length < 2) return list.slice();
     const toks = list.map((r) => r.split(/\s+/));
@@ -1337,6 +1449,7 @@
   }
   function lineGroup(p, l) { return l.grp || (l.com && /techo/i.test(l.com) ? 'H' : null) || inheritGroup(p); }
   function deArt(est) { const a = art(est); return a.startsWith('el ') ? 'del ' + a.slice(3) : 'de ' + a; }
+  function shortName(r) { const w = (r || '').split(/\s+/); return (w.length > 5 ? w.slice(0, 5).join(' ') : r).replace(/[,;]$/, '').toLowerCase(); }
   function art(est) {
     const n = norm(est);
     if (/^(cocina|terraza|galeria|entrada|habitacion|escalera|azotea|cubierta|fachada|despensa|zona|planta|oficina|sala|suite|bodega|tienda|nave|piscina)/.test(n)) return 'la ' + est.toLowerCase().replace(/^\w/, (c) => c);

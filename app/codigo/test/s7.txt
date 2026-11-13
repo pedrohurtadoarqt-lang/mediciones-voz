@@ -1,0 +1,31 @@
+#chip 0
+dormitorio 1
+picar yeso
+paredes
+4,20
+3,10
+4,20
+3,10
+la altura es 2,60
+descuenta puerta de 0,82 por 2,03
+ahora guarnecido de yeso
+la primera
+mismas medidas
+pintura plástica interior lisa con las mismas medidas
+siguiente estancia
+dormitorio 2
+picar yeso
+sí, igual
+3,50
+3
+3,50
+3
+altura 2,60
+guarnecido de yeso
+sí, igual
+mismas
+pintura
+la segunda
+sí
+mismas
+terminar

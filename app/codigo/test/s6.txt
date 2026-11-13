@@ -1,0 +1,12 @@
+#chip 0
+dormitorio 1
+partida picar yeso
+4,20
+3,10
+la altura es 2,60
+ahora guarnecido de yeso
+siguiente partida guarnecido de yeso
+nueva partida guarnecido de yeso
+guarnecido de yeso
+añade pintura plástica
+pintura
