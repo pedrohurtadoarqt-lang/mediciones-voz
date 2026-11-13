@@ -282,14 +282,37 @@
     renderTalk(); renderChips();
     if (!S.session) return; // hasta el primer toque el navegador no deja hablar ni escuchar
     const tk = ++sayToken;
+    if (opts.end) VoiceAdapter.stopListening();
     await VoiceAdapter.speak(text);
+    if (opts.end) { endVoiceSession(); return; }
     if (tk !== sayToken) return;
     if (S.view === 'obra' && S.settings.hands && opts.listen !== false && !S.typing) { noSpeech = 0; VoiceAdapter.listen(false); }
+  }
+  /* ---- Pantalla siempre encendida mientras se mide (Screen Wake Lock) ---- */
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) { wakeLock = null; }
+  }
+  function releaseAwake() { try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null; }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && S.session && S.view === 'obra') {
+      keepAwake();
+      if (S.settings.hands && !VoiceAdapter.listening && !VoiceAdapter.speaking) { noSpeech = 0; VoiceAdapter.listen(false); }
+    }
+  });
+  function endVoiceSession() {
+    VoiceAdapter.stopListening();
+    S.session = false; S.greetPending = false; S.ended = true;
+    releaseAwake();
+    render();
   }
   /** Primer toque: desbloquea audio, pide permiso de micrófono y empieza la conversación guiada. */
   function startSession() {
     VoiceAdapter.unlock();
+    keepAwake();
+    const resume = S.ended; S.ended = false;
     S.session = true; S.greetPending = true;
+    if (resume) { S.greetPending = false; VoiceAdapter.listen(true); dialog.handle('seguir midiendo'); render(); return; }
     hideWarn();
     if (VoiceAdapter.mode === 'native' || VoiceAdapter.mode === 'claude') VoiceAdapter.listen(true); // pide permiso dentro del toque
     else greet();
@@ -365,10 +388,10 @@
       const spec = E.dimsSpec(p);
       const used = { l: p.u === 'm' || p.u === 'm2' || p.u === 'm3', a: p.u === 'm3' || (p.u === 'm2'), h: p.u === 'm3' || p.u === 'm2' };
       const rows = p.lineas.map((l, i) => {
-        const cell = (k) => (l[k] === null || l[k] === undefined) ? '<td class="blk">' + (used[k] ? '·' : '—') + '</td>' : '<td>' + E.fmt(l[k]) + '</td>';
+        const cell = (k) => (k === 'h' && l.hPend && (l.h === null || l.h === undefined)) ? '<td class="pend">falta</td>' : (l[k] === null || l[k] === undefined) ? '<td class="blk">' + (used[k] ? '·' : '—') + '</td>' : '<td>' + E.fmt(l[k]) + '</td>';
         const neg = (l.uds || 0) < 0;
         return '<tr class="' + (neg ? 'neg ' : '') + (l.id === S.lastLineId ? 'new' : '') + '"><td>' + (i + 1) + '</td><td class="com">' + (l.est ? '<span class="e">' + esc(l.est) + '</span>' : '') + esc(l.com || '') + '</td>' +
-          '<td>' + E.fmtUds(l.uds) + '</td>' + cell('l') + cell('a') + cell('h') + '<td class="p">' + E.fmt(E.parcial(l)) + '</td>' +
+          '<td>' + E.fmtUds(l.uds) + '</td>' + cell('l') + cell('a') + cell('h') + '<td class="p">' + (l.hPend && l.h == null ? '<span class="pend">—</span>' : E.fmt(E.parcial(l))) + '</td>' +
           '<td><div class="rowbtns"><button data-a="editl" data-i="' + i + '" aria-label="Editar línea ' + (i + 1) + '">' + ICON.edit + '</button><button data-a="dell" data-i="' + i + '" aria-label="Borrar línea ' + (i + 1) + '">' + ICON.del + '</button></div></td></tr>';
       }).join('');
       mon = '<section class="monitor"><div class="mon-head"><div class="left"><div class="code"><b>' + esc(p.codigo || '') + '</b> · ' + esc(p.ref) + ' · ' + esc(p.chapTitle) + '</div><div class="resumen">' + esc(p.r) + '</div></div>' +
@@ -409,7 +432,7 @@
       else t = 'Toca el micro para hablar';
       st.textContent = t;
     }
-    const sb = $('#startbar'); if (sb) sb.hidden = !!S.session || S.view !== 'obra';
+    const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || S.view !== 'obra'; const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir medición guiada' : 'Empezar medición guiada'; }
     $('#btnHands').setAttribute('aria-pressed', S.settings.hands);
     $('#btnKeyboard').setAttribute('aria-pressed', S.typing);
     $('#typebar').hidden = !S.typing;
@@ -546,7 +569,7 @@
       const num = (id) => { const v = $('#el_' + id).value.trim(); if (!v) return null; const n = parseFloat(v.replace(',', '.')); return isNaN(n) ? null : n; };
       dialog.snapshot();
       const nl = { est: $('#el_est').value.trim(), com: $('#el_com').value.trim(), uds: num('uds'), l: num('l'), a: num('a'), h: num('h') };
-      if (isNew) { nl.id = dialog.nextId(p); p.lineas.push(nl); S.lastLineId = nl.id; } else Object.assign(l, nl);
+      if (isNew) { nl.id = dialog.nextId(p); p.lineas.push(nl); S.lastLineId = nl.id; } else { Object.assign(l, nl); if (nl.h !== null) delete l.hPend; }
       p.mod = Date.now(); saveObra(); closeSheet(); render();
     });
   }
@@ -557,7 +580,7 @@
 
   document.addEventListener('click', async (ev) => {
     const chip = ev.target.closest('[data-chip]');
-    if (chip && !S.session) { VoiceAdapter.unlock(); S.session = true; renderMic(); }
+    if (chip && !S.session && !S.ended) { VoiceAdapter.unlock(); keepAwake(); S.session = true; renderMic(); }
     if (chip) { const c = S.chips[+chip.dataset.chip]; VoiceAdapter.stopSpeaking(); if (c) dialog.handle(c); return; }
     const el = ev.target.closest('[data-a]');
     if (!el) return;
@@ -619,7 +642,7 @@
     VoiceAdapter.listen(true);
   });
   $('#btnStart').addEventListener('click', () => startSession());
-  function goObras() { S.greetPending = false; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); sayToken++; S.view = 'obras'; render(); }
+  function goObras() { S.greetPending = false; S.session = false; S.ended = false; releaseAwake(); VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); sayToken++; S.view = 'obras'; render(); }
 
   /* ---- Importación de BC3 ---- */
   async function importBC3(file) {
@@ -674,6 +697,18 @@
   }
   function buildPdf(obra, J) {
     const doc = new J({ unit: 'mm', format: 'a4' });
+    // Fuente incrustada: evita que los visores del móvil junten las palabras al sustituir Helvetica
+    let FONT = 'helvetica';
+    if (window.PDF_FONTS) {
+      try {
+        doc.addFileToVFS('LS-R.ttf', window.PDF_FONTS.regular); doc.addFont('LS-R.ttf', 'LiberationSans', 'normal');
+        doc.addFileToVFS('LS-B.ttf', window.PDF_FONTS.bold); doc.addFont('LS-B.ttf', 'LiberationSans', 'bold');
+        doc.addFileToVFS('LS-I.ttf', window.PDF_FONTS.italic); doc.addFont('LS-I.ttf', 'LiberationSans', 'italic');
+        FONT = 'LiberationSans';
+      } catch (e) { FONT = 'helvetica'; }
+    }
+    const _sf = doc.setFont.bind(doc);
+    doc.setFont = (f, st) => _sf(f === 'helvetica' ? FONT : f, st === 'bolditalic' ? 'bold' : st);
     const caps = E.obraChapters(obra).map((c) => Object.assign({}, c, { partidas: c.partidas.filter((p) => p.lineas.length) })).filter((c) => c.partidas.length);
     const M = 12, W = 210, R = W - M, BOTTOM = 280;
     const X = { cod: M, ud: 30, res: 40, uds: 113, l: 130, a: 147, h: 164, par: 181, tot: R };
@@ -746,7 +781,7 @@
           if (l.uds !== null && l.uds !== undefined) right(E.fmtUds(l.uds).replace(/^(-?\d+)$/, '$1'), X.uds, y);
           if (l.l !== null && l.l !== undefined) right(E.fmt(l.l), X.l, y);
           if (l.a !== null && l.a !== undefined) right(E.fmt(l.a), X.a, y);
-          if (l.h !== null && l.h !== undefined) right(E.fmt(l.h), X.h, y);
+          if (l.h !== null && l.h !== undefined) right(E.fmt(l.h), X.h, y); else if (l.hPend) right('falta', X.h, y);
           const pv = E.parcial(l); run = E.round2(run + pv);
           right(E.fmt(pv), X.par, y);
           y += h;

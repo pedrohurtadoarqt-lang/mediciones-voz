@@ -1,0 +1,24 @@
+#chip 0
+cocina
+alicatado de paredes
+#chip 0
+la primera
+3,40
+2,80
+tres cuarenta y dos ochenta
+la altura es 2,50
+descuenta puerta de 0,82 por 2,03
+siguiente partida
+enlucido de yeso
+la segunda
+4
+3
+siguiente estancia
+2,60
+baño
+picado de azulejos
+pared ducha 1,80
+siguiente partida
+2,40
+no
+terminar

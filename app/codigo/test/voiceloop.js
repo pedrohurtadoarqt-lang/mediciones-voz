@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
   await pg.addInitScript(() => {
     // Simulación: el "usuario" responde con frases en orden cada vez que se abre el micro
-    const script = ['vivienda', 'cocina', 'picado de azulejos', 'pared frontal tres con cuarenta por dos cincuenta', 'descuenta puerta de 0,82 por 2,03', 'siguiente partida', 'siguiente estancia', 'baño uno', 'quitar azulejos', 'sí, igual', 'pared ducha 1,80 por 2,50'];
+    const script = ['x', 'vivienda', 'cocina', 'alicatado azulejo liso', '3,40', 'dos ochenta', 'la altura es 2,50', 'descuenta puerta de 0,82 por 2,03', 'siguiente partida', 'no', 'terminar', 'esto no debería oírse'];
     window.__said = []; window.__starts = 0;
     class FakeSR { constructor() { this.lang = ''; } start() { window.__starts++; const me = this; setTimeout(() => { me.onstart && me.onstart(); const t = script.shift(); setTimeout(() => { if (!t) { me.onerror && me.onerror({ error: 'no-speech' }); me.onend && me.onend(); return; } me.onresult && me.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: t }], { isFinal: true })] }); me.onend && me.onend(); }, 120); }, 60); } abort() { } stop() { } }
     window.webkitSpeechRecognition = FakeSR; window.SpeechRecognition = FakeSR;

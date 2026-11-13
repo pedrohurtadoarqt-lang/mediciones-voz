@@ -170,3 +170,5 @@ table.lines td.p { font-weight: 700; }
 @keyframes tap { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 .vstate { font-size: var(--fs-xs); color: var(--muted); text-align: center; font-weight: 600; letter-spacing: .03em; min-height: 1em; }
 .voicewarn { color: var(--accent); font-weight: 600; line-height: 1.4; }
+
+table.lines td.pend, .pend { color: var(--accent); font-weight: 700; font-style: italic; }

@@ -92,7 +92,7 @@
         if (nw === 'cero') str = '0';
         while (j + 1 < raw.length) {
           const n1 = norm(raw[j + 1]);
-          if (n1 === 'y' && j + 2 < raw.length && norm(raw[j + 2]) in NUMW && v % 10 === 0 && v >= 30 && v < 100 && NUMW[norm(raw[j + 2])] < 10) {
+          if (n1 === 'y' && j + 2 < raw.length && norm(raw[j + 2]) in NUMW && v % 10 === 0 && v >= 30 && v < 100 && NUMW[norm(raw[j + 2])] < 10 && !(j + 3 < raw.length && (norm(raw[j + 3]) in NUMW || /^\d/.test(raw[j + 3])))) {
             v += NUMW[norm(raw[j + 2])]; j += 2; str = String(v); continue;
           }
           if (n1 in NUMW && v >= 100 && v % 100 === 0 && NUMW[n1] < 100 && n1 !== 'un' && n1 !== 'una') { v += NUMW[n1]; j++; str = String(v); continue; }
@@ -537,6 +537,7 @@
     return { line, warn };
   }
   function parcial(l) {
+    if (l.hPend && (l.h === null || l.h === undefined)) return 0;
     let v = l.uds === null || l.uds === undefined ? 1 : l.uds;
     for (const k of ['l', 'a', 'h']) if (l[k] !== null && l[k] !== undefined) v *= l[k];
     return round2(v);
@@ -639,7 +640,7 @@
       const n = norm(text);
       // Comandos globales que funcionan en cualquier estado
       if (text) {
-        if (/^(cancela|cancelar|olvidalo|dejalo|nada|salir)\b/.test(n)) { this.state = { mode: 'idle' }; return this.ask('Cancelado. ¿Qué medimos?', this.idleChips()); }
+        if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n)) { this.state = { mode: 'idle' }; return this.ask('Cancelado. ¿Qué medimos?', this.idleChips()); }
         if (/^(repite|repitelo|como|que has dicho|perdona)\b/.test(n) && this.lastPrompt) return this.ask(this.lastPrompt.text, this.lastPrompt.chips);
         if (/^(ayuda|que puedo decir|comandos)\b/.test(n)) return this.help();
         if (/^(deshaz|deshacer|deshace|anula lo ultimo|anula)\b/.test(n)) return this.doUndo();
@@ -690,7 +691,7 @@
     st_estancia(text, n) {
       if (/sin estancia|ninguna|general/.test(n)) { this.obra.estActiva = ''; this.touch(); this.state = { mode: 'idle' }; return this.ask('Sin estancia. Dime el trabajo a medir.'); }
       const name = estanciaName(text.replace(/^(pasamos|vamos|empezamos|estamos)\s+(a|al|a la|en|en el|en la|por|por el|por la)?\s*/i, ''));
-      if (!name) return this.ask('¿Qué estancia?', this.lastPrompt.chips);
+      if (!name || !/[a-zñ]/i.test(norm(name))) return this.ask('¿Qué estancia? Dime su nombre, por ejemplo: baño, dormitorio 2.', this.lastPrompt.chips);
       this.setEstancia(name);
       this.state = { mode: 'idle' };
       this.touch();
@@ -726,13 +727,13 @@
         if (!act && pm.ded) return this.ask('Primero dime a qué partida descuento el hueco.');
         if (!act && pm.count >= 2) return this.ask('No hay ninguna partida activa. Dime primero el trabajo, por ejemplo "alicatado de paredes".');
       }
-      if (act && /^(si|vale|ok|sigue|seguimos|otra|otra medida|mas)$/.test(n)) return this.ask(dimsSpec(act).ask);
+      if (act && /^(si|vale|ok|sigue|seguimos|otra|otra medida|mas)$/.test(n)) return this.ask(this.dimsAsk(act));
       // Refinar la última búsqueda: "mecánicos", "exterior"…
       if (this.lastQuery && /^(con |de |en |por )?(medios )?(manual(es)?|mecanic[oa]s?|a mano|a maquina|interior|exterior|con recuperacion|sin recuperacion|con carga|sin carga)$/.test(n)) {
         const res = this.cat.index.search(this.lastQuery, this.boostFn());
         const cands = res.filter((r) => r.s >= (res[0] ? res[0].s * 0.8 : 0)).slice(0, 60);
         const f = prefilter(cands, text);
-        if (f.length === cands.length || !f.length || (act && f.some((r) => r.doc.c === act.ref))) return this.ask('En la base no hay otra variante' + (act ? '; sigo con ' + act.r + '. ' + dimsSpec(act).ask : '.'), this.idleChips());
+        if (f.length === cands.length || !f.length || (act && f.some((r) => r.doc.c === act.ref))) return this.ask('En la base no hay otra variante' + (act ? '; sigo con ' + act.r + '. ' + this.dimsAsk(act) : '.'), this.idleChips());
         return this.funnelStart(this.lastQuery + ' ' + text, f, []);
       }
       return this.selectWork(text);
@@ -742,10 +743,10 @@
       const act = this.active();
       let m;
       // Estancias
-      if (/^(siguiente|otra|cambio de|cambiar de|cambia de|cambiar|nueva) estancia\b/.test(n)) return this.nextEstancia();
+      if (/^(siguiente|otra|cambio de|cambiar de|cambia de|cambiar|nueva) estancia\b/.test(n)) return this.guardHeights(text, () => this.nextEstancia());
       m = n.match(/^(?:pasamos|vamos|pasa|cambiamos|cambia|nos vamos|seguimos|ahora|estamos|entramos)\s+(?:a|al|a la|en|en el|en la|por|por el|por la|con el|con la)\s+(.+)$/) || n.match(/^estancia\s+(.+)$/);
       if (m && (EST_VOCAB.test(m[1].replace(/^(el|la)\s+/, '')) || n.startsWith('estancia') || (this.obra.estancias || []).some((e) => norm(e) === m[1].replace(/^(el|la)\s+/, '')))) {
-        return this.st_estancia(m[1], norm(m[1]));
+        return this.guardHeights(text, () => this.st_estancia(m[1], norm(m[1])));
       }
 
       // Revisión y navegación
@@ -764,13 +765,26 @@
       if ((m = n.match(/^(?:aplica|usa|pon|copia|coge|toma)\s+(?:las\s+)?(?:mismas\s+)?(?:medidas|superficies|mediciones|lineas)\s+(?:que|de|del)\s+(?:en\s+)?(?:el|la|los|las)?\s*(.+)$/))) return this.cmdCopyFrom(m[1]);
       if ((m = n.match(/^copia\s+(?:las\s+|los\s+)?(paredes|paramentos|suelos?|techos?|medidas)\s+(?:del|de la|de|de los)\s+(.+?)(?:\s+(?:pero\s+)?(?:descuenta|descontando|quitando|restando|y descuenta|menos)\s+(?:las\s+|los\s+)?(ventanas|puertas|huecos|carpinterias?))?$/))) return this.cmdCopyRoom(m[1], m[2], m[3]);
 
+      // Altura común de la estancia ("la altura es 2,60")
+      if (!this.state.pending && (m = n.match(/^(?:y\s+)?(?:la\s+)?(?:altura|alto)(?:\s+(?:libre|de (?:la )?(?:estancia|habitacion|pared|paredes|las paredes|suelo a techo|techo)))?\s*(?:es|son|de|a|:|=)?\s*(.+)$/) || n.match(/^(?:la\s+)?(?:estancia|habitacion)\s+tiene\s+(.+?)\s+de\s+altura$/))) {
+        const v = parseNumber(m[1]);
+        if (v !== null && v > 0.3 && v < 20 && contentWords(m[1]).length <= 1) return this.setAltura(v);
+      }
+      // Terminar la medición
+      if (/^(terminar|termina|terminamos|terminado|he terminado|hemos terminado|ya he terminado|ya hemos terminado|fin|finalizar|finaliza|finalizamos|acabar|acaba|acabamos|acabado|he acabado|hemos acabado|eso es todo|ya esta todo|se acabo|fin de la (medicion|visita)|terminar (la )?(medicion|visita)|termina (la )?(medicion|visita)|finalizar (la )?(medicion|visita)|terminamos (la )?(medicion|visita)|salir|cerrar (la )?(medicion|visita))$/.test(n)) return this.guardHeights(text, () => this.endSession());
+      if (/^(no|nada|nada mas|no nada mas|no hay mas|no hay nada mas|ya no|no gracias|no mas)$/.test(n)) {
+        if (act) { this.obra.activa = null; this.touch(); }
+        return this.ask('De acuerdo. ¿Pasamos a otra estancia o terminamos la medición?', [{ label: 'Otra estancia', value: 'siguiente estancia' }, { label: 'Terminar medición', value: 'terminar' }]);
+      }
       // Fin de partida
-      if (/^(siguiente partida|nueva partida|otra partida|terminado|termina|fin de (la )?partida|cerramos (la )?partida|ya esta|listo|vale ya|cambio de partida|cambiamos de partida)$/.test(n)) {
+      if (/^(siguiente partida|nueva partida|otra partida|fin de (la )?partida|cerramos (la )?partida|cierra (la )?partida|ya esta|listo|vale ya|cambio de partida|cambiamos de partida|siguiente trabajo|otro trabajo)$/.test(n)) {
+        if (this.guardHeightsNeeded()) return this.guardHeights(text);
         this.obra.activa = null; this.touch();
         const e = this.obra.estActiva;
-        if (e && this.obra.ambito !== 'libre') return this.ask('Partida cerrada. ¿Qué más hay que hacer en ' + art(e) + '? Si ya has terminado aquí, di "siguiente estancia".', [{ label: 'Siguiente estancia', value: 'siguiente estancia' }, { label: 'Resumen de ' + e, value: 'qué llevo medido en ' + e }]);
+        if (e && this.obra.ambito !== 'libre') return this.ask('Partida cerrada. ¿Qué más hay que hacer en ' + art(e) + '? Si aquí no hay nada más, di "siguiente estancia" o "terminar".', [{ label: 'Siguiente estancia', value: 'siguiente estancia' }, { label: 'Terminar medición', value: 'terminar' }]);
         return this.ask('Partida cerrada. Dime el siguiente trabajo.', this.idleChips());
       }
+      if (/^(seguir midiendo|seguimos midiendo|continuar|continuamos|seguimos)$/.test(n)) { const a = this.active(); return this.ask(a ? 'Seguimos con ' + a.r + '. ' + this.dimsAsk(a) : 'Seguimos' + (this.obra.estActiva ? ' en ' + art(this.obra.estActiva) : '') + '. Dime el trabajo a medir.', this.idleChips()); }
       // Búsqueda forzada
       if ((m = text.match(/^(?:nueva partida|partida|busca|buscar|añade partida|anade partida)\s*:?\s+(.+)$/i))) return this.selectWork(m[1]);
 
@@ -785,6 +799,69 @@
       this.state = prev;
       return false;
     }
+    /* ---- Paredes: longitudes primero, altura común de la estancia ---- */
+    isWall(p) { return p && p.u === 'm2' && p.orient === 'V'; }
+    alturaEst(est) { const a = this.obra.alturas || {}; return a[norm(est || '')] || null; }
+    dimsAsk(p) {
+      if (this.isWall(p)) {
+        const h = this.alturaEst(this.obra.estActiva);
+        return h ? 'Dime la longitud de cada pared; uso la altura de ' + fmt(h) + ' de esta estancia.' : 'Dime la longitud de cada pared, una a una. Al final me dices la altura de la estancia.';
+      }
+      return dimsSpec(p).ask;
+    }
+    pendingWalls(est) {
+      const out = [];
+      this.obra.partidas.forEach((p) => p.lineas.forEach((l) => { if (l.hPend && (l.h === null || l.h === undefined) && norm(l.est || '') === norm(est || '')) out.push([p, l]); }));
+      return out;
+    }
+    guardHeightsNeeded() { return !this.skipHeights && this.pendingWalls(this.obra.estActiva).length > 0; }
+    /** Antes de salir de la estancia/partida, pide la altura que falta. */
+    guardHeights(text, then) {
+      if (!this.guardHeightsNeeded()) return then ? then() : undefined;
+      const pw = this.pendingWalls(this.obra.estActiva);
+      this.state = { mode: 'altura', after: text };
+      return this.ask('Antes: faltan ' + (pw.length === 1 ? '1 pared' : pw.length + ' paredes') + ' sin altura en ' + art(this.obra.estActiva) + '. ¿Qué altura tienen?', [{ label: 'Dejarlo sin altura', value: 'sin altura', act: { skipH: true } }]);
+    }
+    st_altura(text, n, input) {
+      const st = this.state;
+      const skip = (input && input.act && input.act.skipH) || /^(sin altura|luego|despues|mas tarde|no|ahora no|dejalo)/.test(n);
+      if (!skip) {
+        const v = parseNumber(text);
+        if (v === null || v <= 0.3 || v >= 20) return this.ask('Dime la altura, por ejemplo: 2,60.', this.lastPrompt.chips);
+        this.state = { mode: 'idle' };
+        this.applyAltura(v);
+      } else this.state = { mode: 'idle' };
+      if (!st.after) { if (skip) return this.ask('Vale, sin altura de momento.', this.idleChips()); const pw2 = this.obra.partidas.filter((p) => p.lineas.some((l) => norm(l.est || '') === norm(this.obra.estActiva || ''))); const a = this.active(); return this.ask('Altura ' + fmt(this.alturaEst(this.obra.estActiva)) + ' aplicada.' + (a ? ' Total ' + fmt(totalOf(a)) + ' ' + unitSpoken(a.u) + '.' : '') + ' ¿Hay puertas o ventanas que descontar?', this.idleChips()); }
+      this.skipHeights = true;
+      try { this.state = { mode: 'idle' }; const t = st.after; if (this.tryCommands(t, norm(t)) === false) this.st_idle(t, norm(t)); } finally { this.skipHeights = false; }
+    }
+    applyAltura(v) {
+      const est = this.obra.estActiva;
+      this.obra.alturas = this.obra.alturas || {};
+      this.obra.alturas[norm(est || '')] = v;
+      const pw = this.pendingWalls(est);
+      if (pw.length) this.snapshot();
+      pw.forEach(([p, l]) => { l.h = v; delete l.hPend; });
+      this.touch();
+      return pw;
+    }
+    setAltura(v) {
+      const pw = this.applyAltura(v);
+      const act = this.active();
+      const est = this.obra.estActiva;
+      if (!pw.length) return this.ask('Altura de ' + art(est || 'la obra') + ': ' + fmt(v) + '. La usaré para las paredes que me dictes aquí.' + (act ? ' ' + this.dimsAsk(act) : ''), this.idleChips());
+      const ps = [...new Set(pw.map(([p]) => p))];
+      this.io.flash && this.io.flash('ok');
+      this.ask('Altura ' + fmt(v) + ' aplicada a ' + (pw.length === 1 ? '1 pared' : pw.length + ' paredes') + '. ' + ps.map((p) => 'Total ' + p.r + ': ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u)).join('. ') + '. ¿Hay puertas o ventanas que descontar? Por ejemplo: descuenta puerta de 0,82 por 2,03.', this.idleChips());
+    }
+    endSession() {
+      this.obra.activa = null; this.state = { mode: 'idle' }; this.touch();
+      const ps = this.obra.partidas.filter((p) => p.lineas.length);
+      const nl = ps.reduce((a, p) => a + p.lineas.length, 0);
+      const pend = this.obra.partidas.reduce((a, p) => a + p.lineas.filter((l) => l.hPend && l.h == null).length, 0);
+      this.ask('Medición terminada. Llevas ' + ps.length + (ps.length === 1 ? ' partida' : ' partidas') + ' y ' + nl + (nl === 1 ? ' línea' : ' líneas') + ' en ' + (this.obra.estancias || []).length + ((this.obra.estancias || []).length === 1 ? ' estancia.' : ' estancias.') + (pend ? ' Quedan ' + pend + ' paredes sin altura.' : '') + ' Puedes generar el PDF o seguir midiendo cuando quieras.',
+        [{ label: 'Generar PDF', value: 'genera el pdf' }, { label: 'Seguir midiendo', value: 'seguir midiendo' }], { listen: false, end: true });
+    }
     looksLikeMeasure(pm, text, act) {
       if (pm.ded) return true;
       const content = contentWords(text);
@@ -793,6 +870,7 @@
       return content.length <= 3;
     }
     handleAct(a) {
+      if (a.askH) { this.state = { mode: 'altura', after: '' }; return this.ask('¿Qué altura tienen las paredes de ' + art(this.obra.estActiva || 'la estancia') + '?'); }
       if (a.estancia !== undefined) return this.st_estancia(a.estancia, norm(a.estancia));
     }
 
@@ -943,7 +1021,7 @@
       // Herencia proactiva
       const sug = this.inheritSuggestion(p, query);
       if (sug) return sug(msg);
-      this.ask(msg + ' ' + dimsSpec(p).ask, this.idleChips());
+      this.ask(msg + ' ' + this.dimsAsk(p), this.idleChips());
     }
 
     /* ---- Herencia ---- */
@@ -986,7 +1064,7 @@
       if (!mode) { const pm = parseMeasure(text); if (pm.count >= 1 && this.looksLikeMeasure(pm, text, st.p)) { this.state = { mode: 'idle' }; return this.addMeasure(pm, text); } }
       if (!mode) return this.ask('¿Aplico las mismas superficies o medimos aparte?', this.lastPrompt.chips);
       this.state = { mode: 'idle' };
-      if (mode === 'no') return this.ask('De acuerdo, medimos aparte. ' + dimsSpec(st.p).ask, this.idleChips());
+      if (mode === 'no') return this.ask('De acuerdo, medimos aparte. ' + this.dimsAsk(st.p), this.idleChips());
       const est = mode === 'est' ? this.obra.estActiva : null;
       const nl = this.copyLines(st.s, st.p, { est, g: st.g, com: st.toTecho && /pintura|revestimiento|yeso|enlucido|guarnecido/.test(norm(st.p.r)) ? 'Techo' : null });
       this.ask('Copiadas ' + nl + (nl === 1 ? ' línea' : ' líneas') + '. Total ' + fmt(totalOf(st.p)) + ' ' + unitSpoken(st.p.u) + '. ¿Algo más en esta partida?', this.idleChips());
@@ -1001,6 +1079,7 @@
         if (opt.g && lineGroup(src, l) !== opt.g) continue;
         const nl = { id: this.nextId(dst), est: l.est, com: opt.com ? (l.com ? opt.com + ' - ' + l.com : opt.com) : l.com, uds: l.uds, l: l.l, a: null, h: null, from: src.uid };
         const lg = opt.com === 'Techo' ? 'H' : lineGroup(src, l); if (lg) nl.grp = lg;
+        if (l.hPend) nl.hPend = true;
         const second = l.a !== null && l.a !== undefined ? l.a : l.h;
         if (dst.u === 'm2') { const og = nl.grp || null; if (og === 'H' || (!og && dst.orient !== 'V')) nl.a = second; else nl.h = second; }
         else if (dst.u === 'm3') { nl.a = l.a; nl.h = l.h; }
@@ -1109,7 +1188,9 @@
     nextId(p) { return p.lineas.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1; }
     addMeasure(pm, text) {
       const p = this.active();
-      const pend = this.state.pending && this.state.pending.uid === p.uid ? this.state.pending : null;
+      const pend0 = this.state.pending && this.state.pending.uid === p.uid ? this.state.pending : null;
+      if (!pend0 && this.isWall(p) && !pm.ded && pm.labeled.h === undefined && pm.labeled.a === undefined && pm.dims.length >= 1 && !/\bpor\b|\d\s*x\s*\d/.test(norm(text))) return this.addWalls(pm);
+      const pend = pend0;
       const r = buildLine(p, pm, pend ? pend.line : null);
       if (r.missing) {
         if (r.missing[0] === 'n') return this.ask('¿Cuántas unidades?');
@@ -1136,6 +1217,24 @@
       this.io.flash && this.io.flash(ded ? 'ded' : 'ok');
       this.ask(parts.join(' '), this.idleChips(), { short: true });
     }
+    addWalls(pm) {
+      const p = this.active();
+      const est = this.estPrefix();
+      const h = this.alturaEst(est);
+      const ls = (pm.labeled.l !== undefined ? [pm.labeled.l] : []).concat(pm.dims);
+      this.snapshot();
+      const added = ls.map((len, i) => {
+        const nl = { id: this.nextId(p), est, com: ls.length === 1 ? pm.comment : (pm.comment ? pm.comment + ' ' : 'Pared ') + (i + 1), uds: pm.n !== null && ls.length === 1 ? pm.n : 1, l: len, a: null, h: h };
+        if (!h) nl.hPend = true;
+        p.lineas.push(nl); return nl;
+      });
+      p.mod = Date.now(); this.touch();
+      this.io.flash && this.io.flash('ok');
+      const sumL = round2(added.reduce((a, l) => a + l.l * (l.uds || 1), 0));
+      if (h) return this.ask((added.length === 1 ? 'Pared de ' + fmt(added[0].l) + ' por ' + fmt(h) + ', ' + fmt(parcial(added[0])) + '.' : 'Anotadas ' + added.length + ' paredes con altura ' + fmt(h) + '.') + ' Total ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '. ¿Siguiente pared?', this.idleChips(), { short: true });
+      const pw = this.pendingWalls(est).length;
+      this.ask((added.length === 1 ? 'Pared de ' + fmt(added[0].l) + '.' : 'Anotadas ' + added.length + ' paredes, ' + fmt(sumL) + ' metros.') + ' ¿Siguiente pared, o dime la altura de la estancia?', [{ label: 'Decir la altura', value: 'altura', act: { askH: true } }].concat(this.idleChips()), { short: true });
+    }
     reviewLast() {
       const ps = this.obra.partidas.filter((p) => p.lineas.length).sort((a, b) => (b.mod || 0) - (a.mod || 0));
       if (!ps.length) return this.ask('Todavía no hay partidas medidas.');
@@ -1146,7 +1245,7 @@
     readLines() {
       const p = this.active();
       if (!p) return this.ask('No hay partida activa.');
-      if (!p.lineas.length) return this.ask('La partida ' + p.r + ' no tiene líneas todavía. ' + dimsSpec(p).ask);
+      if (!p.lineas.length) return this.ask('La partida ' + p.r + ' no tiene líneas todavía. ' + this.dimsAsk(p));
       const txt = p.lineas.map((l, i) => {
         const dims = ['l', 'a', 'h'].filter((k) => l[k] !== null && l[k] !== undefined).map((k) => fmt(l[k])).join(' por ');
         const u = l.uds !== null && l.uds !== 1 ? (l.uds < 0 ? 'menos ' + fmtUds(Math.abs(l.uds)) : fmtUds(l.uds)) + (dims ? ' de ' : ' unidades') : '';
