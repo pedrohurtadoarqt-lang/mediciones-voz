@@ -1,4 +1,12 @@
-# Medición por voz (prototipo MVP)
+# Mediciones por voz
+
+## Versión actual: medición guiada por voz → [`app/`](app/)
+Diálogo guiado por voz (la app pregunta y escucha), base **Precios de Mallorca 2026** embebida, embudo de partidas, control dimensional por unidad, herencia suelo/techo/paredes y PDF tipo Presto/Arquímedes.
+En GitHub Pages: `https://pedrohurtadoarqt-lang.github.io/mediciones-voz/app/` (abrir en Chrome en Android o Safari en iPhone; «Añadir a pantalla de inicio»). Código fuente en [`app/codigo/`](app/codigo/).
+
+---
+
+## Prototipo anterior (raíz del repositorio)
 
 Herramienta web 100 % cliente para tomar mediciones a pie de obra dictando, sobre una base de precios FIEBDC-3 (.bc3).
 

@@ -1,0 +1,23 @@
+#chip 1
+baño
+montaje de mampara de cristal templado con vinilo antideslizante
+#chip 1
+#chip 0
+2,40
+siguiente partida
+enchufes
+tres
+punto de luz
+2
+3
+cambia la última línea a 4
+tubería de cobre
+cuatro tramos de 2,30
+siguiente partida
+excavación de zanja
+mecánicos
+largo 5 ancho 0,6
+0,8
+qué llevo medido en el baño
+picado de alicatado
+mecánicos

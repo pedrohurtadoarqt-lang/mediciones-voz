@@ -1,0 +1,28 @@
+#chip 0
+salón
+solado de gres porcelánico
+#chip 0
+5,20 por 4,10
+la primera
+5,20 por 4,10
+pasamos a la cocina
+3 por 2,80
+pasamos al dormitorio 1
+largo 3,5 ancho 3
+pintura plástica en techo
+interior lisa
+#chip 0
+siguiente partida
+enlucido de yeso en paredes
+la segunda
+pared norte 4 por 2,6
+siguiente partida
+ventana de aluminio
+corredera
+120x120
+2 de 1,20 por 1,20
+siguiente partida
+pintura plastica interior lisa mate
+#chip 2
+copia las paredes del dormitorio 1 pero descuenta las ventanas
+lee las líneas

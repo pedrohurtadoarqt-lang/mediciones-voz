@@ -1,0 +1,15 @@
+#chip 0
+cocina
+picado de azulejos
+#chip 0
+pared frontal 3,40 por 2,50
+pared lateral tres con veinte por dos cincuenta
+pasamos al baño
+quitar azulejos
+#chip 0
+pared ducha 1,80 por 2,50
+descuenta puerta de 0,72 por 2,03
+lee las líneas
+cambia el largo de la línea 2 a 3 con 40
+borra la última línea
+solado de gres
