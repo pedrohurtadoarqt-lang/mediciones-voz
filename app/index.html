@@ -185,6 +185,10 @@ table.lines td.p { font-weight: 700; }
 .voicewarn { color: var(--accent); font-weight: 600; line-height: 1.4; }
 
 table.lines td.pend, .pend { color: var(--accent); font-weight: 700; font-style: italic; }
+
+.iconbtn.stop { color: var(--rec); border-color: var(--rec); }
+button.resumen.linklike { background: none; border: 0; padding: 0; text-align: left; color: var(--fg); font-family: inherit; font-size: var(--fs-l); font-weight: 700; line-height: 1.25; cursor: pointer; }
+.edit-hint { font-size: var(--fs-xs); font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--accent); border-radius: 6px; padding: 1px 6px; vertical-align: middle; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -205,7 +209,7 @@ table.lines td.pend, .pend { color: var(--accent); font-weight: 700; font-style:
       <button class="btn primary" type="submit">Enviar</button>
     </form>
     <div class="controls">
-      <div class="l"><button class="iconbtn" id="btnKeyboard" aria-label="Escribir en lugar de hablar" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7 14h10"/></svg></button></div>
+      <div class="l"><button class="iconbtn stop" data-a="stop" aria-label="Parar"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button><button class="iconbtn" id="btnKeyboard" aria-label="Escribir en lugar de hablar" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7 14h10"/></svg></button></div>
       <button class="mic" id="btnMic" aria-label="Hablar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg><span class="wave"><i></i><i></i><i></i><i></i></span></button>
       <div class="r"><button class="toggle" id="btnHands" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 0118 0M7 12a5 5 0 0110 0"/><circle cx="12" cy="12" r="1.5"/></svg><span class="t">Manos libres</span></button></div>
     </div>
@@ -1434,12 +1438,20 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n)) { this.changing = null; this.state = { mode: 'idle' }; return this.ask('Cancelado. ¿Qué medimos?', this.idleChips()); }
         if (/^(repite|repitelo|como|que has dicho|perdona)\b/.test(n) && this.lastPrompt) return this.ask(this.lastPrompt.text, this.lastPrompt.chips);
         if (/^(ayuda|que puedo decir|comandos)\b/.test(n)) return this.help();
-        if (/^(deshaz|deshacer|deshace|anula lo ultimo|anula)\b/.test(n)) return this.doUndo();
+        if (/^(deshaz|deshacer|deshace|anula lo ultimo|anula|atras|vuelve atras|para atras|deshaz eso)\b/.test(n)) return this.doUndo();
+        if (/^(para|parar|paro|stop|basta|basta ya|calla|callate|silencio|espera|pausa|para de escuchar|deja de escuchar|para ya)$/.test(n)) return this.stopAll();
       }
       const st = this.state;
       const h = this['st_' + st.mode];
       if (h) return h.call(this, text, n, input);
       return this.st_idle(text, n, input);
+    }
+    /** Parar: corta la pregunta en curso y pone el micro en pausa. */
+    stopAll() {
+      this.changing = null; this.state = { mode: 'idle' };
+      this.io.pause && this.io.pause();
+      this.lastPrompt = { text: 'Dime el trabajo a medir.', chips: this.idleChips() };
+      this.io.say('En pausa. Toca el micro cuando quieras seguir.', this.idleChips(), { listen: false });
     }
     help() {
       this.ask('Puedes decir un trabajo, por ejemplo "picado de azulejos", y luego las medidas: "pared ducha 1,80 por 2,50". ' +
@@ -1582,6 +1594,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         return this.doSame(act, srcs[0], '');
       }
       if (/^(seguir midiendo|seguimos midiendo|continuar|continuamos|seguimos)$/.test(n)) { const a = this.active(); return this.ask(a ? 'Seguimos con ' + a.r + '. ' + this.dimsAsk(a) : 'Seguimos' + (this.obra.estActiva ? ' en ' + art(this.obra.estActiva) : '') + '. Dime el trabajo a medir.', this.idleChips()); }
+      if (/^(crear( una)?( nueva)?( partida)?( nueva)?|crea( una)?( nueva)?( partida)?|crear nueva|partida nueva|creamos una( partida)? nueva)$/.test(n)) return this.createStart(this.pendingQuery || this.lastQuery || '', [], true);
       // Corregir la partida elegida ("no es esa", "cambia la partida por…")
       if ((m = n.match(/^(?:no[, ]+)?(?:cambia|cambiar|cambiamos|corrige|corregir|cambio de)\s+(?:la\s+|de\s+|esta\s+)?partida(?:\s+(?:por|a|a la de|que es|es)\s+(.+))?$/))
         || (m = n.match(/^(?:no[, ]+)?(?:no es esa|esa no es|esa no|no es esta|no es la correcta|no era esa|esa no era|partida equivocada|te has equivocado|te equivocaste|me he equivocado|me equivoque|equivocada|otra partida distinta|no es eso|eso no es|esa no me vale)(?:\s+de partida)?(?:[, ]+(?:es|era|quiero|queria|pon|ponme|mejor)?\s*(.+))?$/))
@@ -1665,7 +1678,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       const ps = this.obra.partidas.filter((p) => p.lineas.length);
       const nl = ps.reduce((a, p) => a + p.lineas.length, 0);
       const pend = this.obra.partidas.reduce((a, p) => a + p.lineas.filter((l) => l.hPend && l.h == null).length, 0);
-      this.ask('Medición terminada. Llevas ' + ps.length + (ps.length === 1 ? ' partida' : ' partidas') + ' y ' + nl + (nl === 1 ? ' línea' : ' líneas') + ' en ' + (this.obra.estancias || []).length + ((this.obra.estancias || []).length === 1 ? ' estancia.' : ' estancias.') + (pend ? ' Quedan ' + pend + ' paredes sin altura.' : '') + ' Puedes generar el PDF o seguir midiendo cuando quieras.',
+      this.ask('Medición terminada. Llevas ' + ps.length + (ps.length === 1 ? ' partida' : ' partidas') + ' y ' + nl + (nl === 1 ? ' línea' : ' líneas') + ((this.obra.estancias || []).length ? ' en ' + (this.obra.estancias || []).length + ((this.obra.estancias || []).length === 1 ? ' estancia.' : ' estancias.') : '.') + (pend ? ' Quedan ' + pend + ' paredes sin altura.' : '') + ' Puedes generar el PDF o seguir midiendo cuando quieras.',
         [{ label: 'Generar PDF', value: 'genera el pdf' }, { label: 'Seguir midiendo', value: 'seguir midiendo' }], { listen: false, end: true });
     }
     looksLikeMeasure(pm, text, act) {
@@ -1676,6 +1689,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       return content.length <= 3;
     }
     handleAct(a) {
+      if (a.createQ) return this.createStart(a.createQ, [], true);
       if (a.askH) { this.state = { mode: 'altura', after: '' }; return this.ask('¿Qué altura tienen las paredes de ' + art(this.obra.estActiva || 'la estancia') + '?'); }
       if (a.estancia !== undefined) return this.st_estancia(a.estancia, norm(a.estancia));
     }
@@ -1687,6 +1701,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       return (d) => kw.test(norm(d.path || d.chapTitle || '')) ? 1.12 : 1;
     }
     selectWork(query) {
+      this.pendingQuery = query;
       const sm = norm(query).match(/^(.*?)\s*,?\s*(?:con\s+)?(?:las\s+)?(?:mismas medidas|mismas mediciones|mismas superficies|lo mismo|igual que antes|con las mismas)(?:\s+que\s+.*)?$/);
       if (sm && sm[1]) { query = sm[1]; this.autoSame = true; }
       const cw = contentWords(query).filter((w) => !(w in ORD) && !/^(si|no|vale|ok|igual|mismas?|eso|esa|bien|bueno|perfecto|venga|gracias)$/.test(w));
@@ -1771,12 +1786,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       }
       const c = st.cands;
       prefix = prefix ? prefix + ' ' : '';
-      if (c.length === 1) return this.pickDoc(c[0].doc, prefix, st.query);
+      if (c.length === 1) return this.propose(c[0].doc, prefix, st.query, st.all || []);
       // Si lo dicho casi coincide con el resumen de una partida, la tomamos sin preguntar
       const qs = new Set(contentWords(st.query).map(stem));
       if (qs.size >= 2) {
         const cov = c.map((x) => { const rw = contentWords(x.doc.r).map(stem); const hit = rw.filter((w) => qs.has(w)).length; return { x, cov: rw.length ? hit / rw.length : 0, all: [...qs].every((q) => rw.includes(q)) }; }).filter((o) => o.all).sort((a, b) => b.cov - a.cov);
-        if (cov.length && cov[0].cov >= 0.75 && (!cov[1] || cov[0].cov - cov[1].cov >= 0.1)) return this.pickDoc(cov[0].x.doc, prefix, st.query);
+        if (cov.length && cov[0].cov >= 0.75 && (!cov[1] || cov[0].cov - cov[1].cov >= 0.1)) return this.propose(cov[0].x.doc, prefix, st.query, c);
       }
       if (c.length <= 4 && !st.asked.has('orient') && new Set(c.map((x) => x.doc.attrs.orient).filter(Boolean)).size > 1) {
         st.split = { a: ATTRS.find((x) => x.id === 'orient'), opts: ['vertical', 'horizontal'] }; st.asked.add('orient');
@@ -1808,6 +1823,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     st_funnel(text, n, input) {
       const st = this.state;
       const a = input && input.act;
+      if (!a && /^(no|no es ninguna|ninguna|ninguno|no lo se|no se)$/.test(n)) return this.noneOfThese(st.query);
       if (a && a.list) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
       if ((a && a.create) || /^(no[, ]+)?(ninguna|ninguno|ninguna de (esas|estas|ellas)|no es ninguna( de (esas|estas|ellas))?|no esta|no esta en la lista|crear|crea|crear nueva|crea nueva|crear( una)?( nueva)? partida( nueva)?|crea( una)?( nueva)? partida( nueva)?|partida nueva|nueva|nueva partida|creamos( una)?( nueva| partida nueva| una partida nueva)?|creala|la creamos|vamos a crearla|dictar( una)?( partida)? nueva|dictar nueva partida|otra nueva)$/.test(n)) return this.createStart(st.query, [], true);
       if (/^(ver lista|lista|leeme|lee las opciones|cuales hay|todas)/.test(n)) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
@@ -1822,7 +1838,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (!contentWords(text).length || /^(si|no|vale|ok|igual|eso|esa|esta|la misma|lo mismo)\b/.test(n)) return this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)) + ' Puedes tocar una opción.', this.lastPrompt.chips);
         const res = this.cat.index.search(st.query + ' ' + text, this.boostFn());
         const inC = res.filter((r) => st.cands.some((c) => c.doc.c === r.doc.c));
-        if (inC.length && inC[0].s > (inC[1] ? inC[1].s * 1.15 : 0)) return this.pickDoc(inC[0].doc, '', st.query);
+        if (inC.length && inC[0].s > (inC[1] ? inC[1].s * 1.15 : 0)) return this.propose(inC[0].doc, '', st.query, st.cands);
         if (contentWords(text).length >= 2 && res.length && res[0].s > 0.5 && !st.cands.some((c) => c.doc.c === res[0].doc.c)) return this.selectWork(text);
         return this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)), this.lastPrompt.chips);
       }
@@ -1833,6 +1849,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     st_list(text, n, input) {
       const st = this.state; const a = input && input.act;
+      if (!a && /^(no|no es ninguna|ninguna|ninguno|no son|no es)$/.test(n)) return this.noneOfThese(st.query);
       if ((a && a.create) || /^(no[, ]+)?(ninguna|ninguno|ninguna de (esas|estas|ellas)|no es ninguna( de (esas|estas|ellas))?|no esta|no esta en la lista|crear|crea|crear nueva|crea nueva|crear( una)?( nueva)? partida( nueva)?|crea( una)?( nueva)? partida( nueva)?|partida nueva|nueva|nueva partida|creamos( una)?( nueva| partida nueva| una partida nueva)?|creala|la creamos|vamos a crearla|dictar( una)?( partida)? nueva|dictar nueva partida|otra nueva)$/.test(n)) return this.createStart(st.query, [], true);
       let i = a && a.pick !== undefined ? a.pick : matchOption(text, st.listed.map((x) => x.short || x.doc.r));
       if (i < 0) i = matchOption(text, st.listed.map((x) => x.doc.r));
@@ -1847,6 +1864,66 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         return this.ask('¿Cuál de ellas? Dime el número.', this.lastPrompt.chips);
       }
       this.pickDoc(st.listed[i].doc, '', st.query);
+    }
+    noneOfThese(query) {
+      this.state = { mode: 'none', query };
+      return this.ask('Vale. ¿Me la dices con otras palabras, o creamos una partida nueva con «' + query + '»?', [{ label: 'Crear partida nueva', value: 'crear nueva', act: { create: true } }, { label: 'Cancelar', value: 'cancela' }]);
+    }
+    st_none(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      if ((a && a.create) || /^(si|crear|crea|crear nueva|crea nueva|creala|partida nueva|nueva|creamos( una)?( nueva)?)\b/.test(n)) return this.createStart(st.query, [], true);
+      if (this.escape(text, n)) return;
+      this.state = { mode: 'idle' };
+      return this.selectWork(text);
+    }
+    /** Elección automática: si está activada la confirmación, pregunta "¿Es X?" antes de medir. */
+    propose(d, prefix, query, alts) {
+      const confirm = this.io.confirmPick ? this.io.confirmPick() : true;
+      if (!confirm) return this.pickDoc(d, prefix, query);
+      const others = (alts || []).filter((x) => x.doc && x.doc.c !== d.c).slice(0, 8);
+      this.state = { mode: 'confirm', d, query, alts: others };
+      this.ask((prefix || '') + '¿Es «' + d.r + '», en ' + unitSpoken(d.u) + '?', [{ label: 'Sí', value: 'sí', act: { yes: true } }, { label: 'No, otra', value: 'no', act: { yes: false } }, { label: 'Crear partida nueva', value: 'crear nueva', act: { create: true } }]);
+    }
+    st_confirm(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      if ((a && a.create) || /^(crear|crea|crear nueva|crea nueva|partida nueva|nueva partida|creamos( una)?( nueva)?|ninguna)$/.test(n)) return this.createStart(st.query, [], true);
+      let yes = a && a.yes !== undefined ? a.yes : null;
+      if (yes === null) {
+        if (/^(si|vale|ok|correcto|esa|eso|exacto|perfecto|de acuerdo|afirmativo|claro|sí)\b/.test(n)) yes = true;
+        else if (/^(no|otra|tampoco|esa no|incorrecto|negativo|no es)\b/.test(n)) yes = false;
+      }
+      if (yes === null) {
+        const pm = parseMeasure(text);
+        if (pm.count >= 1 && contentWords(text).length <= 3) { this.pickDoc(st.d, '', st.query); if (this.state.mode !== 'idle') this.state = { mode: 'idle' }; return this.addMeasure(pm, text); }
+        if (this.escape(text, n)) return;
+        if (contentWords(text).length) return this.selectWork(text);
+        return this.ask('¿Es esa partida? Di sí o no.', this.lastPrompt.chips);
+      }
+      if (yes) return this.pickDoc(st.d, '', st.query);
+      const rest = n.replace(/^(no[, ]*(es)?|otra|esa no)\s*/, '').trim();
+      if (contentWords(rest).length) return this.selectWork(rest);
+      if (st.alts.length) return this.askList(st.alts.slice(0, 5), 'Otras opciones: ' + shortLabels(st.alts.slice(0, 4).map((x) => x.doc.r)).map((x, i) => (i + 1) + ', ' + x).join('; ') + '. ¿Es alguna? También puedes decírmela con otras palabras.');
+      this.state = { mode: 'idle' };
+      return this.ask('No tengo otra parecida. Dímela con otras palabras, o di «crear nueva».', [{ label: 'Crear partida nueva', value: 'crear nueva', act: { createQ: st.query } }]);
+    }
+    /** Cambio manual (desde la pantalla): sustituye la partida activa por d, moviendo sus medidas. */
+    replaceActive(d) {
+      if (this.active()) this.prepareChange();
+      this.state = { mode: 'idle' };
+      return this.pickDoc(d, '', d.r);
+    }
+    createOwn(u, desc) {
+      if (this.active()) this.prepareChange();
+      this.state = { mode: 'create_desc', u, query: desc };
+      return this.st_create_desc(desc, norm(desc), null);
+    }
+    prepareChange() {
+      const act = this.active();
+      if (!act) return null;
+      const av = this.activation && this.activation.uid === act.uid ? this.activation : { before: new Set(act.lineas.map((l) => l.id)), query: act.r, created: false };
+      const moveIds = act.lineas.filter((l) => !av.before.has(l.id)).map((l) => l.id);
+      this.changing = { fromUid: act.uid, moveIds, created: av.created, fromR: act.r };
+      return { act, av, moveIds };
     }
     /** Crea (o reutiliza) la partida del catálogo en la obra y la activa. */
     pickDoc(d, prefix, query) {
@@ -1959,9 +2036,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     changePartida(newText) {
       const act = this.active() || (this.activation && this.obra.partidas.find((x) => x.uid === this.activation.uid));
       if (!act) return this.ask('No hay ninguna partida que cambiar. Dime el trabajo a medir.', this.idleChips());
-      const av = this.activation && this.activation.uid === act.uid ? this.activation : { before: new Set(act.lineas.map((l) => l.id)), query: act.r, created: false };
-      const moveIds = act.lineas.filter((l) => !av.before.has(l.id)).map((l) => l.id);
-      this.changing = { fromUid: act.uid, moveIds, created: av.created, fromR: act.r };
+      const { av, moveIds } = this.prepareChange();
       const mls = act.lineas.filter((l) => moveIds.includes(l.id));
       const want = act.u !== 'm2' ? null : mls.length ? (mls.some((l) => l.hPend || (l.h != null && l.a == null)) ? 'vertical' : 'horizontal') : (act.orient === 'V' ? 'vertical' : 'horizontal');
       const ord = (c) => (c.doc.attrs.orient === want ? 2 : c.doc.attrs.orient ? 0 : 1);
@@ -2594,19 +2669,21 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    * ============================================================ */
   const S = {
     view: 'obras', obra: null, obras: [], cats: [], catsPrepared: new Map(), activeCat: 'palma48',
-    settings: { mode: 'obra', hands: true, plan: 'demo', rate: 1.05, voice: null, catalogo: 'palma48' },
+    settings: { mode: 'obra', hands: true, plan: 'demo', rate: 1.05, voice: null, catalogo: 'palma48', confirm: true },
     log: [], chips: [], chipsLong: false, partial: '', filterEst: null, lastLineId: null, typing: false
   };
   const dialog = new E.Dialog({
     say: (text, chips, opts) => say(text, chips, opts),
-    user: (text) => { S.log.push({ who: 'user', text }); S.partial = ''; renderTalk(); },
+    user: (text) => { S.log.push({ who: 'user', text }); logObra('user', text); S.partial = ''; renderTalk(); },
     save: () => saveObra(),
     render: () => render(),
     getCatalog: () => catFor(S.obra),
     exportPdf: () => exportPdf(S.obra),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },
-    note: (t) => { S.log.push({ who: 'app', text: t }); renderTalk(); }
+    note: (t) => { S.log.push({ who: 'app', text: t }); logObra('app', t); renderTalk(); },
+    confirmPick: () => S.settings.confirm !== false,
+    pause: () => { sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); VoiceAdapter.needTap = true; }
   });
 
   function catFor(obra) {
@@ -2631,9 +2708,18 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   /* ============================================================
    * Diálogo: salida de voz y bocadillos
    * ============================================================ */
+  /** Registro de la conversación guardado en la obra (para revisar fallos). */
+  function logObra(who, text) {
+    if (!S.obra) return;
+    const lg = S.obra.registro || (S.obra.registro = []);
+    const p = dialog.active && dialog.active();
+    lg.push({ t: new Date().toISOString(), who, text, est: S.obra.estActiva || '', partida: p ? p.ref + ' ' + p.r : '' });
+    if (lg.length > 1500) lg.splice(0, lg.length - 1500);
+  }
   let sayToken = 0;
   async function say(text, chips, opts) {
     opts = opts || {};
+    if (!opts.repeat) logObra('app', text);
     const last = S.log[S.log.length - 1];
     if (!(last && last.who === 'app' && last.text === text && opts.repeat)) S.log.push({ who: 'app', text });
     if (S.log.length > 40) S.log.splice(0, S.log.length - 40);
@@ -2753,7 +2839,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           '<td>' + E.fmtUds(l.uds) + '</td>' + cell('l') + cell('a') + cell('h') + '<td class="p">' + (l.hPend && l.h == null ? '<span class="pend">—</span>' : E.fmt(E.parcial(l))) + '</td>' +
           '<td><div class="rowbtns"><button data-a="editl" data-i="' + i + '" aria-label="Editar línea ' + (i + 1) + '">' + ICON.edit + '</button><button data-a="dell" data-i="' + i + '" aria-label="Borrar línea ' + (i + 1) + '">' + ICON.del + '</button></div></td></tr>';
       }).join('');
-      mon = '<section class="monitor"><div class="mon-head"><div class="left"><div class="code"><b>' + esc(p.codigo || '') + '</b> · ' + esc(p.ref) + ' · ' + esc(p.chapTitle) + '</div><div class="resumen">' + esc(p.r) + '</div></div>' +
+      mon = '<section class="monitor"><div class="mon-head"><div class="left"><div class="code"><b>' + esc(p.codigo || '') + '</b> · ' + esc(p.ref) + ' · ' + esc(p.chapTitle) + '</div><button class="resumen linklike" data-a="pickp" aria-label="Cambiar partida">' + esc(p.r) + ' <span class="edit-hint">cambiar</span></button></div>' +
         '<div class="total"><div class="lbl">Total</div><span class="big num">' + E.fmt(E.totalOf(p)) + '</span><span class="u">' + unitL(p.u) + '</span></div></div>' +
         (p.lineas.length ? '<div class="tablewrap"><table class="lines"><thead><tr><th>#</th><th>Estancia / comentario</th><th>Uds</th><th>Largo</th><th>Ancho</th><th>Alto</th><th>Parcial</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<p class="empty">Sin líneas todavía. ' + esc(spec.ask) + '</p>') +
@@ -2859,6 +2945,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>' +
       '<div class="card"><h3>Voz</h3><div class="meta">Reconocimiento: ' + ({ native: 'del navegador (es-ES)', claude: 'dictado de Claude', none: 'no disponible, usa el teclado' }[VoiceAdapter.mode]) + '.</div>' +
       (vs.length ? '<div class="field"><label for="selvoice">Voz del asistente</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' : '') +
+      '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
       '<div class="field"><label for="rate">Velocidad de lectura: ' + S.settings.rate.toFixed(2) + '</label><input id="rate" type="range" min="0.7" max="1.6" step="0.05" value="' + S.settings.rate + '"></div></div>' +
       '<div class="card"><h3>Datos</h3><div class="meta">Las obras y bases importadas se guardan en este navegador (IndexedDB).</div><div class="row"><button class="btn" data-a="backup">Copia de seguridad (.json)</button><label class="btn" for="restorefile">Restaurar copia</label><input id="restorefile" type="file" accept=".json" hidden></div></div>';
   }
@@ -2897,7 +2984,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
   function menuSheet() {
     const items = [['obras', ICON.obras, 'Mis obras']];
-    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['undo', ICON.undo, 'Deshacer último cambio']);
+    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
@@ -2935,6 +3022,34 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       p.mod = Date.now(); saveObra(); closeSheet(); render();
     });
   }
+  /** Elegir partida a mano: buscador en la base + crear partida propia. Las medidas pasan a la elegida. */
+  function pickSheet() {
+    const act = dialog.active();
+    const q0 = (dialog.activation && dialog.activation.query) || (act ? act.r : '') || '';
+    sheet('<h2>' + (act ? 'Cambiar partida' : 'Elegir partida') + '</h2>' +
+      (act ? '<p class="hint">Ahora: <b>' + esc(act.r) + '</b>. Las medidas que tomaste con ella pasan a la que elijas.</p>' : '') +
+      '<div class="field"><label for="pq">Buscar en la base de datos</label><input id="pq" type="search" value="' + esc(q0) + '" placeholder="Ej.: levantado de entarimado"></div>' +
+      '<div class="searchres" id="pres"></div>' +
+      '<div class="card"><h3>¿No está? Crear partida propia</h3><div class="field"><label for="pd">Descripción</label><input id="pd" value="' + esc(q0) + '"></div>' +
+      '<div class="row" id="punits">' + ['ud', 'm', 'm2', 'm3'].map((u, i) => '<button class="btn small' + (i === 2 ? ' primary' : '') + '" data-u="' + u + '" type="button">' + E.unitLabel(u) + '</button>').join('') + '</div>' +
+      '<button class="btn primary" id="pcreate" type="button">Crear y usar esta partida</button></div>' +
+      '<button class="btn" data-a="closesheet">Cancelar</button>');
+    let unit = 'm2';
+    $('#punits').addEventListener('click', (e) => { const b = e.target.closest('[data-u]'); if (!b) return; unit = b.dataset.u; [...$('#punits').children].forEach((x) => x.classList.toggle('primary', x === b)); });
+    $('#pcreate').addEventListener('click', () => { const d = $('#pd').value.trim(); if (!d) return $('#pd').focus(); closeSheet(); if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.createOwn(unit, d); });
+    const upd = () => {
+      const q = $('#pq').value.trim();
+      const r = q.length >= 3 ? catFor(S.obra).index.search(q).slice(0, 30) : [];
+      $('#pres').innerHTML = r.length ? r.map((x) => '<button class="pitem" data-a="pickdoc" data-code="' + esc(x.doc.c) + '"><span class="c">' + esc(x.doc.c) + '</span><span class="r">' + esc(x.doc.r) + '<small>' + esc(x.doc.path) + '</small></span><span class="t">' + E.unitLabel(x.doc.u) + '</span></button>').join('') : '<p class="hint">Escribe al menos 3 letras.</p>';
+    };
+    $('#pq').addEventListener('input', upd); upd();
+  }
+  async function exportLog() {
+    const o = S.obra || S.obras[0]; if (!o) return toast('No hay obra abierta.');
+    const lines = (o.registro || []).map((r) => r.t.replace('T', ' ').slice(0, 19) + ' | ' + (r.who === 'user' ? 'OÍDO' : 'APP ') + ' | ' + (r.est || '-') + ' | ' + (r.partida || '-') + ' | ' + r.text);
+    if (!lines.length) return toast('Todavía no hay conversación registrada en esta obra.');
+    await saveFile('registro-' + o.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 40) + '.txt', new Blob(['Registro de conversación · ' + o.titulo + '\n\n' + lines.join('\n') + '\n'], { type: 'text/plain' }));
+  }
   function confirmSheet(msg, okLabel, fn) {
     sheet('<h2>' + esc(msg) + '</h2><div class="row"><button class="btn danger" id="cfok">' + esc(okLabel) + '</button><button class="btn" data-a="closesheet">Cancelar</button></div>');
     $('#cfok').addEventListener('click', () => { closeSheet(); fn(); });
@@ -2963,7 +3078,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       case 'delobra': { const o = S.obras.find((x) => x.id === el.dataset.id); confirmSheet('¿Borrar la obra «' + o.titulo + '»?', 'Borrar obra', async () => { S.obras = S.obras.filter((x) => x.id !== o.id); await StorageAdapter.del('obras', o.id); if (S.obra && S.obra.id === o.id) S.obra = null; render(); }); break; }
       case 'estancia': if (S.obra.ambito) { VoiceAdapter.stopSpeaking(); dialog.handle('siguiente estancia'); } break;
       case 'close': dialog.handle('siguiente partida'); break;
-      case 'chg': VoiceAdapter.stopSpeaking(); if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.handle('cambia la partida'); break;
+      case 'chg': case 'pickp': sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); pickSheet(); break;
+      case 'pickdoc': { const d = catFor(S.obra).byCode.get(el.dataset.code); closeSheet(); if (d) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.replaceActive(d); } break; }
+      case 'stop': dialog.stopAll(); break;
+      case 'exportlog': closeSheet(); exportLog(); break;
       case 'addl': editLineSheet(-1, true); break;
       case 'editl': editLineSheet(+el.dataset.i, false); break;
       case 'dell': { const p = dialog.active(); const i = +el.dataset.i; dialog.snapshot(); p.lineas.splice(i, 1); saveObra(); render(); toast('Línea ' + (i + 1) + ' borrada', true); break; }
@@ -2986,6 +3104,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (ev.target.id === 'rate') { S.settings.rate = +ev.target.value; VoiceAdapter.setRate(S.settings.rate); ev.target.previousElementSibling.textContent = 'Velocidad de lectura: ' + S.settings.rate.toFixed(2); saveSettings(); }
   });
   document.addEventListener('change', async (ev) => {
+    if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);
     if (ev.target.id === 'restorefile' && ev.target.files[0]) restore(ev.target.files[0]);

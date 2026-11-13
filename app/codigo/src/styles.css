@@ -172,3 +172,7 @@ table.lines td.p { font-weight: 700; }
 .voicewarn { color: var(--accent); font-weight: 600; line-height: 1.4; }
 
 table.lines td.pend, .pend { color: var(--accent); font-weight: 700; font-style: italic; }
+
+.iconbtn.stop { color: var(--rec); border-color: var(--rec); }
+button.resumen.linklike { background: none; border: 0; padding: 0; text-align: left; color: var(--fg); font-family: inherit; font-size: var(--fs-l); font-weight: 700; line-height: 1.25; cursor: pointer; }
+.edit-hint { font-size: var(--fs-xs); font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--accent); border-radius: 6px; padding: 1px 6px; vertical-align: middle; white-space: nowrap; }

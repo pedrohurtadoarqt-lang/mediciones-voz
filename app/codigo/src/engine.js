@@ -654,12 +654,20 @@
         if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n)) { this.changing = null; this.state = { mode: 'idle' }; return this.ask('Cancelado. ¿Qué medimos?', this.idleChips()); }
         if (/^(repite|repitelo|como|que has dicho|perdona)\b/.test(n) && this.lastPrompt) return this.ask(this.lastPrompt.text, this.lastPrompt.chips);
         if (/^(ayuda|que puedo decir|comandos)\b/.test(n)) return this.help();
-        if (/^(deshaz|deshacer|deshace|anula lo ultimo|anula)\b/.test(n)) return this.doUndo();
+        if (/^(deshaz|deshacer|deshace|anula lo ultimo|anula|atras|vuelve atras|para atras|deshaz eso)\b/.test(n)) return this.doUndo();
+        if (/^(para|parar|paro|stop|basta|basta ya|calla|callate|silencio|espera|pausa|para de escuchar|deja de escuchar|para ya)$/.test(n)) return this.stopAll();
       }
       const st = this.state;
       const h = this['st_' + st.mode];
       if (h) return h.call(this, text, n, input);
       return this.st_idle(text, n, input);
+    }
+    /** Parar: corta la pregunta en curso y pone el micro en pausa. */
+    stopAll() {
+      this.changing = null; this.state = { mode: 'idle' };
+      this.io.pause && this.io.pause();
+      this.lastPrompt = { text: 'Dime el trabajo a medir.', chips: this.idleChips() };
+      this.io.say('En pausa. Toca el micro cuando quieras seguir.', this.idleChips(), { listen: false });
     }
     help() {
       this.ask('Puedes decir un trabajo, por ejemplo "picado de azulejos", y luego las medidas: "pared ducha 1,80 por 2,50". ' +
@@ -802,6 +810,7 @@
         return this.doSame(act, srcs[0], '');
       }
       if (/^(seguir midiendo|seguimos midiendo|continuar|continuamos|seguimos)$/.test(n)) { const a = this.active(); return this.ask(a ? 'Seguimos con ' + a.r + '. ' + this.dimsAsk(a) : 'Seguimos' + (this.obra.estActiva ? ' en ' + art(this.obra.estActiva) : '') + '. Dime el trabajo a medir.', this.idleChips()); }
+      if (/^(crear( una)?( nueva)?( partida)?( nueva)?|crea( una)?( nueva)?( partida)?|crear nueva|partida nueva|creamos una( partida)? nueva)$/.test(n)) return this.createStart(this.pendingQuery || this.lastQuery || '', [], true);
       // Corregir la partida elegida ("no es esa", "cambia la partida por…")
       if ((m = n.match(/^(?:no[, ]+)?(?:cambia|cambiar|cambiamos|corrige|corregir|cambio de)\s+(?:la\s+|de\s+|esta\s+)?partida(?:\s+(?:por|a|a la de|que es|es)\s+(.+))?$/))
         || (m = n.match(/^(?:no[, ]+)?(?:no es esa|esa no es|esa no|no es esta|no es la correcta|no era esa|esa no era|partida equivocada|te has equivocado|te equivocaste|me he equivocado|me equivoque|equivocada|otra partida distinta|no es eso|eso no es|esa no me vale)(?:\s+de partida)?(?:[, ]+(?:es|era|quiero|queria|pon|ponme|mejor)?\s*(.+))?$/))
@@ -885,7 +894,7 @@
       const ps = this.obra.partidas.filter((p) => p.lineas.length);
       const nl = ps.reduce((a, p) => a + p.lineas.length, 0);
       const pend = this.obra.partidas.reduce((a, p) => a + p.lineas.filter((l) => l.hPend && l.h == null).length, 0);
-      this.ask('Medición terminada. Llevas ' + ps.length + (ps.length === 1 ? ' partida' : ' partidas') + ' y ' + nl + (nl === 1 ? ' línea' : ' líneas') + ' en ' + (this.obra.estancias || []).length + ((this.obra.estancias || []).length === 1 ? ' estancia.' : ' estancias.') + (pend ? ' Quedan ' + pend + ' paredes sin altura.' : '') + ' Puedes generar el PDF o seguir midiendo cuando quieras.',
+      this.ask('Medición terminada. Llevas ' + ps.length + (ps.length === 1 ? ' partida' : ' partidas') + ' y ' + nl + (nl === 1 ? ' línea' : ' líneas') + ((this.obra.estancias || []).length ? ' en ' + (this.obra.estancias || []).length + ((this.obra.estancias || []).length === 1 ? ' estancia.' : ' estancias.') : '.') + (pend ? ' Quedan ' + pend + ' paredes sin altura.' : '') + ' Puedes generar el PDF o seguir midiendo cuando quieras.',
         [{ label: 'Generar PDF', value: 'genera el pdf' }, { label: 'Seguir midiendo', value: 'seguir midiendo' }], { listen: false, end: true });
     }
     looksLikeMeasure(pm, text, act) {
@@ -896,6 +905,7 @@
       return content.length <= 3;
     }
     handleAct(a) {
+      if (a.createQ) return this.createStart(a.createQ, [], true);
       if (a.askH) { this.state = { mode: 'altura', after: '' }; return this.ask('¿Qué altura tienen las paredes de ' + art(this.obra.estActiva || 'la estancia') + '?'); }
       if (a.estancia !== undefined) return this.st_estancia(a.estancia, norm(a.estancia));
     }
@@ -907,6 +917,7 @@
       return (d) => kw.test(norm(d.path || d.chapTitle || '')) ? 1.12 : 1;
     }
     selectWork(query) {
+      this.pendingQuery = query;
       const sm = norm(query).match(/^(.*?)\s*,?\s*(?:con\s+)?(?:las\s+)?(?:mismas medidas|mismas mediciones|mismas superficies|lo mismo|igual que antes|con las mismas)(?:\s+que\s+.*)?$/);
       if (sm && sm[1]) { query = sm[1]; this.autoSame = true; }
       const cw = contentWords(query).filter((w) => !(w in ORD) && !/^(si|no|vale|ok|igual|mismas?|eso|esa|bien|bueno|perfecto|venga|gracias)$/.test(w));
@@ -991,12 +1002,12 @@
       }
       const c = st.cands;
       prefix = prefix ? prefix + ' ' : '';
-      if (c.length === 1) return this.pickDoc(c[0].doc, prefix, st.query);
+      if (c.length === 1) return this.propose(c[0].doc, prefix, st.query, st.all || []);
       // Si lo dicho casi coincide con el resumen de una partida, la tomamos sin preguntar
       const qs = new Set(contentWords(st.query).map(stem));
       if (qs.size >= 2) {
         const cov = c.map((x) => { const rw = contentWords(x.doc.r).map(stem); const hit = rw.filter((w) => qs.has(w)).length; return { x, cov: rw.length ? hit / rw.length : 0, all: [...qs].every((q) => rw.includes(q)) }; }).filter((o) => o.all).sort((a, b) => b.cov - a.cov);
-        if (cov.length && cov[0].cov >= 0.75 && (!cov[1] || cov[0].cov - cov[1].cov >= 0.1)) return this.pickDoc(cov[0].x.doc, prefix, st.query);
+        if (cov.length && cov[0].cov >= 0.75 && (!cov[1] || cov[0].cov - cov[1].cov >= 0.1)) return this.propose(cov[0].x.doc, prefix, st.query, c);
       }
       if (c.length <= 4 && !st.asked.has('orient') && new Set(c.map((x) => x.doc.attrs.orient).filter(Boolean)).size > 1) {
         st.split = { a: ATTRS.find((x) => x.id === 'orient'), opts: ['vertical', 'horizontal'] }; st.asked.add('orient');
@@ -1028,6 +1039,7 @@
     st_funnel(text, n, input) {
       const st = this.state;
       const a = input && input.act;
+      if (!a && /^(no|no es ninguna|ninguna|ninguno|no lo se|no se)$/.test(n)) return this.noneOfThese(st.query);
       if (a && a.list) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
       if ((a && a.create) || /^(no[, ]+)?(ninguna|ninguno|ninguna de (esas|estas|ellas)|no es ninguna( de (esas|estas|ellas))?|no esta|no esta en la lista|crear|crea|crear nueva|crea nueva|crear( una)?( nueva)? partida( nueva)?|crea( una)?( nueva)? partida( nueva)?|partida nueva|nueva|nueva partida|creamos( una)?( nueva| partida nueva| una partida nueva)?|creala|la creamos|vamos a crearla|dictar( una)?( partida)? nueva|dictar nueva partida|otra nueva)$/.test(n)) return this.createStart(st.query, [], true);
       if (/^(ver lista|lista|leeme|lee las opciones|cuales hay|todas)/.test(n)) return this.askList(st.cands.slice(0, 12), 'Estas son las opciones. ¿Cuál?');
@@ -1042,7 +1054,7 @@
         if (!contentWords(text).length || /^(si|no|vale|ok|igual|eso|esa|esta|la misma|lo mismo)\b/.test(n)) return this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)) + ' Puedes tocar una opción.', this.lastPrompt.chips);
         const res = this.cat.index.search(st.query + ' ' + text, this.boostFn());
         const inC = res.filter((r) => st.cands.some((c) => c.doc.c === r.doc.c));
-        if (inC.length && inC[0].s > (inC[1] ? inC[1].s * 1.15 : 0)) return this.pickDoc(inC[0].doc, '', st.query);
+        if (inC.length && inC[0].s > (inC[1] ? inC[1].s * 1.15 : 0)) return this.propose(inC[0].doc, '', st.query, st.cands);
         if (contentWords(text).length >= 2 && res.length && res[0].s > 0.5 && !st.cands.some((c) => c.doc.c === res[0].doc.c)) return this.selectWork(text);
         return this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)), this.lastPrompt.chips);
       }
@@ -1053,6 +1065,7 @@
     }
     st_list(text, n, input) {
       const st = this.state; const a = input && input.act;
+      if (!a && /^(no|no es ninguna|ninguna|ninguno|no son|no es)$/.test(n)) return this.noneOfThese(st.query);
       if ((a && a.create) || /^(no[, ]+)?(ninguna|ninguno|ninguna de (esas|estas|ellas)|no es ninguna( de (esas|estas|ellas))?|no esta|no esta en la lista|crear|crea|crear nueva|crea nueva|crear( una)?( nueva)? partida( nueva)?|crea( una)?( nueva)? partida( nueva)?|partida nueva|nueva|nueva partida|creamos( una)?( nueva| partida nueva| una partida nueva)?|creala|la creamos|vamos a crearla|dictar( una)?( partida)? nueva|dictar nueva partida|otra nueva)$/.test(n)) return this.createStart(st.query, [], true);
       let i = a && a.pick !== undefined ? a.pick : matchOption(text, st.listed.map((x) => x.short || x.doc.r));
       if (i < 0) i = matchOption(text, st.listed.map((x) => x.doc.r));
@@ -1067,6 +1080,66 @@
         return this.ask('¿Cuál de ellas? Dime el número.', this.lastPrompt.chips);
       }
       this.pickDoc(st.listed[i].doc, '', st.query);
+    }
+    noneOfThese(query) {
+      this.state = { mode: 'none', query };
+      return this.ask('Vale. ¿Me la dices con otras palabras, o creamos una partida nueva con «' + query + '»?', [{ label: 'Crear partida nueva', value: 'crear nueva', act: { create: true } }, { label: 'Cancelar', value: 'cancela' }]);
+    }
+    st_none(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      if ((a && a.create) || /^(si|crear|crea|crear nueva|crea nueva|creala|partida nueva|nueva|creamos( una)?( nueva)?)\b/.test(n)) return this.createStart(st.query, [], true);
+      if (this.escape(text, n)) return;
+      this.state = { mode: 'idle' };
+      return this.selectWork(text);
+    }
+    /** Elección automática: si está activada la confirmación, pregunta "¿Es X?" antes de medir. */
+    propose(d, prefix, query, alts) {
+      const confirm = this.io.confirmPick ? this.io.confirmPick() : true;
+      if (!confirm) return this.pickDoc(d, prefix, query);
+      const others = (alts || []).filter((x) => x.doc && x.doc.c !== d.c).slice(0, 8);
+      this.state = { mode: 'confirm', d, query, alts: others };
+      this.ask((prefix || '') + '¿Es «' + d.r + '», en ' + unitSpoken(d.u) + '?', [{ label: 'Sí', value: 'sí', act: { yes: true } }, { label: 'No, otra', value: 'no', act: { yes: false } }, { label: 'Crear partida nueva', value: 'crear nueva', act: { create: true } }]);
+    }
+    st_confirm(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      if ((a && a.create) || /^(crear|crea|crear nueva|crea nueva|partida nueva|nueva partida|creamos( una)?( nueva)?|ninguna)$/.test(n)) return this.createStart(st.query, [], true);
+      let yes = a && a.yes !== undefined ? a.yes : null;
+      if (yes === null) {
+        if (/^(si|vale|ok|correcto|esa|eso|exacto|perfecto|de acuerdo|afirmativo|claro|sí)\b/.test(n)) yes = true;
+        else if (/^(no|otra|tampoco|esa no|incorrecto|negativo|no es)\b/.test(n)) yes = false;
+      }
+      if (yes === null) {
+        const pm = parseMeasure(text);
+        if (pm.count >= 1 && contentWords(text).length <= 3) { this.pickDoc(st.d, '', st.query); if (this.state.mode !== 'idle') this.state = { mode: 'idle' }; return this.addMeasure(pm, text); }
+        if (this.escape(text, n)) return;
+        if (contentWords(text).length) return this.selectWork(text);
+        return this.ask('¿Es esa partida? Di sí o no.', this.lastPrompt.chips);
+      }
+      if (yes) return this.pickDoc(st.d, '', st.query);
+      const rest = n.replace(/^(no[, ]*(es)?|otra|esa no)\s*/, '').trim();
+      if (contentWords(rest).length) return this.selectWork(rest);
+      if (st.alts.length) return this.askList(st.alts.slice(0, 5), 'Otras opciones: ' + shortLabels(st.alts.slice(0, 4).map((x) => x.doc.r)).map((x, i) => (i + 1) + ', ' + x).join('; ') + '. ¿Es alguna? También puedes decírmela con otras palabras.');
+      this.state = { mode: 'idle' };
+      return this.ask('No tengo otra parecida. Dímela con otras palabras, o di «crear nueva».', [{ label: 'Crear partida nueva', value: 'crear nueva', act: { createQ: st.query } }]);
+    }
+    /** Cambio manual (desde la pantalla): sustituye la partida activa por d, moviendo sus medidas. */
+    replaceActive(d) {
+      if (this.active()) this.prepareChange();
+      this.state = { mode: 'idle' };
+      return this.pickDoc(d, '', d.r);
+    }
+    createOwn(u, desc) {
+      if (this.active()) this.prepareChange();
+      this.state = { mode: 'create_desc', u, query: desc };
+      return this.st_create_desc(desc, norm(desc), null);
+    }
+    prepareChange() {
+      const act = this.active();
+      if (!act) return null;
+      const av = this.activation && this.activation.uid === act.uid ? this.activation : { before: new Set(act.lineas.map((l) => l.id)), query: act.r, created: false };
+      const moveIds = act.lineas.filter((l) => !av.before.has(l.id)).map((l) => l.id);
+      this.changing = { fromUid: act.uid, moveIds, created: av.created, fromR: act.r };
+      return { act, av, moveIds };
     }
     /** Crea (o reutiliza) la partida del catálogo en la obra y la activa. */
     pickDoc(d, prefix, query) {
@@ -1179,9 +1252,7 @@
     changePartida(newText) {
       const act = this.active() || (this.activation && this.obra.partidas.find((x) => x.uid === this.activation.uid));
       if (!act) return this.ask('No hay ninguna partida que cambiar. Dime el trabajo a medir.', this.idleChips());
-      const av = this.activation && this.activation.uid === act.uid ? this.activation : { before: new Set(act.lineas.map((l) => l.id)), query: act.r, created: false };
-      const moveIds = act.lineas.filter((l) => !av.before.has(l.id)).map((l) => l.id);
-      this.changing = { fromUid: act.uid, moveIds, created: av.created, fromR: act.r };
+      const { av, moveIds } = this.prepareChange();
       const mls = act.lineas.filter((l) => moveIds.includes(l.id));
       const want = act.u !== 'm2' ? null : mls.length ? (mls.some((l) => l.hPend || (l.h != null && l.a == null)) ? 'vertical' : 'horizontal') : (act.orient === 'V' ? 'vertical' : 'horizontal');
       const ord = (c) => (c.doc.attrs.orient === want ? 2 : c.doc.attrs.orient ? 0 : 1);

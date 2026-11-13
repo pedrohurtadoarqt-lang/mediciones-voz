@@ -236,19 +236,21 @@
    * ============================================================ */
   const S = {
     view: 'obras', obra: null, obras: [], cats: [], catsPrepared: new Map(), activeCat: 'palma48',
-    settings: { mode: 'obra', hands: true, plan: 'demo', rate: 1.05, voice: null, catalogo: 'palma48' },
+    settings: { mode: 'obra', hands: true, plan: 'demo', rate: 1.05, voice: null, catalogo: 'palma48', confirm: true },
     log: [], chips: [], chipsLong: false, partial: '', filterEst: null, lastLineId: null, typing: false
   };
   const dialog = new E.Dialog({
     say: (text, chips, opts) => say(text, chips, opts),
-    user: (text) => { S.log.push({ who: 'user', text }); S.partial = ''; renderTalk(); },
+    user: (text) => { S.log.push({ who: 'user', text }); logObra('user', text); S.partial = ''; renderTalk(); },
     save: () => saveObra(),
     render: () => render(),
     getCatalog: () => catFor(S.obra),
     exportPdf: () => exportPdf(S.obra),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },
-    note: (t) => { S.log.push({ who: 'app', text: t }); renderTalk(); }
+    note: (t) => { S.log.push({ who: 'app', text: t }); logObra('app', t); renderTalk(); },
+    confirmPick: () => S.settings.confirm !== false,
+    pause: () => { sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); VoiceAdapter.needTap = true; }
   });
 
   function catFor(obra) {
@@ -273,9 +275,18 @@
   /* ============================================================
    * Diálogo: salida de voz y bocadillos
    * ============================================================ */
+  /** Registro de la conversación guardado en la obra (para revisar fallos). */
+  function logObra(who, text) {
+    if (!S.obra) return;
+    const lg = S.obra.registro || (S.obra.registro = []);
+    const p = dialog.active && dialog.active();
+    lg.push({ t: new Date().toISOString(), who, text, est: S.obra.estActiva || '', partida: p ? p.ref + ' ' + p.r : '' });
+    if (lg.length > 1500) lg.splice(0, lg.length - 1500);
+  }
   let sayToken = 0;
   async function say(text, chips, opts) {
     opts = opts || {};
+    if (!opts.repeat) logObra('app', text);
     const last = S.log[S.log.length - 1];
     if (!(last && last.who === 'app' && last.text === text && opts.repeat)) S.log.push({ who: 'app', text });
     if (S.log.length > 40) S.log.splice(0, S.log.length - 40);
@@ -395,7 +406,7 @@
           '<td>' + E.fmtUds(l.uds) + '</td>' + cell('l') + cell('a') + cell('h') + '<td class="p">' + (l.hPend && l.h == null ? '<span class="pend">—</span>' : E.fmt(E.parcial(l))) + '</td>' +
           '<td><div class="rowbtns"><button data-a="editl" data-i="' + i + '" aria-label="Editar línea ' + (i + 1) + '">' + ICON.edit + '</button><button data-a="dell" data-i="' + i + '" aria-label="Borrar línea ' + (i + 1) + '">' + ICON.del + '</button></div></td></tr>';
       }).join('');
-      mon = '<section class="monitor"><div class="mon-head"><div class="left"><div class="code"><b>' + esc(p.codigo || '') + '</b> · ' + esc(p.ref) + ' · ' + esc(p.chapTitle) + '</div><div class="resumen">' + esc(p.r) + '</div></div>' +
+      mon = '<section class="monitor"><div class="mon-head"><div class="left"><div class="code"><b>' + esc(p.codigo || '') + '</b> · ' + esc(p.ref) + ' · ' + esc(p.chapTitle) + '</div><button class="resumen linklike" data-a="pickp" aria-label="Cambiar partida">' + esc(p.r) + ' <span class="edit-hint">cambiar</span></button></div>' +
         '<div class="total"><div class="lbl">Total</div><span class="big num">' + E.fmt(E.totalOf(p)) + '</span><span class="u">' + unitL(p.u) + '</span></div></div>' +
         (p.lineas.length ? '<div class="tablewrap"><table class="lines"><thead><tr><th>#</th><th>Estancia / comentario</th><th>Uds</th><th>Largo</th><th>Ancho</th><th>Alto</th><th>Parcial</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<p class="empty">Sin líneas todavía. ' + esc(spec.ask) + '</p>') +
@@ -501,6 +512,7 @@
       (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>' +
       '<div class="card"><h3>Voz</h3><div class="meta">Reconocimiento: ' + ({ native: 'del navegador (es-ES)', claude: 'dictado de Claude', none: 'no disponible, usa el teclado' }[VoiceAdapter.mode]) + '.</div>' +
       (vs.length ? '<div class="field"><label for="selvoice">Voz del asistente</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' : '') +
+      '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
       '<div class="field"><label for="rate">Velocidad de lectura: ' + S.settings.rate.toFixed(2) + '</label><input id="rate" type="range" min="0.7" max="1.6" step="0.05" value="' + S.settings.rate + '"></div></div>' +
       '<div class="card"><h3>Datos</h3><div class="meta">Las obras y bases importadas se guardan en este navegador (IndexedDB).</div><div class="row"><button class="btn" data-a="backup">Copia de seguridad (.json)</button><label class="btn" for="restorefile">Restaurar copia</label><input id="restorefile" type="file" accept=".json" hidden></div></div>';
   }
@@ -539,7 +551,7 @@
   }
   function menuSheet() {
     const items = [['obras', ICON.obras, 'Mis obras']];
-    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['undo', ICON.undo, 'Deshacer último cambio']);
+    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
@@ -577,6 +589,34 @@
       p.mod = Date.now(); saveObra(); closeSheet(); render();
     });
   }
+  /** Elegir partida a mano: buscador en la base + crear partida propia. Las medidas pasan a la elegida. */
+  function pickSheet() {
+    const act = dialog.active();
+    const q0 = (dialog.activation && dialog.activation.query) || (act ? act.r : '') || '';
+    sheet('<h2>' + (act ? 'Cambiar partida' : 'Elegir partida') + '</h2>' +
+      (act ? '<p class="hint">Ahora: <b>' + esc(act.r) + '</b>. Las medidas que tomaste con ella pasan a la que elijas.</p>' : '') +
+      '<div class="field"><label for="pq">Buscar en la base de datos</label><input id="pq" type="search" value="' + esc(q0) + '" placeholder="Ej.: levantado de entarimado"></div>' +
+      '<div class="searchres" id="pres"></div>' +
+      '<div class="card"><h3>¿No está? Crear partida propia</h3><div class="field"><label for="pd">Descripción</label><input id="pd" value="' + esc(q0) + '"></div>' +
+      '<div class="row" id="punits">' + ['ud', 'm', 'm2', 'm3'].map((u, i) => '<button class="btn small' + (i === 2 ? ' primary' : '') + '" data-u="' + u + '" type="button">' + E.unitLabel(u) + '</button>').join('') + '</div>' +
+      '<button class="btn primary" id="pcreate" type="button">Crear y usar esta partida</button></div>' +
+      '<button class="btn" data-a="closesheet">Cancelar</button>');
+    let unit = 'm2';
+    $('#punits').addEventListener('click', (e) => { const b = e.target.closest('[data-u]'); if (!b) return; unit = b.dataset.u; [...$('#punits').children].forEach((x) => x.classList.toggle('primary', x === b)); });
+    $('#pcreate').addEventListener('click', () => { const d = $('#pd').value.trim(); if (!d) return $('#pd').focus(); closeSheet(); if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.createOwn(unit, d); });
+    const upd = () => {
+      const q = $('#pq').value.trim();
+      const r = q.length >= 3 ? catFor(S.obra).index.search(q).slice(0, 30) : [];
+      $('#pres').innerHTML = r.length ? r.map((x) => '<button class="pitem" data-a="pickdoc" data-code="' + esc(x.doc.c) + '"><span class="c">' + esc(x.doc.c) + '</span><span class="r">' + esc(x.doc.r) + '<small>' + esc(x.doc.path) + '</small></span><span class="t">' + E.unitLabel(x.doc.u) + '</span></button>').join('') : '<p class="hint">Escribe al menos 3 letras.</p>';
+    };
+    $('#pq').addEventListener('input', upd); upd();
+  }
+  async function exportLog() {
+    const o = S.obra || S.obras[0]; if (!o) return toast('No hay obra abierta.');
+    const lines = (o.registro || []).map((r) => r.t.replace('T', ' ').slice(0, 19) + ' | ' + (r.who === 'user' ? 'OÍDO' : 'APP ') + ' | ' + (r.est || '-') + ' | ' + (r.partida || '-') + ' | ' + r.text);
+    if (!lines.length) return toast('Todavía no hay conversación registrada en esta obra.');
+    await saveFile('registro-' + o.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 40) + '.txt', new Blob(['Registro de conversación · ' + o.titulo + '\n\n' + lines.join('\n') + '\n'], { type: 'text/plain' }));
+  }
   function confirmSheet(msg, okLabel, fn) {
     sheet('<h2>' + esc(msg) + '</h2><div class="row"><button class="btn danger" id="cfok">' + esc(okLabel) + '</button><button class="btn" data-a="closesheet">Cancelar</button></div>');
     $('#cfok').addEventListener('click', () => { closeSheet(); fn(); });
@@ -605,7 +645,10 @@
       case 'delobra': { const o = S.obras.find((x) => x.id === el.dataset.id); confirmSheet('¿Borrar la obra «' + o.titulo + '»?', 'Borrar obra', async () => { S.obras = S.obras.filter((x) => x.id !== o.id); await StorageAdapter.del('obras', o.id); if (S.obra && S.obra.id === o.id) S.obra = null; render(); }); break; }
       case 'estancia': if (S.obra.ambito) { VoiceAdapter.stopSpeaking(); dialog.handle('siguiente estancia'); } break;
       case 'close': dialog.handle('siguiente partida'); break;
-      case 'chg': VoiceAdapter.stopSpeaking(); if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.handle('cambia la partida'); break;
+      case 'chg': case 'pickp': sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); pickSheet(); break;
+      case 'pickdoc': { const d = catFor(S.obra).byCode.get(el.dataset.code); closeSheet(); if (d) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.replaceActive(d); } break; }
+      case 'stop': dialog.stopAll(); break;
+      case 'exportlog': closeSheet(); exportLog(); break;
       case 'addl': editLineSheet(-1, true); break;
       case 'editl': editLineSheet(+el.dataset.i, false); break;
       case 'dell': { const p = dialog.active(); const i = +el.dataset.i; dialog.snapshot(); p.lineas.splice(i, 1); saveObra(); render(); toast('Línea ' + (i + 1) + ' borrada', true); break; }
@@ -628,6 +671,7 @@
     if (ev.target.id === 'rate') { S.settings.rate = +ev.target.value; VoiceAdapter.setRate(S.settings.rate); ev.target.previousElementSibling.textContent = 'Velocidad de lectura: ' + S.settings.rate.toFixed(2); saveSettings(); }
   });
   document.addEventListener('change', async (ev) => {
+    if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);
     if (ev.target.id === 'restorefile' && ev.target.files[0]) restore(ev.target.files[0]);

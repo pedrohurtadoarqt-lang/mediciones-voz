@@ -1,0 +1,19 @@
+#chip 4
+picado de azulejos
+no
+levantar tarima
+sí
+5 por 4
+pintura plástica interior lisa
+para
+lee las líneas
+levantar tarima
+3 por 2
+atrás
+demolición de tabique de ladrillo hueco
+no
+crear nueva
+m2
+Demolición de tabique de ladrillo hueco sencillo
+2,5 por 2,7
+terminar
