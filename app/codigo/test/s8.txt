@@ -1,0 +1,20 @@
+#chip 0
+cocina
+picar yeso
+paredes
+4,20
+3,10
+no es esa
+la segunda
+la altura es 2,60
+cambia la partida por guarnecido de yeso a buena vista
+siguiente partida
+solado de gres
+la primera
+3 por 2,5
+esa no, es solado de gres porcelánico 60x60
+lee las líneas
+cambia la partida
+cancela
+pintura
+#chip 1

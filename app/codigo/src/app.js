@@ -399,7 +399,7 @@
         '<div class="total"><div class="lbl">Total</div><span class="big num">' + E.fmt(E.totalOf(p)) + '</span><span class="u">' + unitL(p.u) + '</span></div></div>' +
         (p.lineas.length ? '<div class="tablewrap"><table class="lines"><thead><tr><th>#</th><th>Estancia / comentario</th><th>Uds</th><th>Largo</th><th>Ancho</th><th>Alto</th><th>Parcial</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<p class="empty">Sin líneas todavía. ' + esc(spec.ask) + '</p>') +
-        '<div class="row"><button class="btn small" data-a="addl">Añadir línea a mano</button><button class="btn small" data-a="close">Cerrar partida</button><button class="btn small" data-a="resumen">Resumen de obra</button></div></section>';
+        '<div class="row"><button class="btn small" data-a="chg">Cambiar partida</button><button class="btn small" data-a="addl">Añadir línea a mano</button><button class="btn small" data-a="close">Cerrar partida</button><button class="btn small" data-a="resumen">Resumen de obra</button></div></section>';
     }
     return '<div class="ctx">' + est + amb + '</div>' + mon;
   }
@@ -552,7 +552,10 @@
         '<b>Revisión:</b> «revisa la última partida», «muéstrame la demolición de alicatado», «lee las líneas», «qué llevo medido en la cocina», «resumen»',
         '<b>Corrección:</b> «borra la última línea», «borra la línea 3», «cambia el largo de la línea 2 a 3 con 40», «cambia la última línea a 3 por 2,5», «deshacer»',
         '<b>Herencia:</b> «aplica las mismas medidas que en el pavimento», «copia las paredes del salón pero descuenta las ventanas»',
-        '<b>Partida:</b> «siguiente partida», «borra esta partida», «exporta el PDF»',
+        '<b>Partida:</b> «siguiente partida», «ahora guarnecido de yeso», «pintura con las mismas medidas», «borra esta partida», «exporta el PDF»',
+        '<b>Corregir partida:</b> «no es esa», «cambia la partida», «esa no, es solado de gres 60x60» (las medidas pasan a la nueva)',
+        '<b>Paredes:</b> «3,40», «2,80»… y luego «la altura es 2,60»',
+        '<b>Terminar:</b> «terminar», «he terminado», «eso es todo»',
         '<b>Diálogo:</b> «repite», «cancela», «ayuda»'].map((x) => '<div>' + x + '</div>').join('') +
       '</div><button class="btn" data-a="closesheet">Cerrar</button>');
   }
@@ -602,6 +605,7 @@
       case 'delobra': { const o = S.obras.find((x) => x.id === el.dataset.id); confirmSheet('¿Borrar la obra «' + o.titulo + '»?', 'Borrar obra', async () => { S.obras = S.obras.filter((x) => x.id !== o.id); await StorageAdapter.del('obras', o.id); if (S.obra && S.obra.id === o.id) S.obra = null; render(); }); break; }
       case 'estancia': if (S.obra.ambito) { VoiceAdapter.stopSpeaking(); dialog.handle('siguiente estancia'); } break;
       case 'close': dialog.handle('siguiente partida'); break;
+      case 'chg': VoiceAdapter.stopSpeaking(); if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.handle('cambia la partida'); break;
       case 'addl': editLineSheet(-1, true); break;
       case 'editl': editLineSheet(+el.dataset.i, false); break;
       case 'dell': { const p = dialog.active(); const i = +el.dataset.i; dialog.snapshot(); p.lineas.splice(i, 1); saveObra(); render(); toast('Línea ' + (i + 1) + ' borrada', true); break; }

@@ -1399,7 +1399,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     tell(text, chips) { this.ask(text, chips, { listen: true }); }
     idleChips() {
       const c = [];
-      if (this.active()) c.push({ label: 'Siguiente partida', value: 'siguiente partida' }, { label: 'Leer líneas', value: 'lee las líneas' });
+      if (this.active()) c.push({ label: 'Siguiente partida', value: 'siguiente partida' }, { label: 'Cambiar partida', value: 'cambia la partida' }, { label: 'Leer líneas', value: 'lee las líneas' });
       if (this.obra && this.obra.ambito !== 'libre') c.push({ label: 'Cambiar estancia', value: 'siguiente estancia' });
       return c;
     }
@@ -1420,7 +1420,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       const n = norm(text);
       // Comandos globales que funcionan en cualquier estado
       if (text) {
-        if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n)) { this.state = { mode: 'idle' }; return this.ask('Cancelado. ¿Qué medimos?', this.idleChips()); }
+        if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n)) { this.changing = null; this.state = { mode: 'idle' }; return this.ask('Cancelado. ¿Qué medimos?', this.idleChips()); }
         if (/^(repite|repitelo|como|que has dicho|perdona)\b/.test(n) && this.lastPrompt) return this.ask(this.lastPrompt.text, this.lastPrompt.chips);
         if (/^(ayuda|que puedo decir|comandos)\b/.test(n)) return this.help();
         if (/^(deshaz|deshacer|deshace|anula lo ultimo|anula)\b/.test(n)) return this.doUndo();
@@ -1494,6 +1494,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     /* ---- Estado idle / medición ---- */
     st_idle(text, n, input) {
+      this.changing = null; // si se abandona una corrección de partida a medias, se descarta
       if (input && input.act) return this.handleAct(input.act);
       if (!text) return;
       const act = this.active();
@@ -1570,6 +1571,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         return this.doSame(act, srcs[0], '');
       }
       if (/^(seguir midiendo|seguimos midiendo|continuar|continuamos|seguimos)$/.test(n)) { const a = this.active(); return this.ask(a ? 'Seguimos con ' + a.r + '. ' + this.dimsAsk(a) : 'Seguimos' + (this.obra.estActiva ? ' en ' + art(this.obra.estActiva) : '') + '. Dime el trabajo a medir.', this.idleChips()); }
+      // Corregir la partida elegida ("no es esa", "cambia la partida por…")
+      if ((m = n.match(/^(?:no[, ]+)?(?:cambia|cambiar|cambiamos|corrige|corregir|cambio de)\s+(?:la\s+|de\s+|esta\s+)?partida(?:\s+(?:por|a|a la de|que es|es)\s+(.+))?$/))
+        || (m = n.match(/^(?:no[, ]+)?(?:no es esa|esa no es|esa no|no es esta|no es la correcta|no era esa|esa no era|partida equivocada|te has equivocado|te equivocaste|me he equivocado|me equivoque|equivocada|otra partida distinta|no es eso|eso no es|esa no me vale)(?:\s+de partida)?(?:[, ]+(?:es|era|quiero|queria|pon|ponme|mejor)?\s*(.+))?$/))
+        || (m = n.match(/^no[, ]+(?:es|era|queria|quiero)\s+(.+)$/))) return this.changePartida(m[1] || '');
       // Nueva partida en la misma estancia ("ahora guarnecido", "siguiente partida pintura", "añade…")
       if ((m = n.match(/^(?:y\s+)?(?:siguiente partida|nueva partida|otra partida|partida|ahora|despues|luego|añade|anade|añadir|anadir|añade partida|anade partida|metemos|mete|pon|ponemos|vamos con|seguimos con|busca|buscar|tambien)\s*:?\s+(?:la\s+partida\s+(?:de\s+)?|una\s+partida\s+de\s+|partida\s+de\s+|partida\s+|la\s+|el\s+)?(.+)$/)) && contentWords(m[1]).length >= 1 && !EST_VOCAB.test(m[1])) {
         if (this.guardHeightsNeeded()) return this.guardHeights(text);
@@ -1583,7 +1588,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       if (!text) return false;
       const prev = this.state;
       this.state = { mode: 'idle' };
+      const ch = this.changing; this.changing = null;
       if (this.tryCommands(text, n) !== false) return true;
+      this.changing = ch;
       this.state = prev;
       return false;
     }
@@ -1731,7 +1738,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         const vals = new Set(st.cands.map((c) => c.doc.attrs.orient).filter(Boolean));
         if (vals.size > 1) {
           const q = norm(st.query);
-          let want = /techo|cielo|horizontal|suelo/.test(q) ? 'horizontal' : /pared|vertical|paramento/.test(q) ? 'vertical' : null;
+          let want = st.want || (/techo|cielo|horizontal|suelo/.test(q) ? 'horizontal' : /pared|vertical|paramento/.test(q) ? 'vertical' : null);
           if (!want) { const prev = this.lastPartidaHere(); if (prev && prev.u === 'm2') want = prev.orient === 'V' ? 'vertical' : 'horizontal'; }
           if (want) { const f = st.cands.filter((c) => c.doc.attrs.orient !== (want === 'vertical' ? 'horizontal' : 'vertical')); if (f.length) st.cands = f.sort((a, b) => (b.doc.attrs.orient === want) - (a.doc.attrs.orient === want) || b.s - a.s); st.asked.add('orient'); }
         }
@@ -1826,10 +1833,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         };
         p.orient = orientOf(p);
         this.obra.partidas.push(p);
+        this._justCreated = true;
       }
       return this.activate(p, (prefix || '') + 'Partida ' + p.r + ', en ' + unitSpoken(p.u) + '.', query);
     }
     activate(p, msg, query) {
+      const created = !!this._justCreated; this._justCreated = false;
+      if (this.changing) return this.finishChange(p, created);
+      this.markActivation(p, query, created);
       this.obra.activa = p.uid; p.mod = Date.now();
       if (query) this.lastQuery = query;
       this.state = { mode: 'idle' };
@@ -1907,10 +1918,70 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         p = { uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ref: d.c, u: d.u, r: d.r, t: d.t, chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder, subTitle: d.subTitle, lineas: [], creada: Date.now() };
         p.orient = orientOf(p); this.obra.partidas.push(p);
       }
+      if (this.changing) { const st0 = this.state; this.finishChange(p, !this.obra.partidas.some((x) => x !== p && x.ref === d.c) && !p.lineas.length, true); this.state = { mode: 'idle' }; this.addMeasure(pm, text); return true; }
+      this.markActivation(p, this.state.query, !p.lineas.length);
       this.obra.activa = p.uid; p.mod = Date.now(); this.state = { mode: 'idle' };
       this.io.note && this.io.note('Uso «' + d.r + '». Si no es la correcta, di "borra esta partida".');
       this.addMeasure(pm, text);
       return true;
+    }
+
+    /* ---- Corregir una partida mal elegida ---- */
+    markActivation(p, query, created) {
+      this.activation = { uid: p.uid, before: new Set(p.lineas.map((l) => l.id)), query: query || this.lastQuery || p.r, created: !!created };
+    }
+    changePartida(newText) {
+      const act = this.active() || (this.activation && this.obra.partidas.find((x) => x.uid === this.activation.uid));
+      if (!act) return this.ask('No hay ninguna partida que cambiar. Dime el trabajo a medir.', this.idleChips());
+      const av = this.activation && this.activation.uid === act.uid ? this.activation : { before: new Set(act.lineas.map((l) => l.id)), query: act.r, created: false };
+      const moveIds = act.lineas.filter((l) => !av.before.has(l.id)).map((l) => l.id);
+      this.changing = { fromUid: act.uid, moveIds, created: av.created, fromR: act.r };
+      const mls = act.lineas.filter((l) => moveIds.includes(l.id));
+      const want = act.u !== 'm2' ? null : mls.length ? (mls.some((l) => l.hPend || (l.h != null && l.a == null)) ? 'vertical' : 'horizontal') : (act.orient === 'V' ? 'vertical' : 'horizontal');
+      const ord = (c) => (c.doc.attrs.orient === want ? 2 : c.doc.attrs.orient ? 0 : 1);
+      const q = (newText || '').trim();
+      const query = q && contentWords(q).length ? q : av.query;
+      const res = this.cat.index.search(query, this.boostFn());
+      const pre = moveIds.length ? 'Vale, cambio la partida y paso ' + (moveIds.length === 1 ? 'la línea medida' : 'las ' + moveIds.length + ' líneas medidas') + ' a la nueva.' : 'Vale, cambio la partida.';
+      if (!res.length || res[0].s < 0.34) { this.state = { mode: 'idle' }; return this.ask(pre + ' ¿Cuál es la partida correcta? Dímela con otras palabras.', [{ label: 'Cancelar', value: 'cancela' }]); }
+      const best = res[0].s;
+      let cands = res.filter((r) => r.s >= best * (q ? 0.8 : 0.55) && r.doc.c !== act.ref).slice(0, 40);
+      if (!cands.length) cands = res.filter((r) => r.doc.c !== act.ref).slice(0, 12);
+      cands = prefilter(cands, query);
+      if (want && !/techo|cielo|horizontal|suelo|pared|vertical/.test(norm(query + ' ' + q))) { const f = cands.filter((c) => ord(c) > 0); if (f.length) cands = f; cands.sort((a, b) => ord(b) - ord(a) || b.s - a.s); }
+      if (!q) {
+        // sin pista nueva: mostramos directamente las alternativas
+        this.state = { mode: 'funnel', query, cands, asked: new Set(['orient']), ctxDone: true };
+        return this.askList(cands.slice(0, 6), pre + ' Estas son las alternativas: ' + shortLabels(cands.slice(0, 4).map((x) => x.doc.r)).map((x, i) => (i + 1) + ', ' + x).join('; ') + '. ¿Cuál es? Si no está, dímela con otras palabras.');
+      }
+      this.state = { mode: 'funnel', query, cands, asked: new Set(), all: cands, want };
+      this.lastPrompt = null;
+      return this.funnelStep(pre);
+    }
+    finishChange(p2, created, silent) {
+      const ch = this.changing; this.changing = null;
+      const p1 = this.obra.partidas.find((x) => x.uid === ch.fromUid);
+      this.snapshot();
+      let moved = 0, warn = '';
+      if (p1 && p1 !== p2) {
+        const mv = p1.lineas.filter((l) => ch.moveIds.includes(l.id));
+        p1.lineas = p1.lineas.filter((l) => !ch.moveIds.includes(l.id));
+        mv.forEach((l) => {
+          const nl = Object.assign({}, l, { id: this.nextId(p2) });
+          if (p2.u === 'm2' && p1.u === 'm2' && (p2.orient === 'V') !== (p1.orient === 'V')) { const sec = l.a != null ? l.a : l.h; nl.a = p2.orient === 'V' ? null : sec; nl.h = p2.orient === 'V' ? sec : null; }
+          p2.lineas.push(nl); moved++;
+        });
+        if (p1.u !== p2.u && moved) warn = ' Ojo: la unidad cambia de ' + unitSpoken(p1.u) + ' a ' + unitSpoken(p2.u) + ', revisa las medidas.';
+        if (!p1.lineas.length && (ch.created || !this.obra.partidas.some((x) => x === p1 && x.lineas.length))) this.obra.partidas = this.obra.partidas.filter((x) => x !== p1);
+      }
+      this.obra.activa = p2.uid; p2.mod = Date.now();
+      this.markActivation(p2, this.lastQuery, created);
+      // las líneas movidas siguen contando como "de esta selección" por si hay que volver a cambiar
+      this.activation.before = new Set(p2.lineas.slice(0, p2.lineas.length - moved).map((l) => l.id));
+      this.state = { mode: 'idle' };
+      this.touch();
+      if (silent) { this.io.note && this.io.note('Cambiada a «' + p2.r + '».'); return; }
+      this.ask('Cambiada: ahora es ' + p2.r + ', en ' + unitSpoken(p2.u) + '.' + (moved ? ' He pasado ' + (moved === 1 ? '1 línea' : moved + ' líneas') + '.' + (p2.lineas.some((l) => l.hPend && l.h == null) ? ' Faltan alturas.' : ' Total ' + fmt(totalOf(p2)) + ' ' + unitSpoken(p2.u) + '.') : '') + warn + ' ' + (moved ? '¿Seguimos midiendo?' : this.dimsAsk(p2)), this.idleChips());
     }
 
     /* ---- Herencia ---- */
@@ -2658,7 +2729,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         '<div class="total"><div class="lbl">Total</div><span class="big num">' + E.fmt(E.totalOf(p)) + '</span><span class="u">' + unitL(p.u) + '</span></div></div>' +
         (p.lineas.length ? '<div class="tablewrap"><table class="lines"><thead><tr><th>#</th><th>Estancia / comentario</th><th>Uds</th><th>Largo</th><th>Ancho</th><th>Alto</th><th>Parcial</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<p class="empty">Sin líneas todavía. ' + esc(spec.ask) + '</p>') +
-        '<div class="row"><button class="btn small" data-a="addl">Añadir línea a mano</button><button class="btn small" data-a="close">Cerrar partida</button><button class="btn small" data-a="resumen">Resumen de obra</button></div></section>';
+        '<div class="row"><button class="btn small" data-a="chg">Cambiar partida</button><button class="btn small" data-a="addl">Añadir línea a mano</button><button class="btn small" data-a="close">Cerrar partida</button><button class="btn small" data-a="resumen">Resumen de obra</button></div></section>';
     }
     return '<div class="ctx">' + est + amb + '</div>' + mon;
   }
@@ -2811,7 +2882,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         '<b>Revisión:</b> «revisa la última partida», «muéstrame la demolición de alicatado», «lee las líneas», «qué llevo medido en la cocina», «resumen»',
         '<b>Corrección:</b> «borra la última línea», «borra la línea 3», «cambia el largo de la línea 2 a 3 con 40», «cambia la última línea a 3 por 2,5», «deshacer»',
         '<b>Herencia:</b> «aplica las mismas medidas que en el pavimento», «copia las paredes del salón pero descuenta las ventanas»',
-        '<b>Partida:</b> «siguiente partida», «borra esta partida», «exporta el PDF»',
+        '<b>Partida:</b> «siguiente partida», «ahora guarnecido de yeso», «pintura con las mismas medidas», «borra esta partida», «exporta el PDF»',
+        '<b>Corregir partida:</b> «no es esa», «cambia la partida», «esa no, es solado de gres 60x60» (las medidas pasan a la nueva)',
+        '<b>Paredes:</b> «3,40», «2,80»… y luego «la altura es 2,60»',
+        '<b>Terminar:</b> «terminar», «he terminado», «eso es todo»',
         '<b>Diálogo:</b> «repite», «cancela», «ayuda»'].map((x) => '<div>' + x + '</div>').join('') +
       '</div><button class="btn" data-a="closesheet">Cerrar</button>');
   }
@@ -2861,6 +2935,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       case 'delobra': { const o = S.obras.find((x) => x.id === el.dataset.id); confirmSheet('¿Borrar la obra «' + o.titulo + '»?', 'Borrar obra', async () => { S.obras = S.obras.filter((x) => x.id !== o.id); await StorageAdapter.del('obras', o.id); if (S.obra && S.obra.id === o.id) S.obra = null; render(); }); break; }
       case 'estancia': if (S.obra.ambito) { VoiceAdapter.stopSpeaking(); dialog.handle('siguiente estancia'); } break;
       case 'close': dialog.handle('siguiente partida'); break;
+      case 'chg': VoiceAdapter.stopSpeaking(); if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.handle('cambia la partida'); break;
       case 'addl': editLineSheet(-1, true); break;
       case 'editl': editLineSheet(+el.dataset.i, false); break;
       case 'dell': { const p = dialog.active(); const i = +el.dataset.i; dialog.snapshot(); p.lineas.splice(i, 1); saveObra(); render(); toast('Línea ' + (i + 1) + ' borrada', true); break; }
