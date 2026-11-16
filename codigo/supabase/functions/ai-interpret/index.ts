@@ -42,8 +42,9 @@ Deno.serve(async (req) => {
   if (!user) return new Response(JSON.stringify({ error: 'Inicia sesión para usar la IA' }), { status: 401, headers: h });
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data: esAdmin } = await admin.from('admins').select('user_id').eq('user_id', user.id).maybeSingle();
   const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { count } = await admin.from('ia_uso').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('creado', desde);
+  const { count } = esAdmin ? { count: 0 } : await admin.from('ia_uso').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('creado', desde);
   if ((count || 0) >= LIMITE) return new Response(JSON.stringify({ error: 'Has llegado al límite diario de consultas a la IA' }), { status: 429, headers: h });
 
   let ctx;

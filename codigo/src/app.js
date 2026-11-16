@@ -459,7 +459,7 @@
   function viewObras() {
     const list = S.obras.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const canNew = BillingGuard.canCreateObra(list.filter((o) => !o.ejemplo).length);
-    const plan = S.settings.plan === 'pro' ? '<span class="badge pro">Plan Pro</span>' : '<span class="badge">Plan Demo · hasta ' + BillingGuard.MAX_DEMO + ' obras · PDF con marca de agua</span>';
+    const plan = S.serverPlan === 'admin' ? '<span class="badge pro">Administrador · sin límites</span>' : BillingGuard.plan === 'pro' ? '<span class="badge pro">Plan Pro</span>' : '<span class="badge">Plan Demo · hasta ' + BillingGuard.MAX_DEMO + ' obras · PDF con marca de agua</span>';
     let h = '';
     if (window.Cloud && Cloud.available()) {
       if (!Cloud.user) h += '<div class="installcard acct"><div class="tx"><b>Crea tu cuenta</b>Guarda tus obras en la nube y activa la ayuda de la IA cuando la app no te entienda.</div><div class="row" style="flex-wrap:nowrap"><button class="btn" data-a="login">Entrar</button><button class="btn primary" data-a="signup">Crear cuenta</button></div></div>';
@@ -521,9 +521,12 @@
   }
   function viewAjustes() {
     const vs = VoiceAdapter.voices();
-    return '<div class="card"><h3>Plan</h3><div class="meta">Demo: hasta ' + BillingGuard.MAX_DEMO + ' obras y PDF con marca de agua. Pago por obra: desbloquea la exportación limpia de una obra. Pro: obras ilimitadas.</div>' +
+    const planCard = (window.Cloud && Cloud.user)
+      ? '<div class="card"><h3>Plan</h3><div class="meta">' + (S.serverPlan === 'admin' ? 'Administrador: uso ilimitado y sin pagos.' : S.serverPlan === 'pro' ? 'Plan Pro: mediciones ilimitadas.' : 'Plan gratuito: la primera medición es gratis; después, pago por medición o suscripción.') + '</div></div>'
+      : '<div class="card"><h3>Plan</h3><div class="meta">Demo: hasta ' + BillingGuard.MAX_DEMO + ' obras y PDF con marca de agua. Pago por obra: desbloquea la exportación limpia de una obra. Pro: obras ilimitadas.</div>' +
       '<div class="row"><button class="btn' + (S.settings.plan === 'demo' ? ' primary' : '') + '" data-a="plan" data-p="demo">Demo</button><button class="btn' + (S.settings.plan === 'pro' ? ' primary' : '') + '" data-a="plan" data-p="pro">Pro (simulado)</button></div>' +
-      (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>' +
+      (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>';
+    return planCard +
       '<div class="card"><h3>Voz</h3><div class="meta">Reconocimiento: ' + ({ native: 'del navegador (es-ES)', claude: 'dictado de Claude', none: 'no disponible, usa el teclado' }[VoiceAdapter.mode]) + '.</div>' +
       (vs.length ? '<div class="field"><label for="selvoice">Voz del asistente</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' : '') +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkia"' + (S.settings.ia !== false ? ' checked' : '') + '> Usar la IA cuando la app no entienda algo (necesita cuenta y conexión)</label>' +
@@ -743,6 +746,13 @@
       } catch (er) { msg.textContent = er.message; btn.disabled = false; }
     });
     setTimeout(() => { const f = $('#facc input'); f && f.focus(); }, 60);
+  }
+  /** El plan real lo decide el servidor (perfil); el ajuste local solo vale sin cuenta. */
+  function applyServerPlan() {
+    const C = window.Cloud;
+    const pro = !!(C && C.user && (C.isAdmin || (C.perfil && C.perfil.plan === 'pro' && (!C.perfil.pro_hasta || new Date(C.perfil.pro_hasta) > new Date()))));
+    BillingGuard.plan = pro ? 'pro' : (C && C.user ? 'demo' : S.settings.plan);
+    S.serverPlan = C && C.user ? (pro ? (C.isAdmin ? 'admin' : 'pro') : 'demo') : null;
   }
   async function syncNow() {
     if (!window.Cloud || !Cloud.user) return;
@@ -1155,6 +1165,7 @@
     // Servidor: sesión, sincronización y recuperación de contraseña
     if (window.Cloud && Cloud.init()) {
       Cloud.onAuth((ev, user) => {
+        applyServerPlan();
         if (ev === 'PASSWORD_RECOVERY') accountSheet('newpass');
         if (user && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) syncNow();
         if (S.view === 'obras' || S.view === 'ajustes') render();
