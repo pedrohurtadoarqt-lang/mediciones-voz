@@ -3342,12 +3342,17 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
   function init() {
     if (!available() || sb) return !!sb;
     sb = root.supabase.createClient(CFG.url, CFG.anonKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'mediciona-auth' } });
-    sb.auth.onAuthStateChange(async (ev, session) => {
+    // Importante: no llamar a Supabase dentro de este aviso (bloquearía la sesión y dejaría
+    // colgadas todas las peticiones). Se difiere al siguiente ciclo.
+    sb.auth.onAuthStateChange((ev, session) => {
       const was = user && user.id;
       user = session ? session.user : null;
       if (!user) { perfil = null; admin = false; }
-      if (user && user.id !== was) await loadProfile();
-      listeners.forEach((f) => { try { f(ev, user); } catch (e) {} });
+      const changed = !!user && user.id !== was;
+      setTimeout(async () => {
+        if (changed) await loadProfile();
+        listeners.forEach((f) => { try { f(ev, user); } catch (e) {} });
+      }, 0);
     });
     window.addEventListener('online', () => flush());
     return true;
@@ -3471,9 +3476,10 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     return data;
   }
   /* ---------------- Envío de archivos al correo ---------------- */
+  const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
   async function sendFiles(body) {
     if (!user) throw new Error('Entra en tu cuenta para enviar archivos.');
-    const { data, error } = await sb.functions.invoke('enviar-archivos', { body });
+    const { data, error } = await withTimeout(sb.functions.invoke('enviar-archivos', { body }), 60000, 'El servidor no responde. Comprueba la conexión y vuelve a probar.');
     if (error) {
       let msg = errMsg(error);
       try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
