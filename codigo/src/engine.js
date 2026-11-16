@@ -501,10 +501,10 @@
   /** Qué dimensiones necesita una partida (según unidad y orientación). */
   function dimsSpec(p) {
     switch (p.u) {
-      case 'ud': return { need: [], ask: isCarpinteria(p) ? '¿Cuántas unidades y qué medida, ancho por alto?' : '¿Cuántas unidades?' };
-      case 'm': return { need: ['l'], ask: '¿Longitud? Si son varios tramos iguales, dime cuántos.' };
-      case 'm2': return p.orient === 'V' ? { need: ['l', 'h'], ask: '¿Largo y alto?' } : { need: ['l', 'a'], ask: '¿Largo y ancho?' };
-      case 'm3': return { need: ['l', 'a', 'h'], ask: '¿Largo, ancho y alto o espesor?' };
+      case 'ud': return { need: [], ask: isCarpinteria(p) ? '¿Cuántas unidades? Si quieres, añade la medida del hueco, ancho por alto en metros, por ejemplo «2 de 1,20 por 1,40».' : '¿Cuántas unidades?' };
+      case 'm': return { need: ['l'], ask: '¿Longitud, en metros? Si son varios tramos iguales, dime cuántos, por ejemplo «3 tramos de 2,40».' };
+      case 'm2': return p.orient === 'V' ? { need: ['l', 'h'], ask: '¿Largo y alto, en metros? Por ejemplo «3,40 por 2,50».' } : { need: ['l', 'a'], ask: '¿Largo y ancho, en metros? Por ejemplo «4,20 por 3,10».' };
+      case 'm3': return { need: ['l', 'a', 'h'], ask: '¿Largo, ancho y alto o espesor, en metros? Por ejemplo «5 por 0,60 por 0,80».' };
       default: return { need: [], ask: '¿Qué cantidad, en ' + unitSpoken(p.u) + '?' };
     }
   }
@@ -809,8 +809,8 @@
       const act = this.active();
       if (!act) return this.ask('Primero dime el trabajo a medir; luego te ayudo con la forma de la sala.', this.idleChips());
       this.geo = { uid: act.uid, est: this.obra.estActiva || '', n: 0 };
-      if (act.u === 'm2' && act.orient === 'V') return this.ask('Sin problema: en paredes da igual la forma de la sala. Dime la longitud de cada tramo de pared, uno a uno, y al final la altura.', this.idleChips());
-      return this.ask('Sin problema. Divide la sala en rectángulos y dímelos uno a uno, por ejemplo «4 por 3» y luego «2 por 1,5». También puedes decir los dos a la vez («4 por 3 y 2 por 1,5»), darme la superficie total («superficie 18,5») o medir el rectángulo grande y descontar el trozo que falta («descuenta 1,5 por 2»).',
+      if (act.u === 'm2' && act.orient === 'V') return this.ask('Sin problema: en paredes da igual la forma de la sala. Dime la longitud de cada tramo de pared en metros, uno a uno, y al final la altura.', this.idleChips());
+      return this.ask('Sin problema. Divide la sala en rectángulos y dímelos uno a uno, en metros, por ejemplo «4 por 3» y luego «2 por 1,5». También puedes decir los dos a la vez («4 por 3 y 2 por 1,5»), darme la superficie total («superficie 18,5») o medir el rectángulo grande y descontar el trozo que falta («descuenta 1,5 por 2»).',
         [{ label: 'Ya está', value: 'siguiente partida' }, { label: 'Leer líneas', value: 'lee las líneas' }]);
     }
     /** Comandos reconocibles en cualquier momento. Devuelve false si no es un comando. */
@@ -910,7 +910,7 @@
     dimsAsk(p) {
       if (this.isWall(p)) {
         const h = this.alturaEst(this.obra.estActiva);
-        return h ? 'Dime la longitud de cada pared; uso la altura de ' + fmt(h) + ' de esta estancia.' : 'Dime la longitud de cada pared, una a una. Al final me dices la altura de la estancia.';
+        return h ? 'Dime la longitud de cada pared en metros; uso la altura de ' + fmt(h) + ' metros de esta estancia.' : 'Dime la longitud de cada pared en metros, una a una, por ejemplo «3,40». Al final me dices la altura de la estancia.';
       }
       return dimsSpec(p).ask;
     }
@@ -925,7 +925,7 @@
       if (!this.guardHeightsNeeded()) return then ? then() : undefined;
       const pw = this.pendingWalls(this.obra.estActiva);
       this.state = { mode: 'altura', after: text };
-      return this.ask('Antes: faltan ' + (pw.length === 1 ? '1 pared' : pw.length + ' paredes') + ' sin altura en ' + art(this.obra.estActiva) + '. ¿Qué altura tienen?', [{ label: 'Dejarlo sin altura', value: 'sin altura', act: { skipH: true } }]);
+      return this.ask('Antes: faltan ' + (pw.length === 1 ? '1 pared' : pw.length + ' paredes') + ' sin altura en ' + art(this.obra.estActiva) + '. ¿Qué altura tienen, en metros?', [{ label: 'Dejarlo sin altura', value: 'sin altura', act: { skipH: true } }]);
     }
     st_altura(text, n, input) {
       const st = this.state;
@@ -1660,7 +1660,7 @@
       if (r.missing) {
         if (r.missing[0] === 'n') return this.ask('¿Cuántas unidades?');
         this.state = { mode: 'idle', pending: { uid: p.uid, line: r.pending, com: pm.comment || (pend && pend.com) || '', ded: pm.ded || (pend && pend.ded) } };
-        return this.ask('Me falta ' + r.missing.map((k) => DIM_NAME[k]).join(' y ') + '.');
+        return this.ask('Me falta ' + r.missing.map((k) => DIM_NAME[k]).join(' y ') + ', en metros.');
       }
       const line = r.line;
       const com = pm.comment || (pend && pend.com) || '';
@@ -1701,7 +1701,7 @@
       const sumL = round2(added.reduce((a, l) => a + l.l * (l.uds || 1), 0));
       if (h) return this.ask((added.length === 1 ? 'Pared de ' + fmt(added[0].l) + ' por ' + fmt(h) + ', ' + fmt(parcial(added[0])) + '.' : 'Anotadas ' + added.length + ' paredes con altura ' + fmt(h) + '.') + ' Total ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '. ¿Siguiente pared?', this.idleChips(), { short: true });
       const pw = this.pendingWalls(est).length;
-      this.ask((added.length === 1 ? 'Pared de ' + fmt(added[0].l) + '.' : 'Anotadas ' + added.length + ' paredes, ' + fmt(sumL) + ' metros.') + ' ¿Siguiente pared, o dime la altura de la estancia?', [{ label: 'Decir la altura', value: 'altura', act: { askH: true } }].concat(this.idleChips()), { short: true });
+      this.ask((added.length === 1 ? 'Pared de ' + fmt(added[0].l) + '.' : 'Anotadas ' + added.length + ' paredes, ' + fmt(sumL) + ' metros.') + ' ¿Siguiente pared, o dime la altura de la estancia en metros?', [{ label: 'Decir la altura', value: 'altura', act: { askH: true } }].concat(this.idleChips()), { short: true });
     }
     reviewLast() {
       const ps = this.obra.partidas.filter((p) => p.lineas.length).sort((a, b) => (b.mod || 0) - (a.mod || 0));
