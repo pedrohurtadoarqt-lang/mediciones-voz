@@ -86,6 +86,8 @@
     const seen = new Set();
     for (const o of local) {
       if (o.ejemplo) { out.push(o); continue; }
+      if (o.owner && o.owner !== user.id) continue; // obra de otra cuenta en este dispositivo: ni se sube ni se muestra
+      if (!o.owner) o.owner = user.id; // obra hecha sin cuenta: pasa a esta cuenta
       seen.add(o.id);
       const r = remote.get(o.id);
       if (!r) { queue(o); out.push(o); continue; }
@@ -94,7 +96,7 @@
       const ro = Object.assign({}, r.datos, { unlocked: r.desbloqueada || r.datos.unlocked });
       if (rTime > stamp(o) + 1000) out.push(ro); else { if (stamp(o) > rTime + 1000) queue(o); out.push(Object.assign(o, { unlocked: r.desbloqueada || o.unlocked })); }
     }
-    for (const [id, r] of remote) if (!seen.has(id) && !r.borrada) out.push(Object.assign({}, r.datos, { unlocked: r.desbloqueada }));
+    for (const [id, r] of remote) if (!seen.has(id) && !r.borrada) out.push(Object.assign({}, r.datos, { unlocked: r.desbloqueada, owner: user.id }));
     await flush();
     return out;
   }
@@ -104,7 +106,8 @@
     clearTimeout(flushTimer); flushTimer = setTimeout(flush, 2500);
   }
   async function flush() {
-    if (!user || !pending.size || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    if (!user || !pending.size) return true;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
     for (const [id, o] of [...pending]) {
       const row = { titulo: (o.titulo || '').slice(0, 200), datos: o, actualizada: new Date(stamp(o) || Date.now()).toISOString() };
       try {
@@ -117,6 +120,7 @@
         pending.delete(id);
       } catch (e) { break; /* se reintenta con la próxima modificación o al volver la red */ }
     }
+    return pending.size === 0;
   }
   async function deleteObra(id) {
     pending.delete(id);
@@ -165,6 +169,7 @@
     available, init, onAuth: (f) => listeners.push(f),
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
+    get pendingCount() { return pending.size; },
     syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState, savePrice
   };
 })(typeof self !== 'undefined' ? self : this);

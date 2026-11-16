@@ -274,7 +274,7 @@
   }
   function baseCatalog() { return { id: 'palma48', nombre: 'Base de partidas Mediciona', base: true, n: window.CATALOGO_BASE.partidas.length, data: window.CATALOGO_BASE, fecha: Date.now() }; }
 
-  async function saveObra() { if (!S.obra) return; S.obra.updated = Date.now(); await StorageAdapter.put('obras', JSON.parse(JSON.stringify(S.obra))); if (window.Cloud) Cloud.queue(S.obra); }
+  async function saveObra() { if (!S.obra) return; S.obra.updated = Date.now(); if (window.Cloud && Cloud.user && !S.obra.owner && !S.obra.ejemplo) S.obra.owner = Cloud.user.id; await StorageAdapter.put('obras', JSON.parse(JSON.stringify(S.obra))); if (window.Cloud) Cloud.queue(S.obra); }
   async function saveSettings() { BillingGuard.plan = S.settings.plan; await StorageAdapter.put('ajustes', S.settings, 'settings'); }
 
   /* ============================================================
@@ -457,7 +457,8 @@
   }
 
   function viewObras() {
-    const list = S.obras.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    const uid = window.Cloud && Cloud.user ? Cloud.user.id : null;
+    const list = S.obras.filter((o) => o.ejemplo || !o.owner || o.owner === uid).slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const canNew = BillingGuard.canCreateObra(list.filter((o) => !o.ejemplo).length);
     const plan = S.serverPlan === 'admin' ? '<span class="badge pro">Administrador · sin límites</span>' : BillingGuard.plan === 'pro' ? '<span class="badge pro">Plan Pro</span>' : '<span class="badge">Plan Demo · hasta ' + BillingGuard.MAX_DEMO + ' obras · PDF con marca de agua</span>';
     let h = '';
@@ -608,6 +609,7 @@
     if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
     if (canOfferInstall()) items.push(['install', ICON.obras, 'Instalar en este móvil']);
     if (window.Cloud && Cloud.available()) items.push(['account', ICON.gear, Cloud.user ? 'Mi cuenta' : 'Entrar o crear cuenta']);
+    if (window.Cloud && Cloud.user) items.push(['logout', ICON.undo, 'Cerrar sesión (' + Cloud.user.email + ')']);
     if (window.Cloud && Cloud.isAdmin) items.push(['admin', ICON.list, 'Administración']);
     items.push(['sugerencias', ICON.help, 'Buzón de sugerencias']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
@@ -748,6 +750,23 @@
     });
     setTimeout(() => { const f = $('#facc input'); f && f.focus(); }, 60);
   }
+  /** Cerrar sesión: sube lo pendiente, cierra y quita del dispositivo las obras de esa cuenta (siguen en la nube). */
+  async function logout(force) {
+    const C = window.Cloud; if (!C || !C.user) return;
+    const uid = C.user.id;
+    const ok = await C.flush();
+    if (!ok && !force) {
+      return confirmSheet('Hay cambios que aún no se han subido a la nube (sin conexión). Si cierras sesión ahora se perderán. ¿Cerrar igualmente?', 'Cerrar sesión', () => logout(true));
+    }
+    sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening();
+    await C.signOut();
+    const mine = S.obras.filter((o) => o.owner === uid);
+    for (const o of mine) await StorageAdapter.del('obras', o.id);
+    S.obras = S.obras.filter((o) => o.owner !== uid);
+    S.obra = null; S.session = false; S.ended = false; S.view = 'obras';
+    applyServerPlan(); render();
+    toast('Sesión cerrada' + (mine.length ? '. Tus obras siguen guardadas en la nube.' : ''));
+  }
   /** El plan real lo decide el servidor (perfil); el ajuste local solo vale sin cuenta. */
   function applyServerPlan() {
     const C = window.Cloud;
@@ -875,7 +894,7 @@
       case 'admin': closeSheet(); S.view = 'admin'; S.adminData = null; render(); loadAdmin(); break;
       case 'admtab': S.adminTab = el.dataset.tab; render(); break;
       case 'sgstate': { try { await Cloud.setSuggestionState(+el.dataset.id, el.dataset.st); const s = (S.adminData.sugerencias || []).find((x) => x.id === +el.dataset.id); if (s) s.estado = el.dataset.st; render(); } catch (e) { toast(e.message); } break; }
-      case 'logout': closeSheet(); await Cloud.signOut(); toast('Sesión cerrada'); render(); break;
+      case 'logout': closeSheet(); logout(); break;
       case 'undo': closeSheet(); $('#toast').hidden = true; if (S.obra) { dialog.handle('deshacer'); render(); } break;
       case 'xlsx': case 'bc3': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) exportFile(o, a); break; }
       case 'pdf': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) { await loadCatalog(o.catalogo || 'palma48'); exportPdf(o); } break; }
