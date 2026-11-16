@@ -248,6 +248,9 @@
     exportPdf: () => exportPdf(S.obra),
     exportXlsx: () => exportFile(S.obra, 'xlsx'),
     exportBc3: () => exportFile(S.obra, 'bc3'),
+    aiReady: () => S.settings.ia !== false && !!(window.Cloud && Cloud.user) && navigator.onLine !== false,
+    ai: (ctx) => Cloud.ai(ctx),
+    history: () => S.log.slice(-6),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },
     note: (t) => { S.log.push({ who: 'app', text: t }); logObra('app', t); renderTalk(); },
@@ -269,9 +272,9 @@
     S.catsPrepared.set(id, p);
     return p;
   }
-  function baseCatalog() { return { id: 'palma48', nombre: 'Precios de Mallorca 2026 (COAAT)', base: true, n: window.CATALOGO_BASE.partidas.length, data: window.CATALOGO_BASE, fecha: Date.now() }; }
+  function baseCatalog() { return { id: 'palma48', nombre: 'Base de partidas Mediciona', base: true, n: window.CATALOGO_BASE.partidas.length, data: window.CATALOGO_BASE, fecha: Date.now() }; }
 
-  async function saveObra() { if (!S.obra) return; S.obra.updated = Date.now(); await StorageAdapter.put('obras', JSON.parse(JSON.stringify(S.obra))); }
+  async function saveObra() { if (!S.obra) return; S.obra.updated = Date.now(); await StorageAdapter.put('obras', JSON.parse(JSON.stringify(S.obra))); if (window.Cloud) Cloud.queue(S.obra); }
   async function saveSettings() { BillingGuard.plan = S.settings.plan; await StorageAdapter.put('ajustes', S.settings, 'settings'); }
 
   /* ============================================================
@@ -382,6 +385,7 @@
     else if (S.view === 'resumen') { t.innerHTML = 'Resumen<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewResumen(); }
     else if (S.view === 'catalogos') { t.innerHTML = 'Bases de datos BC3<small>Sin precios: código, unidad, resumen y texto</small>'; v.innerHTML = viewCatalogos(); }
     else if (S.view === 'ajustes') { t.innerHTML = 'Ajustes'; v.innerHTML = viewAjustes(); }
+    else if (S.view === 'admin') { t.innerHTML = '<span class="brandtitle">Administración</span><small>Usuarios, sugerencias e IA</small>'; v.innerHTML = viewAdmin(); }
     renderMic();
     if (S.view === 'obra') { renderTalk(); renderChips(); const nr = $('tr.new'); if (nr) nr.scrollIntoView({ block: 'nearest' }); }
   }
@@ -457,6 +461,10 @@
     const canNew = BillingGuard.canCreateObra(list.filter((o) => !o.ejemplo).length);
     const plan = S.settings.plan === 'pro' ? '<span class="badge pro">Plan Pro</span>' : '<span class="badge">Plan Demo · hasta ' + BillingGuard.MAX_DEMO + ' obras · PDF con marca de agua</span>';
     let h = '';
+    if (window.Cloud && Cloud.available()) {
+      if (!Cloud.user) h += '<div class="installcard acct"><div class="tx"><b>Crea tu cuenta</b>Guarda tus obras en la nube y activa la ayuda de la IA cuando la app no te entienda.</div><div class="row" style="flex-wrap:nowrap"><button class="btn" data-a="login">Entrar</button><button class="btn primary" data-a="signup">Crear cuenta</button></div></div>';
+      else h += '<div class="syncline"><span class="dot' + (navigator.onLine === false ? ' off' : '') + '"></span>' + (navigator.onLine === false ? 'Sin conexión: tus obras se guardan aquí y se subirán al volver la red' : 'Obras guardadas en la nube · ' + esc((Cloud.perfil && (Cloud.perfil.empresa || Cloud.perfil.nombre)) || Cloud.user.email)) + ' <button class="linkbtn" data-a="account">Mi cuenta</button></div>';
+    }
     if (canOfferInstall()) h += '<div class="installcard"><img src="' + ($('#brandlogo') ? $('#brandlogo').src : '') + '" alt=""><div class="tx"><b>Instalar en este móvil</b>Úsala como una app, desde un icono y a pantalla completa.</div><button class="btn primary" data-a="install">Instalar</button></div>';
     h += '<div class="row" style="justify-content:space-between">' + plan + '<button class="btn primary" data-a="newobra"' + (canNew ? '' : ' disabled') + '>Nueva obra</button></div>';
     if (!canNew) h += '<p class="hint">Has llegado al límite del plan Demo. Borra una obra o activa el plan Pro en Ajustes.</p>';
@@ -518,6 +526,7 @@
       (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>' +
       '<div class="card"><h3>Voz</h3><div class="meta">Reconocimiento: ' + ({ native: 'del navegador (es-ES)', claude: 'dictado de Claude', none: 'no disponible, usa el teclado' }[VoiceAdapter.mode]) + '.</div>' +
       (vs.length ? '<div class="field"><label for="selvoice">Voz del asistente</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' : '') +
+      '<label class="row" style="gap:10px"><input type="checkbox" id="chkia"' + (S.settings.ia !== false ? ' checked' : '') + '> Usar la IA cuando la app no entienda algo (necesita cuenta y conexión)</label>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
       '<div class="field"><label for="rate">Velocidad de lectura: ' + S.settings.rate.toFixed(2) + '</label><input id="rate" type="range" min="0.7" max="1.6" step="0.05" value="' + S.settings.rate + '"></div></div>' +
       '<div class="card"><h3>Datos</h3><div class="meta">Las obras y bases importadas se guardan en este navegador (IndexedDB).</div><div class="row"><button class="btn" data-a="backup">Copia de seguridad (.json)</button><label class="btn" for="restorefile">Restaurar copia</label><input id="restorefile" type="file" accept=".json" hidden></div></div>';
@@ -595,6 +604,8 @@
     const items = [['obras', ICON.obras, 'Mis obras']];
     if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
     if (canOfferInstall()) items.push(['install', ICON.obras, 'Instalar en este móvil']);
+    if (window.Cloud && Cloud.available()) items.push(['account', ICON.gear, Cloud.user ? 'Mi cuenta' : 'Entrar o crear cuenta']);
+    if (window.Cloud && Cloud.isAdmin) items.push(['admin', ICON.list, 'Administración']);
     items.push(['sugerencias', ICON.help, 'Buzón de sugerencias']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
@@ -673,11 +684,118 @@
       if (!msg) return $('#sgtext').focus();
       let body = msg + '\n\n— Tipo: ' + tipo + '\n— Dispositivo: ' + navigator.userAgent.slice(0, 160);
       if ($('#sglog') && $('#sglog').checked && S.obra && S.obra.registro) body += '\n\nÚltima conversación:\n' + S.obra.registro.slice(-20).map((r) => (r.who === 'user' ? 'OÍDO: ' : 'APP: ') + r.text).join('\n');
+      if (window.Cloud && Cloud.user) {
+        const conv = $('#sglog') && $('#sglog').checked && S.obra && S.obra.registro ? S.obra.registro.slice(-30) : null;
+        Cloud.suggestion({ tipo, mensaje: msg, conversacion: conv, dispositivo: navigator.userAgent }).then(() => { closeSheet(); toast('Sugerencia enviada. ¡Gracias!'); }).catch((e) => toast('No se pudo enviar: ' + e.message));
+        return;
+      }
       closeSheet();
       location.href = 'mailto:' + SUGERENCIAS_BUZON + '?subject=' + encodeURIComponent('Mediciona · ' + tipo) + '&body=' + encodeURIComponent(body.slice(0, 1800));
       toast('Abriendo tu correo para enviar la sugerencia. ¡Gracias!');
     });
     setTimeout(() => { const t = $('#sgtext'); t && t.focus(); }, 50);
+  }
+  /* ---- Cuenta ---- */
+  function accountSheet(mode) {
+    const C = window.Cloud;
+    if (mode === 'perfil' && C.user) {
+      const p = C.perfil || {};
+      sheet('<h2>Mi cuenta</h2><p class="hint">' + esc(C.user.email) + ' · Plan ' + (p.plan === 'pro' ? 'Pro' : 'gratuito') + '</p>' +
+        '<form id="facc" style="display:flex;flex-direction:column;gap:10px">' +
+        '<div class="field"><label for="anom">Nombre y apellidos</label><input id="anom" autocomplete="name" value="' + esc(p.nombre || '') + '"></div>' +
+        '<div class="field"><label for="aemp">Empresa o razón social</label><input id="aemp" autocomplete="organization" value="' + esc(p.empresa || '') + '"></div>' +
+        '<div class="field"><label for="anif">NIF / CIF</label><input id="anif" value="' + esc(p.nif || '') + '"></div>' +
+        '<p class="hint">Teléfono: ' + (p.telefono_verificado ? esc(p.telefono) + ' (verificado)' : 'pendiente de verificar por SMS (lo activaremos pronto)') + '</p>' +
+        '<div class="row"><button class="btn primary" type="submit">Guardar</button><button class="btn" type="button" data-a="closesheet">Cerrar</button><button class="btn danger" type="button" data-a="logout">Cerrar sesión</button></div></form>');
+      $('#facc').addEventListener('submit', async (e) => { e.preventDefault(); try { await C.updateProfile({ nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif: $('#anif').value.trim().toUpperCase() }); closeSheet(); toast('Datos guardados'); render(); } catch (er) { toast(er.message); } });
+      return;
+    }
+    if (mode === 'newpass') {
+      sheet('<h2>Nueva contraseña</h2><form id="fnp" style="display:flex;flex-direction:column;gap:10px"><div class="field"><label for="np1">Nueva contraseña (mínimo 8 caracteres)</label><input id="np1" type="password" autocomplete="new-password" minlength="8" required></div><div class="row"><button class="btn primary" type="submit">Guardar contraseña</button></div><p class="hint" id="accmsg"></p></form>');
+      $('#fnp').addEventListener('submit', async (e) => { e.preventDefault(); try { await C.updatePassword($('#np1').value); closeSheet(); toast('Contraseña cambiada'); } catch (er) { $('#accmsg').textContent = er.message; } });
+      return;
+    }
+    const signup = mode === 'signup', forgot = mode === 'forgot';
+    sheet('<h2>' + (signup ? 'Crear cuenta' : forgot ? 'Recuperar contraseña' : 'Entrar') + '</h2>' +
+      '<form id="facc" style="display:flex;flex-direction:column;gap:10px">' +
+      (signup ? '<div class="field"><label for="anom">Nombre y apellidos</label><input id="anom" autocomplete="name" required></div>' +
+        '<div class="field"><label for="aemp">Empresa o razón social</label><input id="aemp" autocomplete="organization" required></div>' +
+        '<div class="field"><label for="anif">NIF / CIF</label><input id="anif" required></div>' : '') +
+      '<div class="field"><label for="amail">Correo electrónico</label><input id="amail" type="email" autocomplete="email" required></div>' +
+      (forgot ? '' : '<div class="field"><label for="apass">Contraseña' + (signup ? ' (mínimo 8 caracteres)' : '') + '</label><input id="apass" type="password" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" minlength="8" required></div>') +
+      (signup ? '<label class="row" style="gap:10px;align-items:flex-start"><input type="checkbox" id="alegal" required> <span class="hint" style="margin:0">Soy profesional o empresa y acepto el <a href="legal/aviso-legal.html" target="_blank">aviso legal</a> y la <a href="legal/privacidad.html" target="_blank">política de privacidad</a>.</span></label>' : '') +
+      '<div class="row"><button class="btn primary" type="submit">' + (signup ? 'Crear cuenta' : forgot ? 'Enviar enlace' : 'Entrar') + '</button><button class="btn" type="button" data-a="closesheet">Cancelar</button></div>' +
+      '<p class="hint" id="accmsg" role="status"></p>' +
+      '<p class="hint">' + (signup ? '¿Ya tienes cuenta? <button class="linkbtn" type="button" data-a="login">Entrar</button>' : forgot ? '<button class="linkbtn" type="button" data-a="login">Volver a entrar</button>' : '¿No tienes cuenta? <button class="linkbtn" type="button" data-a="signup">Crear cuenta</button> · <button class="linkbtn" type="button" id="aforgot">He olvidado la contraseña</button>') + '</p></form>');
+    const fg = $('#aforgot'); if (fg) fg.addEventListener('click', () => accountSheet('forgot'));
+    $('#facc').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = $('#accmsg'); const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true; msg.textContent = 'Un momento…';
+      try {
+        const email = $('#amail').value.trim();
+        if (forgot) { await C.resetPassword(email); msg.textContent = 'Si existe una cuenta con ese correo, te hemos enviado un enlace para crear una contraseña nueva.'; btn.disabled = false; return; }
+        if (signup) {
+          const r = await C.signUp({ email, password: $('#apass').value, nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif: $('#anif').value.trim().toUpperCase() });
+          if (r.needsConfirm) { msg.textContent = 'Cuenta creada. Te hemos enviado un correo para confirmarla: ábrelo desde este móvil y vuelve a entrar.'; btn.disabled = false; return; }
+        } else await C.signIn(email, $('#apass').value);
+        closeSheet(); toast(signup ? 'Cuenta creada. ¡Bienvenido a Mediciona!' : 'Sesión iniciada');
+      } catch (er) { msg.textContent = er.message; btn.disabled = false; }
+    });
+    setTimeout(() => { const f = $('#facc input'); f && f.focus(); }, 60);
+  }
+  async function syncNow() {
+    if (!window.Cloud || !Cloud.user) return;
+    try {
+      const merged = await Cloud.syncObras(S.obras);
+      for (const o of merged) await StorageAdapter.put('obras', o);
+      const ids = new Set(merged.map((o) => o.id));
+      S.obras = merged.concat(S.obras.filter((o) => !ids.has(o.id) && o.ejemplo));
+      if (S.obra) { const cur = S.obras.find((o) => o.id === S.obra.id); if (cur && cur !== S.obra && (cur.updated || 0) > (S.obra.updated || 0)) { S.obra = cur; dialog.obra = cur; } }
+      if (S.view !== 'obra') render();
+    } catch (e) { /* sin conexión: se reintenta luego */ }
+  }
+  /* ---- Panel de administración ---- */
+  async function loadAdmin() {
+    try { S.adminData = await Cloud.adminData(); } catch (e) { S.adminData = { error: e.message }; }
+    if (S.view === 'admin') render();
+  }
+  function viewAdmin() {
+    const d = S.adminData;
+    if (!d) return '<p class="hint">Cargando…</p>';
+    if (d.error) return '<p class="hint">No se pudo cargar: ' + esc(d.error) + '</p>';
+    const tab = S.adminTab || 'usuarios';
+    const nuevas = d.sugerencias.filter((s) => s.estado === 'nueva').length;
+    const tokIn = d.ia.reduce((a, x) => a + (x.tokens_entrada || 0), 0), tokOut = d.ia.reduce((a, x) => a + (x.tokens_salida || 0), 0);
+    let h = '<div class="kpis">' +
+      '<div class="kpi"><b>' + d.usuarios.length + '</b><span>usuarios</span></div>' +
+      '<div class="kpi"><b>' + d.usuarios.filter((u) => u.plan === 'pro').length + '</b><span>en plan Pro</span></div>' +
+      '<div class="kpi"><b>' + d.usuarios.reduce((a, u) => a + Number(u.obras_pagadas || 0), 0) + '</b><span>obras pagadas</span></div>' +
+      '<div class="kpi"><b>' + nuevas + '</b><span>sugerencias nuevas</span></div>' +
+      '<div class="kpi"><b>' + d.ia.length + '</b><span>consultas IA (30 días)</span></div></div>';
+    h += '<div class="chips">' + [['usuarios', 'Usuarios'], ['sugerencias', 'Sugerencias' + (nuevas ? ' (' + nuevas + ')' : '')], ['ia', 'Uso de la IA']].map(([k, l]) => '<button class="chip' + (tab === k ? ' primary' : '') + '" data-a="admtab" data-tab="' + k + '">' + l + '</button>').join('') + '<button class="chip ghost" data-a="admin">Actualizar</button></div>';
+    const fd = (x) => x ? new Date(x).toLocaleDateString('es-ES') : '—';
+    if (tab === 'usuarios') {
+      h += '<div class="tablewrap"><table class="lines admin"><thead><tr><th>Usuario</th><th>Empresa · NIF</th><th>Teléfono</th><th>Plan</th><th>Obras</th><th>IA</th><th>Alta</th><th>Actividad</th></tr></thead><tbody>' +
+        d.usuarios.map((u) => '<tr><td class="com">' + esc(u.nombre || '—') + '<span class="e">' + esc(u.email) + '</span></td><td class="com">' + esc(u.empresa || '—') + '<span class="e">' + esc(u.nif || '') + '</span></td><td>' + (u.telefono_verificado ? esc(u.telefono) : '—') + '</td><td>' + esc(u.plan) + '</td><td>' + u.obras + (u.obras_pagadas ? ' (' + u.obras_pagadas + ' pag.)' : '') + '</td><td>' + u.consultas_ia + '</td><td>' + fd(u.creado) + '</td><td>' + fd(u.ultima_actividad) + '</td></tr>').join('') + '</tbody></table></div>';
+      if (!d.usuarios.length) h += '<p class="hint">Todavía no hay usuarios registrados.</p>';
+    } else if (tab === 'sugerencias') {
+      if (!d.sugerencias.length) h += '<p class="hint">Todavía no hay sugerencias.</p>';
+      const who = new Map(d.usuarios.map((u) => [u.id, u]));
+      d.sugerencias.forEach((s) => {
+        const u = who.get(s.user_id);
+        h += '<div class="card"><div class="row" style="justify-content:space-between"><span class="badge' + (s.estado === 'nueva' ? ' ex' : s.estado === 'hecha' ? ' pro' : '') + '">' + esc(s.estado) + '</span><span class="meta">' + esc(s.tipo) + ' · ' + new Date(s.creada).toLocaleString('es-ES') + '</span></div>' +
+          '<div style="white-space:pre-wrap">' + esc(s.mensaje) + '</div><div class="meta">' + esc(u ? (u.nombre || u.email) + (u.empresa ? ' · ' + u.empresa : '') : 'usuario borrado') + '</div>' +
+          (s.conversacion ? '<details><summary class="meta">Conversación adjunta (' + s.conversacion.length + ' mensajes)</summary><div class="meta" style="white-space:pre-wrap">' + esc(s.conversacion.map((r) => (r.who === 'user' ? 'OÍDO: ' : 'APP: ') + r.text).join('\n')) + '</div></details>' : '') +
+          '<div class="row">' + ['leida', 'hecha', 'descartada'].map((st) => '<button class="btn small" data-a="sgstate" data-id="' + s.id + '" data-st="' + st + '">' + { leida: 'Leída', hecha: 'Hecha', descartada: 'Descartar' }[st] + '</button>').join('') + '</div></div>';
+      });
+    } else {
+      const byIntent = {}; d.ia.forEach((x) => { byIntent[x.intent || '—'] = (byIntent[x.intent || '—'] || 0) + 1; });
+      const ms = d.ia.length ? Math.round(d.ia.reduce((a, x) => a + (x.ms || 0), 0) / d.ia.length) : 0;
+      h += '<div class="card"><h3>Últimos 30 días</h3><div class="meta">' + d.ia.length + ' consultas · ' + tokIn.toLocaleString('es-ES') + ' tokens de entrada · ' + tokOut.toLocaleString('es-ES') + ' de salida · ' + ms + ' ms de media</div>' +
+        '<div class="meta">Por tipo: ' + Object.entries(byIntent).map(([k, v]) => esc(k) + ' ' + v).join(' · ') + '</div>' +
+        '<p class="hint">El coste exacto se consulta en la facturación de Google (AI Studio). Con estos tokens puedes estimarlo según el precio del modelo.</p></div>';
+    }
+    return h;
   }
   async function exportLog() {
     const o = S.obra || S.obras[0]; if (!o) return toast('No hay obra abierta.');
@@ -712,10 +830,17 @@
       case 'ajustes': closeSheet(); S.view = 'ajustes'; render(); break;
       case 'ayuda': helpSheet(); break;
       case 'sugerencias': closeSheet(); suggestionSheet(); break;
+      case 'login': closeSheet(); accountSheet('login'); break;
+      case 'signup': closeSheet(); accountSheet('signup'); break;
+      case 'account': closeSheet(); accountSheet(Cloud.user ? 'perfil' : 'login'); break;
+      case 'admin': closeSheet(); S.view = 'admin'; S.adminData = null; render(); loadAdmin(); break;
+      case 'admtab': S.adminTab = el.dataset.tab; render(); break;
+      case 'sgstate': { try { await Cloud.setSuggestionState(+el.dataset.id, el.dataset.st); const s = (S.adminData.sugerencias || []).find((x) => x.id === +el.dataset.id); if (s) s.estado = el.dataset.st; render(); } catch (e) { toast(e.message); } break; }
+      case 'logout': closeSheet(); await Cloud.signOut(); toast('Sesión cerrada'); render(); break;
       case 'undo': closeSheet(); $('#toast').hidden = true; if (S.obra) { dialog.handle('deshacer'); render(); } break;
       case 'xlsx': case 'bc3': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) exportFile(o, a); break; }
       case 'pdf': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) { await loadCatalog(o.catalogo || 'palma48'); exportPdf(o); } break; }
-      case 'delobra': { const o = S.obras.find((x) => x.id === el.dataset.id); confirmSheet('¿Borrar la obra «' + o.titulo + '»?', 'Borrar obra', async () => { S.obras = S.obras.filter((x) => x.id !== o.id); await StorageAdapter.del('obras', o.id); if (S.obra && S.obra.id === o.id) S.obra = null; render(); }); break; }
+      case 'delobra': { const o = S.obras.find((x) => x.id === el.dataset.id); confirmSheet('¿Borrar la obra «' + o.titulo + '»?', 'Borrar obra', async () => { S.obras = S.obras.filter((x) => x.id !== o.id); await StorageAdapter.del('obras', o.id); if (window.Cloud) Cloud.deleteObra(o.id); if (S.obra && S.obra.id === o.id) S.obra = null; render(); }); break; }
       case 'estancia': if (S.obra.ambito) { VoiceAdapter.stopSpeaking(); dialog.handle('siguiente estancia'); } break;
       case 'close': dialog.handle('siguiente partida'); break;
       case 'chg': case 'pickp': sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); pickSheet(); break;
@@ -744,6 +869,7 @@
     if (ev.target.id === 'rate') { S.settings.rate = +ev.target.value; VoiceAdapter.setRate(S.settings.rate); ev.target.previousElementSibling.textContent = 'Velocidad de lectura: ' + S.settings.rate.toFixed(2); saveSettings(); }
   });
   document.addEventListener('change', async (ev) => {
+    if (ev.target.id === 'chkia') { S.settings.ia = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);
@@ -955,7 +1081,7 @@
       doc.setPage(i);
       doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.2); doc.line(M, 287, R, 287);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
-      doc.text(txt('Mediciona · Mediciones de obra con IA · ' + obra.titulo + ' · Base: ' + ((catFor(obra) || {}).nombre || '')), M, 291, { maxWidth: 150 });
+      doc.text(txt('Mediciona · Mediciones de obra con IA · ' + obra.titulo), M, 291, { maxWidth: 150 });
       right('Página ' + i + ' de ' + n, R, 291);
       if (wm) {
         try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.13 })); } catch (e) {}
@@ -990,13 +1116,24 @@
     BillingGuard.plan = S.settings.plan; VoiceAdapter.setRate(S.settings.rate); if (S.settings.voice) VoiceAdapter.setVoice(S.settings.voice);
     // Catálogo base embebido → IndexedDB en el primer arranque
     let cats = await StorageAdapter.all('catalogos');
-    if (!cats.some((c) => c.id === 'palma48')) { await StorageAdapter.put('catalogos', baseCatalog()); }
+    const stored = cats.find((c) => c.id === 'palma48');
+    if (!stored || stored.nombre !== baseCatalog().nombre) { await StorageAdapter.put('catalogos', baseCatalog()); }
     S.cats = [{ id: 'palma48', nombre: baseCatalog().nombre, base: true, n: window.CATALOGO_BASE.partidas.length }].concat(cats.filter((c) => !c.base).map((c) => ({ id: c.id, nombre: c.nombre, base: false, n: c.n })));
     const cat = await loadCatalog('palma48');
     if (S.settings.catalogo !== 'palma48') await loadCatalog(S.settings.catalogo).catch(() => {});
     S.obras = await StorageAdapter.all('obras');
     if (!S.obras.length && !st) { const ex = exampleObra(cat); S.obras.push(ex); await StorageAdapter.put('obras', ex); await saveSettings(); }
     render();
+    // Servidor: sesión, sincronización y recuperación de contraseña
+    if (window.Cloud && Cloud.init()) {
+      Cloud.onAuth((ev, user) => {
+        if (ev === 'PASSWORD_RECOVERY') accountSheet('newpass');
+        if (user && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) syncNow();
+        if (S.view === 'obras' || S.view === 'ajustes') render();
+      });
+      window.addEventListener('online', () => { syncNow(); if (S.view === 'obras') render(); });
+      window.addEventListener('offline', () => { if (S.view === 'obras') render(); });
+    }
     // iPhone: mostrar una vez la guía de instalación
     try { if (isIOS() && !isStandalone() && !localStorage.getItem('iosGuideSeen')) setTimeout(iosGuide, 1500); } catch (e) {}
     VoiceAdapter.init().then((m) => {

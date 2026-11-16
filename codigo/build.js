@@ -3,7 +3,8 @@ const fs = require('fs'), path = require('path');
 const BC3 = require('./src/bc3.js');
 const src = (f) => fs.readFileSync(path.join(__dirname, 'src', f), 'utf8');
 const bc3File = process.argv[2] || path.join(__dirname, 'data', 'Palma48_2026_COAATMCA.bc3');
-const cat = BC3.parseBC3(fs.readFileSync(bc3File), 'Precios de Mallorca 2026');
+const cat = BC3.parseBC3(fs.readFileSync(bc3File), 'Base de partidas Mediciona');
+cat.nombre = 'Base de partidas Mediciona'; cat.titulo = 'Base de partidas Mediciona';
 const safe = (js) => js.replace(/<\/script/gi, '<\\/script');
 const fontB64 = (n) => fs.readFileSync(path.join(__dirname, 'src', 'fonts', 'LiberationSans-' + n + '.ttf')).toString('base64');
 const fontJs = 'window.PDF_FONTS={regular:"' + fontB64('Regular') + '",bold:"' + fontB64('Bold') + '",italic:"' + fontB64('Italic') + '"};';
@@ -12,7 +13,7 @@ const catJs = 'window.CATALOGO_BASE=' + JSON.stringify(cat).replace(/<\//g, '<\\
 const woff = (w) => 'data:font/woff2;base64,' + fs.readFileSync(path.join(__dirname, 'src', 'fonts', 'montserrat-latin-' + w + '-normal.woff2')).toString('base64');
 const fontFace = [700, 800].map((w) => "@font-face{font-family:'Montserrat';font-style:normal;font-weight:" + w + ";font-display:swap;src:url(" + woff(w) + ") format('woff2');}").join('\n') + '\n';
 const head = '<title>Mediciona</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n<meta name="theme-color" content="#1A2231">\n<meta name="description" content="Mediciona: mediciones de obra con IA">\n<style>\n' + fontFace + src('styles.css') + '</style>\n';
-const scripts = ['<script>' + safe(src('vendor-jspdf.umd.min.js')) + '</script>', '<script>' + catJs + '</script>', '<script>' + fontJs + '</script>', '<script>' + safe(src('bc3.js')) + '</script>', '<script>' + safe(src('engine.js')) + '</script>', '<script>' + safe(src('export.js')) + '</script>', '<script>' + safe(src('app.js')) + '</script>'].join('\n');
+const scripts = ['<script>' + safe(src('vendor-jspdf.umd.min.js')) + '</script>', '<script>' + catJs + '</script>', '<script>' + fontJs + '</script>', '<script>' + safe(src('bc3.js')) + '</script>', '<script>' + safe(src('engine.js')) + '</script>', '<script>' + safe(src('export.js')) + '</script>', '<script>' + safe(src('ai.js')) + '</script>', '<script>' + safe(src('vendor-supabase.umd.js')) + '</script>', '<script>' + safe(src('cloud-config.js')) + '</script>', '<script>' + safe(src('cloud.js')) + '</script>', '<script>' + safe(src('app.js')) + '</script>'].join('\n');
 const iconData = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, 'src', 'brand', 'icon-192.png')).toString('base64');
 const body = src('body.html').replace('src="icon-192.png"', 'src="' + iconData + '"');
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });

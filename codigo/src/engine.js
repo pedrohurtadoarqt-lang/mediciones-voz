@@ -750,6 +750,14 @@
 
       if (this.tryCommands(text, n) !== false) return;
 
+      // Medida + hueco en la misma frase: "3,40 por 2,60 y quita la ventana de 1,20 por 1,10" → dos líneas
+      if (act) {
+        const mm = text.match(/^(.+?)\s*,?\s+(?:y\s+)?((?:descuenta|descontando|descontar|quita|quitando|resta|restando|menos|deduce|deduciendo)\b.+)$/i);
+        if (mm && parseMeasure(mm[1]).count >= 1 && parseMeasure(mm[2]).count >= 1) {
+          this.st_idle(mm[1].replace(/\s+y\s*$/i, ''), norm(mm[1]));
+          return this.st_idle(mm[2], norm(mm[2]));
+        }
+      }
       // Medición
       const pm = parseMeasure(text);
       if (pm.count > 0 || pm.n !== null) {
@@ -983,7 +991,7 @@
       const isDemDoc = (r) => DEM_DOC.test(norm(r.doc.r)) || /DEMOLIC/i.test(r.doc.chapTitle || '');
       if (qDem) {
         const f = res.filter(isDemDoc);
-        if (!f.length || f[0].s < 0.3) return this.lowConfidence(query, []);
+        if (!f.length || f[0].s < 0.3) return this.aiOr(query, 'no hay partidas de demolición que encajen', () => this.lowConfidence(query, []));
         res = f;
       } else {
         const f = res.filter((r) => !isDemDoc(r));
@@ -992,11 +1000,11 @@
       // Cobertura: ¿hay partidas cuyo resumen contenga todo lo importante que se ha dicho?
       const top = res.slice(0, 120);
       const minMiss = top.length ? Math.min(...top.map((r) => r.miss || 0)) : 0;
-      if (top.length && minMiss > 0 && top[0].nKey >= 2 && !this.forceCands) return this.lowConfidence(query, top.filter((r) => r.miss === minMiss).slice(0, 4));
+      if (top.length && minMiss > 0 && top[0].nKey >= 2 && !this.forceCands) return this.aiOr(query, 'ninguna partida contiene todo lo dicho', () => this.lowConfidence(query, top.filter((r) => r.miss === minMiss).slice(0, 4)));
       this.forceCands = false;
       if (top.length && top[0].nKey) res = res.filter((r) => (r.miss || 0) === minMiss);
       const best = res.length ? res[0].s : 0;
-      if (best < 0.34) return this.createStart(query, res);
+      if (best < 0.34) return this.aiOr(query, 'el motor no encuentra la partida', () => this.createStart(query, res));
       let cands = res.filter((r) => r.s >= best * 0.8 && !exclude.includes(r.doc.c)).slice(0, 60);
       if (!cands.length) return this.createStart(query, res);
       cands = prefilter(cands, query);
@@ -1084,7 +1092,7 @@
         const inC = res.filter((r) => st.cands.some((c) => c.doc.c === r.doc.c));
         if (inC.length && inC[0].s > (inC[1] ? inC[1].s * 1.15 : 0)) return this.propose(inC[0].doc, '', st.query, st.cands);
         if (contentWords(text).length >= 2 && res.length && res[0].s > 0.5 && !st.cands.some((c) => c.doc.c === res[0].doc.c)) return this.selectWork(text);
-        return this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)), this.lastPrompt.chips);
+        return this.aiOr(text, 'respuesta no reconocida mientras se elegía partida para «' + st.query + '»', () => this.ask('No te he entendido. ' + st.split.a.q(st.splitOpts.map(cap)), this.lastPrompt.chips));
       }
       const val = st.splitOpts[i];
       const id = st.split.a.id;
@@ -1105,7 +1113,7 @@
         const f = prefilter(st.listed, text);
         if (f.length === 1) return this.pickDoc(f[0].doc, '', st.query);
         if (f.length > 1 && f.length < st.listed.length) return this.askList(f, 'Quedan ' + f.length + ': ' + f.map((x, j) => (j + 1) + ', ' + x.doc.r).join('; ') + '. ¿Cuál?');
-        return this.ask('¿Cuál de ellas? Dime el número.', this.lastPrompt.chips);
+        return this.aiOr(st.query + ' — ' + text, 'respuesta no reconocida al elegir de una lista', () => this.ask('¿Cuál de ellas? Dime el número.', this.lastPrompt.chips));
       }
       this.pickDoc(st.listed[i].doc, '', st.query);
     }
@@ -1120,9 +1128,83 @@
       this.state = { mode: 'idle' };
       return this.selectWork(text);
     }
+    /* ---- IA de respaldo ----
+     * Solo cuando el motor no está seguro. Si no hay IA (sin sesión, sin conexión) o falla, se usa el plan B. */
+    aiOr(frase, motivo, fallback) {
+      const io = this.io;
+      const AIm = root.AI;
+      if (!io.ai || !AIm || !io.aiReady || !io.aiReady()) return fallback();
+      const key = norm(frase);
+      this.aiTried = this.aiTried || new Set();
+      if (this.aiTried.has(key)) return fallback();
+      this.aiTried.add(key);
+      const token = (this.aiToken = (this.aiToken || 0) + 1);
+      const prev = this.state;
+      this.state = { mode: 'thinking', prev, fallback };
+      io.note && io.note('Lo consulto con la IA…');
+      const act = this.active();
+      const ctx = {
+        frase, motivo, estancia: this.obra.estActiva || '',
+        activa: act ? { ref: act.ref, r: act.r, u: act.u } : null,
+        rechazadas: [...(this.rejected || [])].slice(-20),
+        historial: (io.history ? io.history() : []).slice(-6),
+        candidatas: AIm.candidates(this.cat, frase).map((d) => ({ c: d.c, u: d.u, r: d.r, path: d.path }))
+      };
+      const timer = setTimeout(() => { if (token === this.aiToken) { this.aiToken++; this.state = { mode: 'idle' }; fallback(); } }, 9000);
+      Promise.resolve(io.ai(ctx)).then((raw) => {
+        clearTimeout(timer);
+        if (token !== this.aiToken) return;
+        const r = AIm.validate(raw && raw.result ? raw.result : raw, ctx);
+        this.state = { mode: 'idle' };
+        this.applyAI(r, frase, fallback);
+      }).catch(() => { clearTimeout(timer); if (token !== this.aiToken) return; this.state = { mode: 'idle' }; fallback(); });
+    }
+    st_thinking(text, n, input) {
+      // Si el usuario habla mientras la IA piensa, se abandona la consulta y se atiende lo nuevo
+      this.aiToken = (this.aiToken || 0) + 1;
+      this.state = { mode: 'idle' };
+      return this.handleInternal(text, n, input);
+    }
+    handleInternal(text, n, input) {
+      if (input && input.act) return this.st_idle(text, n, input);
+      if (this.tryCommands(text, n) === false) return this.st_idle(text, n, input);
+    }
+    applyAI(r, frase, fallback) {
+      const cat = this.cat;
+      if (r.intent === 'partida' && r.partida_codigo && cat.byCode.get(r.partida_codigo)) {
+        const d = cat.byCode.get(r.partida_codigo);
+        const alts = (r.alternativas || []).map((c) => cat.byCode.get(c)).filter(Boolean).map((doc) => ({ doc }));
+        return this.propose(d, 'Creo que es esta.', frase, alts, true);
+      }
+      if (r.intent === 'crear_partida' && r.nueva_descripcion) {
+        this.state = { mode: 'ai_create', query: frase, desc: cap(r.nueva_descripcion), u: r.nueva_unidad || null };
+        return this.ask('No está en la base de datos. ¿Creo la partida «' + cap(r.nueva_descripcion) + '»' + (r.nueva_unidad ? ', en ' + unitSpoken(r.nueva_unidad) : '') + '?',
+          [{ label: 'Sí, crearla', value: 'sí', act: { yes: true } }, { label: 'Cambiar la descripción', value: 'cambiar descripción', act: { edit: true } }, { label: 'Cancelar', value: 'cancela' }]);
+      }
+      if ((r.intent === 'medida' || r.intent === 'comando') && r.texto_normalizado) {
+        const parts = r.texto_normalizado.split('|').map((x) => x.trim()).filter(Boolean).slice(0, 12);
+        if (r.intent === 'medida' && !this.active()) return fallback();
+        this.aiTried.add(norm(frase));
+        parts.forEach((t) => { this.state = { mode: 'idle' }; this.handleInternal(t, norm(t)); });
+        return;
+      }
+      if (r.intent === 'estancia' && r.estancia) return this.st_estancia(r.estancia, norm(r.estancia));
+      if (r.intent === 'no_entiendo' && r.pregunta) return this.ask(r.pregunta, this.idleChips());
+      return fallback();
+    }
+    st_ai_create(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      if ((a && a.yes) || /^(si|vale|ok|creala|crea|de acuerdo|correcto)\b/.test(n)) {
+        if (st.u) { this.state = { mode: 'create_desc', u: st.u, query: st.query }; return this.st_create_desc(st.desc, norm(st.desc), null); }
+        return this.createStart(st.desc, [], true);
+      }
+      if ((a && a.edit) || /^(cambia|otra descripcion|no)\b/.test(n)) { this.state = { mode: 'create_unit', query: st.query }; return this.createStart(st.query, [], true); }
+      if (this.escape(text, n)) return;
+      return this.ask('¿Creo la partida «' + st.desc + '»?', this.lastPrompt.chips);
+    }
     /** Elección automática: si está activada la confirmación, pregunta "¿Es X?" antes de medir. */
-    propose(d, prefix, query, alts) {
-      const confirm = this.io.confirmPick ? this.io.confirmPick() : true;
+    propose(d, prefix, query, alts, forceConfirm) {
+      const confirm = forceConfirm || (this.io.confirmPick ? this.io.confirmPick() : true);
       if (!confirm) return this.pickDoc(d, prefix, query);
       const others = (alts || []).filter((x) => x.doc && x.doc.c !== d.c).slice(0, 8);
       this.state = { mode: 'confirm', d, query, alts: others };
@@ -1144,6 +1226,7 @@
         return this.ask('¿Es esa partida? Di sí o no.', this.lastPrompt.chips);
       }
       if (yes) return this.pickDoc(st.d, '', st.query);
+      (this.rejected = this.rejected || new Set()).add(st.d.c);
       const rest = n.replace(/^(no[, ]*(es)?|otra|esa no)\s*/, '').trim();
       if (contentWords(rest).length) return this.selectWork(rest);
       if (st.alts.length) return this.askList(st.alts.slice(0, 5), 'Otras opciones: ' + shortLabels(st.alts.slice(0, 4).map((x) => x.doc.r)).map((x, i) => (i + 1) + ', ' + x).join('; ') + '. ¿Es alguna? También puedes decírmela con otras palabras.');

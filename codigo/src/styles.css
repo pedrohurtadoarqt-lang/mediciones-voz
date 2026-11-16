@@ -194,3 +194,16 @@ button.resumen.linklike { background: none; border: 0; padding: 0; text-align: l
 .brandtitle { font-family: var(--brand); font-weight: 800; letter-spacing: -.01em; }
 .legal-links a { color: var(--muted); }
 .field textarea { min-height: 110px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); padding: 10px 12px; width: 100%; resize: vertical; font: inherit; color: inherit; }
+
+/* Cuenta, sincronización y administración */
+.installcard.acct { flex-wrap: wrap; }
+.syncline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-s); color: var(--muted); }
+.syncline .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+.syncline .dot.off { background: var(--accent); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.kpi b { font-size: 1.6rem; font-family: var(--brand); font-variant-numeric: tabular-nums; }
+.kpi span { font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+table.admin td { white-space: normal; font-size: var(--fs-xs); }
+details summary { cursor: pointer; }

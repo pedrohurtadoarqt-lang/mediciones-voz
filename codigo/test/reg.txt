@@ -1,0 +1,9 @@
+Registro de conversación · Ejemplo · Reforma Calle Mayor 14
+
+2026-11-16 15:09:45 | APP  | Baño 1 | DRA010 Demolición de alicatado de azulejo | Obra Ejemplo · Reforma Calle Mayor 14 abierta. Estancia: Baño 1. Partida activa: Demolición de alicatado de azulejo. Dime el trabajo a medir.
+2026-11-16 15:09:46 | OÍDO | Baño 1 | DRA010 Demolición de alicatado de azulejo | picado de azulejos
+2026-11-16 15:09:46 | APP  | Baño 1 | DRA010 Demolición de alicatado de azulejo | Continúo con la partida Demolición de alicatado de azulejo. Dime la longitud de cada pared, una a una. Al final me dices la altura de la estancia.
+2026-11-16 15:09:46 | OÍDO | Baño 1 | DRA010 Demolición de alicatado de azulejo | pared 3 por 2,5
+2026-11-16 15:09:46 | APP  | Baño 1 | DRA010 Demolición de alicatado de azulejo | Anotado 7,50. Total 19,04 metros cuadrados. ¿Otra medida?
+2026-11-16 15:09:47 | APP  | Baño 1 | DRS040 Levantado de entarimado de madera maciza | Cambiada: ahora es Levantado de entarimado de madera maciza, en metros cuadrados. He pasado 1 línea. Total 7,50 metros cuadrados. ¿Seguimos midiendo?
+2026-11-16 15:09:47 | APP  | Baño 1 | DRS040 Levantado de entarimado de madera maciza | En pausa. Toca el micro cuando quieras seguir.

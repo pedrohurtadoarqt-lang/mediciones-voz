@@ -1,0 +1,2 @@
+/* Configuración pública de Supabase (la clave anon es pública por diseño; la seguridad la aplican las políticas RLS). */
+window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impka2dvd3V0ZHRsYWl0c3pja2pvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4MzQ3MzUsImV4cCI6MjExMDQxMDczNX0.-ku50fSnmkB2aa5ukutow7VC_s6UdF64v6XhOn-wxdo" };
