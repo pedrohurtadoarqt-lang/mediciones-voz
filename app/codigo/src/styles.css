@@ -1,28 +1,31 @@
 /* Layout: app de una pantalla — barra superior, monitor de partida en el centro, panel de diálogo anclado al pulgar.
    Modo Obra (oscuro, por defecto) y Modo Luz Solar (blanco/negro de máximo contraste). */
 :root {
-  --bg: #0F172A;          /* Slate 900 */
-  --card: #1E293B;        /* Slate 800 */
-  --card-2: #273449;
-  --line: #334155;
-  --fg: #F1F5F9;
-  --muted: #94A3B8;
-  --accent: #F59E0B;      /* ámbar seguridad */
-  --accent-fg: #1A1204;
-  --ok: #10B981;          /* esmeralda */
+  /* Identidad Mediciona: Dark Slate · Electric Cyan · Construction Teal · Light Steel Blue */
+  --bg: #1A2231;          /* Dark Slate (fondo) */
+  --card: #232D3F;        /* Dark Slate (tarjetas) */
+  --card-2: #2C384D;
+  --line: #3A475E;
+  --fg: #EEF1F7;          /* Light Steel Blue */
+  --muted: #9AA8BF;
+  --accent: #22D3EE;      /* Electric Cyan */
+  --accent-fg: #0B1524;
+  --teal: #1A746C;        /* Construction Teal */
+  --ok: #2DD4BF;          /* teal claro: medida anotada */
   --rec: #EF4444;         /* rojo coral: escucha y deducciones */
   --ded: #F87171;
   --chip: #263449;
   --chip-line: #3B4A63;
   --shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  --brand: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
   --fs-xs: .75rem; --fs-s: .875rem; --fs-m: 1rem; --fs-l: 1.25rem; --fs-xl: 2.6rem;
   color-scheme: dark;
 }
 :root[data-mode="sol"] {
-  --bg: #FFFFFF; --card: #FFFFFF; --card-2: #F1F5F9; --line: #000000; --fg: #000000; --muted: #1F2937;
-  --accent: #B45309; --accent-fg: #FFFFFF; --ok: #047857; --rec: #B91C1C; --ded: #B91C1C;
+  --bg: #FFFFFF; --card: #FFFFFF; --card-2: #EEF1F7; --line: #000000; --fg: #000000; --muted: #1F2937;
+  --accent: #0E7490; --accent-fg: #FFFFFF; --teal: #1A746C; --ok: #1A746C; --rec: #B91C1C; --ded: #B91C1C;
   --chip: #FFFFFF; --chip-line: #000000; --shadow: none;
   color-scheme: light;
 }
@@ -39,7 +42,8 @@ button { cursor: pointer; }
 
 /* Barra superior */
 .topbar { display: flex; align-items: center; gap: 8px; padding-block: 10px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line); background: var(--bg); }
-.topbar h1 { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-m); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .01em; }
+.brandlogo { width: 36px; height: 36px; flex: none; border-radius: 9px; }
+.topbar h1 { font-family: var(--brand); flex: 1; min-width: 0; margin: 0; font-size: var(--fs-m); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .01em; }
 .topbar h1 small { display: block; font-size: var(--fs-xs); color: var(--muted); font-weight: 500; }
 .iconbtn { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; flex: none; }
 .iconbtn svg { width: 22px; height: 22px; }
@@ -103,7 +107,7 @@ table.lines td.p { font-weight: 700; }
 .controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .controls .l { justify-self: start; display: flex; gap: 8px; }
 .controls .r { justify-self: end; display: flex; gap: 8px; }
-.mic { width: 72px; height: 72px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; position: relative; box-shadow: 0 6px 18px rgba(245, 158, 11, .35); }
+.mic { width: 72px; height: 72px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; position: relative; box-shadow: 0 6px 18px rgba(34, 211, 238, .35); }
 .mic svg { width: 32px; height: 32px; }
 .mic.listening { background: var(--rec); color: #fff; box-shadow: 0 0 0 0 rgba(239, 68, 68, .6); animation: pulse 1.4s infinite; }
 .mic.speaking { background: var(--card-2); color: var(--accent); border: 2px solid var(--accent); }
@@ -176,3 +180,15 @@ table.lines td.pend, .pend { color: var(--accent); font-weight: 700; font-style:
 .iconbtn.stop { color: var(--rec); border-color: var(--rec); }
 button.resumen.linklike { background: none; border: 0; padding: 0; text-align: left; color: var(--fg); font-family: inherit; font-size: var(--fs-l); font-weight: 700; line-height: 1.25; cursor: pointer; }
 .edit-hint { font-size: var(--fs-xs); font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--accent); border-radius: 6px; padding: 1px 6px; vertical-align: middle; white-space: nowrap; }
+
+/* Instalación como app */
+.installcard { display: flex; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--accent); border-radius: 14px; padding: 12px 14px; }
+.installcard img { width: 44px; height: 44px; border-radius: 10px; flex: none; }
+.installcard .tx { flex: 1; min-width: 0; font-size: var(--fs-s); line-height: 1.4; }
+.installcard .tx b { display: block; font-family: var(--brand); font-size: var(--fs-m); }
+.ios-guide { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; background: var(--card); border-top: 2px solid var(--accent); padding-block: 16px calc(18px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 -10px 30px rgba(0,0,0,.4); }
+.ios-guide ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
+.ios-guide .share { display: inline-grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--accent); border-radius: 6px; vertical-align: middle; color: var(--accent); }
+.ios-guide .arrow { align-self: center; color: var(--accent); animation: bob 1.2s ease-in-out infinite; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
+.brandtitle { font-family: var(--brand); font-weight: 800; letter-spacing: -.01em; }

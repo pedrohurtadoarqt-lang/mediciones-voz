@@ -377,7 +377,7 @@
     $('#dock').hidden = S.view !== 'obra';
     const v = $('#view');
     const t = $('#title');
-    if (S.view === 'obras') { t.innerHTML = 'Mediciones por voz<small>Estado de mediciones · BC3</small>'; v.innerHTML = viewObras(); }
+    if (S.view === 'obras') { t.innerHTML = '<span class="brandtitle">Mediciona</span><small>Mediciones de obra con IA</small>'; v.innerHTML = viewObras(); }
     else if (S.view === 'obra') { t.innerHTML = esc(S.obra.titulo) + '<small>' + esc([S.obra.cliente, S.obra.ubicacion].filter(Boolean).join(' · ') || 'Obra') + '</small>'; v.innerHTML = viewObra(); }
     else if (S.view === 'resumen') { t.innerHTML = 'Resumen<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewResumen(); }
     else if (S.view === 'catalogos') { t.innerHTML = 'Bases de datos BC3<small>Sin precios: código, unidad, resumen y texto</small>'; v.innerHTML = viewCatalogos(); }
@@ -456,7 +456,9 @@
     const list = S.obras.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const canNew = BillingGuard.canCreateObra(list.filter((o) => !o.ejemplo).length);
     const plan = S.settings.plan === 'pro' ? '<span class="badge pro">Plan Pro</span>' : '<span class="badge">Plan Demo · hasta ' + BillingGuard.MAX_DEMO + ' obras · PDF con marca de agua</span>';
-    let h = '<div class="row" style="justify-content:space-between">' + plan + '<button class="btn primary" data-a="newobra"' + (canNew ? '' : ' disabled') + '>Nueva obra</button></div>';
+    let h = '';
+    if (canOfferInstall()) h += '<div class="installcard"><img src="' + ($('#brandlogo') ? $('#brandlogo').src : '') + '" alt=""><div class="tx"><b>Instalar en este móvil</b>Úsala como una app, desde un icono y a pantalla completa.</div><button class="btn primary" data-a="install">Instalar</button></div>';
+    h += '<div class="row" style="justify-content:space-between">' + plan + '<button class="btn primary" data-a="newobra"' + (canNew ? '' : ' disabled') + '>Nueva obra</button></div>';
     if (!canNew) h += '<p class="hint">Has llegado al límite del plan Demo. Borra una obra o activa el plan Pro en Ajustes.</p>';
     if (!list.length) h += '<div class="card"><h3>Sin obras todavía</h3><p class="hint">Crea una obra, elige el ámbito de la visita y dicta las partidas y medidas mientras recorres la obra.</p></div>';
     list.forEach((o) => {
@@ -547,13 +549,50 @@
   function sheet(html) { const s = $('#sheet'); s.innerHTML = '<div class="sheet-bg" data-a="closesheet-bg"><div class="sheet" role="dialog" aria-modal="true">' + html + '</div></div>'; s.hidden = false; }
   function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
   let toastT = null;
-  function toast(msg, undo) {
-    const t = $('#toast'); t.innerHTML = esc(msg) + (undo ? '<button data-a="undo">Deshacer</button>' : ''); t.hidden = false;
-    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 4000);
+  let toastAction = null;
+  function toast(msg, undo, action) {
+    const t = $('#toast');
+    toastAction = action || null;
+    t.innerHTML = esc(msg) + (undo ? '<button data-a="undo">Deshacer</button>' : '') + (action ? '<button data-a="toastact">' + esc(action.label) + '</button>' : '');
+    t.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, action ? 9000 : 4000);
+  }
+  /* ---- Archivo generado: se descarga y, si el móvil lo permite, se ofrece compartir (correo, WhatsApp…) ---- */
+  function canShareFile(file) { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: [file] })); } catch (e) { return false; } }
+  async function fileReady(name, blob, label) {
+    const ok = await saveFile(name, blob);
+    if (!ok) return;
+    const file = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+    if (canShareFile(file)) toast(label + ' generado', false, { label: 'Compartir', fn: () => navigator.share({ files: [file], title: name, text: 'Mediciones · ' + name }).catch(() => {}) });
+    else toast(label + ' generado: ' + name);
+  }
+  /* ---- Instalación como app (PWA) ---- */
+  const isStandalone = () => { try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.installEvt = e; if (S.view === 'obras') render(); });
+  window.addEventListener('appinstalled', () => { S.installEvt = null; toast('Mediciona instalada. Ábrela desde el icono de tu pantalla de inicio.'); render(); });
+  function canOfferInstall() { return !isStandalone() && (!!S.installEvt || isIOS()); }
+  async function doInstall() {
+    if (S.installEvt) { const e = S.installEvt; S.installEvt = null; e.prompt(); try { await e.userChoice; } catch (er) {} render(); return; }
+    if (isIOS()) return iosGuide();
+    toast('Abre esta web en Chrome (Android) o Safari (iPhone) para instalarla.');
+  }
+  function iosGuide() {
+    if ($('.ios-guide')) return;
+    const notSafari = /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+    const d = document.createElement('div'); d.className = 'ios-guide'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Instalar en iPhone');
+    d.innerHTML = '<b class="brandtitle">Instala Mediciona en tu iPhone</b><ol>' +
+      '<li>Pulsa <span class="share"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11v9h12v-9"/></svg></span> <b>Compartir</b> en la barra de abajo' + (notSafari ? ' (o arriba, junto a la dirección)' : '') + '.</li>' +
+      '<li>Elige <b>«Añadir a pantalla de inicio»</b> (desliza hacia abajo si no lo ves).</li>' +
+      '<li>Pulsa <b>Añadir</b>. Abre Mediciona siempre desde ese icono.</li></ol>' +
+      (notSafari ? '<p class="hint">Si no aparece la opción, abre mediciona.es en Safari.</p>' : '') +
+      '<div class="row" style="justify-content:space-between"><button class="btn" data-a="iosclose">Ahora no</button><svg class="arrow" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 4v15M6 13l6 6 6-6"/></svg></div>';
+    document.body.appendChild(d);
   }
   function menuSheet() {
     const items = [['obras', ICON.obras, 'Mis obras']];
     if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
+    if (canOfferInstall()) items.push(['install', ICON.obras, 'Instalar en este móvil']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
@@ -635,6 +674,9 @@
     if (a === 'closesheet-bg') { if (ev.target === el) closeSheet(); return; }
     switch (a) {
       case 'closesheet': closeSheet(); break;
+      case 'install': closeSheet(); doInstall(); break;
+      case 'iosclose': { const g = $('.ios-guide'); if (g) g.remove(); try { localStorage.setItem('iosGuideSeen', '1'); } catch (e) {} break; }
+      case 'toastact': { $('#toast').hidden = true; const fn = toastAction && toastAction.fn; toastAction = null; if (fn) fn(); break; }
       case 'newobra': newObraSheet(); break;
       case 'open': openObra(el.dataset.id); break;
       case 'obras': closeSheet(); goObras(); break;
@@ -743,14 +785,13 @@
   async function exportFile(obra, kind) {
     if (!obra) return;
     if (!obra.partidas.some((p) => p.lineas.length)) return toast('La obra no tiene mediciones todavía.');
-    const base = 'Mediciones_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60);
+    const base = 'Mediciona_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60);
     try {
       const X = window.Exporters;
       const blob = kind === 'xlsx'
         ? new Blob([X.buildXLSX(obra)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
         : new Blob([X.buildBC3(obra)], { type: 'application/octet-stream' });
-      const ok = await saveFile(base + '.' + kind, blob);
-      if (ok) toast((kind === 'xlsx' ? 'Excel' : 'BC3') + ' generado: ' + base + '.' + kind);
+      await fileReady(base + '.' + kind, blob, kind === 'xlsx' ? 'Excel' : 'BC3');
     } catch (e) { console.error(e); toast('No se pudo generar el archivo: ' + e.message); }
   }
   async function exportPdf(obra) {
@@ -758,9 +799,8 @@
     const J = window.jspdf && window.jspdf.jsPDF;
     if (!J) return toast('El generador de PDF no está disponible.');
     const doc = buildPdf(obra, J);
-    const name = 'Mediciones_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60) + '.pdf';
-    const ok = await saveFile(name, doc.output('blob'));
-    if (ok) toast('PDF generado: ' + name);
+    const name = 'Mediciona_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60) + '.pdf';
+    await fileReady(name, new Blob([doc.output('blob')], { type: 'application/pdf' }), 'PDF');
   }
   function buildPdf(obra, J) {
     const doc = new J({ unit: 'mm', format: 'a4' });
@@ -888,7 +928,7 @@
       doc.setPage(i);
       doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.2); doc.line(M, 287, R, 287);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
-      doc.text(txt('Mediciones por voz · ' + obra.titulo + ' · Base: ' + ((catFor(obra) || {}).nombre || '')), M, 291, { maxWidth: 150 });
+      doc.text(txt('Mediciona · Mediciones de obra con IA · ' + obra.titulo + ' · Base: ' + ((catFor(obra) || {}).nombre || '')), M, 291, { maxWidth: 150 });
       right('Página ' + i + ' de ' + n, R, 291);
       if (wm) {
         try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.13 })); } catch (e) {}
@@ -930,6 +970,8 @@
     S.obras = await StorageAdapter.all('obras');
     if (!S.obras.length && !st) { const ex = exampleObra(cat); S.obras.push(ex); await StorageAdapter.put('obras', ex); await saveSettings(); }
     render();
+    // iPhone: mostrar una vez la guía de instalación
+    try { if (isIOS() && !isStandalone() && !localStorage.getItem('iosGuideSeen')) setTimeout(iosGuide, 1500); } catch (e) {}
     VoiceAdapter.init().then((m) => {
       if (m === 'none') {
         S.typing = true;

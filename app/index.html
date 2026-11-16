@@ -4,38 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Mediciones por Voz</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mediciona">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mediciona</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="theme-color" content="#0F172A">
+<meta name="theme-color" content="#1A2231">
+<meta name="description" content="Mediciona: mediciones de obra con IA">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&display=swap">
 <style>
 /* Layout: app de una pantalla — barra superior, monitor de partida en el centro, panel de diálogo anclado al pulgar.
    Modo Obra (oscuro, por defecto) y Modo Luz Solar (blanco/negro de máximo contraste). */
 :root {
-  --bg: #0F172A;          /* Slate 900 */
-  --card: #1E293B;        /* Slate 800 */
-  --card-2: #273449;
-  --line: #334155;
-  --fg: #F1F5F9;
-  --muted: #94A3B8;
-  --accent: #F59E0B;      /* ámbar seguridad */
-  --accent-fg: #1A1204;
-  --ok: #10B981;          /* esmeralda */
+  /* Identidad Mediciona: Dark Slate · Electric Cyan · Construction Teal · Light Steel Blue */
+  --bg: #1A2231;          /* Dark Slate (fondo) */
+  --card: #232D3F;        /* Dark Slate (tarjetas) */
+  --card-2: #2C384D;
+  --line: #3A475E;
+  --fg: #EEF1F7;          /* Light Steel Blue */
+  --muted: #9AA8BF;
+  --accent: #22D3EE;      /* Electric Cyan */
+  --accent-fg: #0B1524;
+  --teal: #1A746C;        /* Construction Teal */
+  --ok: #2DD4BF;          /* teal claro: medida anotada */
   --rec: #EF4444;         /* rojo coral: escucha y deducciones */
   --ded: #F87171;
   --chip: #263449;
   --chip-line: #3B4A63;
   --shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  --brand: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
   --fs-xs: .75rem; --fs-s: .875rem; --fs-m: 1rem; --fs-l: 1.25rem; --fs-xl: 2.6rem;
   color-scheme: dark;
 }
 :root[data-mode="sol"] {
-  --bg: #FFFFFF; --card: #FFFFFF; --card-2: #F1F5F9; --line: #000000; --fg: #000000; --muted: #1F2937;
-  --accent: #B45309; --accent-fg: #FFFFFF; --ok: #047857; --rec: #B91C1C; --ded: #B91C1C;
+  --bg: #FFFFFF; --card: #FFFFFF; --card-2: #EEF1F7; --line: #000000; --fg: #000000; --muted: #1F2937;
+  --accent: #0E7490; --accent-fg: #FFFFFF; --teal: #1A746C; --ok: #1A746C; --rec: #B91C1C; --ded: #B91C1C;
   --chip: #FFFFFF; --chip-line: #000000; --shadow: none;
   color-scheme: light;
 }
@@ -52,7 +60,8 @@ button { cursor: pointer; }
 
 /* Barra superior */
 .topbar { display: flex; align-items: center; gap: 8px; padding-block: 10px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line); background: var(--bg); }
-.topbar h1 { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-m); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .01em; }
+.brandlogo { width: 36px; height: 36px; flex: none; border-radius: 9px; }
+.topbar h1 { font-family: var(--brand); flex: 1; min-width: 0; margin: 0; font-size: var(--fs-m); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .01em; }
 .topbar h1 small { display: block; font-size: var(--fs-xs); color: var(--muted); font-weight: 500; }
 .iconbtn { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; flex: none; }
 .iconbtn svg { width: 22px; height: 22px; }
@@ -116,7 +125,7 @@ table.lines td.p { font-weight: 700; }
 .controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .controls .l { justify-self: start; display: flex; gap: 8px; }
 .controls .r { justify-self: end; display: flex; gap: 8px; }
-.mic { width: 72px; height: 72px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; position: relative; box-shadow: 0 6px 18px rgba(245, 158, 11, .35); }
+.mic { width: 72px; height: 72px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; position: relative; box-shadow: 0 6px 18px rgba(34, 211, 238, .35); }
 .mic svg { width: 32px; height: 32px; }
 .mic.listening { background: var(--rec); color: #fff; box-shadow: 0 0 0 0 rgba(239, 68, 68, .6); animation: pulse 1.4s infinite; }
 .mic.speaking { background: var(--card-2); color: var(--accent); border: 2px solid var(--accent); }
@@ -189,13 +198,26 @@ table.lines td.pend, .pend { color: var(--accent); font-weight: 700; font-style:
 .iconbtn.stop { color: var(--rec); border-color: var(--rec); }
 button.resumen.linklike { background: none; border: 0; padding: 0; text-align: left; color: var(--fg); font-family: inherit; font-size: var(--fs-l); font-weight: 700; line-height: 1.25; cursor: pointer; }
 .edit-hint { font-size: var(--fs-xs); font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--accent); border-radius: 6px; padding: 1px 6px; vertical-align: middle; white-space: nowrap; }
+
+/* Instalación como app */
+.installcard { display: flex; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--accent); border-radius: 14px; padding: 12px 14px; }
+.installcard img { width: 44px; height: 44px; border-radius: 10px; flex: none; }
+.installcard .tx { flex: 1; min-width: 0; font-size: var(--fs-s); line-height: 1.4; }
+.installcard .tx b { display: block; font-family: var(--brand); font-size: var(--fs-m); }
+.ios-guide { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; background: var(--card); border-top: 2px solid var(--accent); padding-block: 16px calc(18px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 -10px 30px rgba(0,0,0,.4); }
+.ios-guide ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
+.ios-guide .share { display: inline-grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--accent); border-radius: 6px; vertical-align: middle; color: var(--accent); }
+.ios-guide .arrow { align-self: center; color: var(--accent); animation: bob 1.2s ease-in-out infinite; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
+.brandtitle { font-family: var(--brand); font-weight: 800; letter-spacing: -.01em; }
 </style>
 </head>
 <body>
 <div id="app">
   <header class="topbar">
     <button class="iconbtn" id="btnBack" aria-label="Volver a obras" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <h1 id="title">Mediciones por voz</h1>
+    <img class="brandlogo" src="icon-192.png" alt="" id="brandlogo">
+    <h1 id="title">Mediciona</h1>
     <button class="iconbtn" id="btnSol" aria-label="Modo luz solar" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></button>
     <button class="iconbtn" id="btnMenu" aria-label="Menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
   </header>
@@ -2543,7 +2565,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     const pc = partCodes(caps);
     const rootCode = (clean(obra.titulo).toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 14) || 'OBRA') + '##';
     const R = [];
-    R.push('~V|' + clean(opts.propietario || '') + '|FIEBDC-3/2016\\' + ddmmyyyy(now) + '|Mediciones por voz|' + clean(obra.titulo) + '\\|ANSI|Estado de mediciones sin precios|2|||');
+    R.push('~V|' + clean(opts.propietario || '') + '|FIEBDC-3/2016\\' + ddmmyyyy(now) + '|Mediciona|' + clean(obra.titulo) + '\\|ANSI|Estado de mediciones sin precios|2|||');
     R.push('~K|-9\\2\\3\\3\\2\\2\\2\\2\\EUR\\|0\\13\\6\\\\21|3\\2\\\\3\\3\\\\2\\2\\2\\-9\\2\\3\\3\\2\\EUR\\||');
     // Raíz
     R.push('~C|' + rootCode + '||' + clean(obra.titulo) + '|0|' + ddmmyy(now) + '|0|');
@@ -2675,7 +2697,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     const files = [
       { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>' },
       { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>' },
-      { name: 'docProps/core.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Mediciones · ' + title + '</dc:title><dc:creator>Mediciones por voz</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + new Date().toISOString().slice(0, 19) + 'Z</dcterms:created></cp:coreProperties>' },
+      { name: 'docProps/core.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Mediciones · ' + title + '</dc:title><dc:creator>Mediciona</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + new Date().toISOString().slice(0, 19) + 'Z</dcterms:created></cp:coreProperties>' },
       { name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets><sheet name="Mediciones" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">Mediciones!$A$1:$H$' + rows.length + '</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">Mediciones!$1:$1</definedName></definedNames><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>' },
       { name: 'xl/_rels/workbook.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
       { name: 'xl/styles.xml', data: styles },
@@ -3068,7 +3090,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     $('#dock').hidden = S.view !== 'obra';
     const v = $('#view');
     const t = $('#title');
-    if (S.view === 'obras') { t.innerHTML = 'Mediciones por voz<small>Estado de mediciones · BC3</small>'; v.innerHTML = viewObras(); }
+    if (S.view === 'obras') { t.innerHTML = '<span class="brandtitle">Mediciona</span><small>Mediciones de obra con IA</small>'; v.innerHTML = viewObras(); }
     else if (S.view === 'obra') { t.innerHTML = esc(S.obra.titulo) + '<small>' + esc([S.obra.cliente, S.obra.ubicacion].filter(Boolean).join(' · ') || 'Obra') + '</small>'; v.innerHTML = viewObra(); }
     else if (S.view === 'resumen') { t.innerHTML = 'Resumen<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewResumen(); }
     else if (S.view === 'catalogos') { t.innerHTML = 'Bases de datos BC3<small>Sin precios: código, unidad, resumen y texto</small>'; v.innerHTML = viewCatalogos(); }
@@ -3147,7 +3169,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     const list = S.obras.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const canNew = BillingGuard.canCreateObra(list.filter((o) => !o.ejemplo).length);
     const plan = S.settings.plan === 'pro' ? '<span class="badge pro">Plan Pro</span>' : '<span class="badge">Plan Demo · hasta ' + BillingGuard.MAX_DEMO + ' obras · PDF con marca de agua</span>';
-    let h = '<div class="row" style="justify-content:space-between">' + plan + '<button class="btn primary" data-a="newobra"' + (canNew ? '' : ' disabled') + '>Nueva obra</button></div>';
+    let h = '';
+    if (canOfferInstall()) h += '<div class="installcard"><img src="' + ($('#brandlogo') ? $('#brandlogo').src : '') + '" alt=""><div class="tx"><b>Instalar en este móvil</b>Úsala como una app, desde un icono y a pantalla completa.</div><button class="btn primary" data-a="install">Instalar</button></div>';
+    h += '<div class="row" style="justify-content:space-between">' + plan + '<button class="btn primary" data-a="newobra"' + (canNew ? '' : ' disabled') + '>Nueva obra</button></div>';
     if (!canNew) h += '<p class="hint">Has llegado al límite del plan Demo. Borra una obra o activa el plan Pro en Ajustes.</p>';
     if (!list.length) h += '<div class="card"><h3>Sin obras todavía</h3><p class="hint">Crea una obra, elige el ámbito de la visita y dicta las partidas y medidas mientras recorres la obra.</p></div>';
     list.forEach((o) => {
@@ -3238,13 +3262,50 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   function sheet(html) { const s = $('#sheet'); s.innerHTML = '<div class="sheet-bg" data-a="closesheet-bg"><div class="sheet" role="dialog" aria-modal="true">' + html + '</div></div>'; s.hidden = false; }
   function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
   let toastT = null;
-  function toast(msg, undo) {
-    const t = $('#toast'); t.innerHTML = esc(msg) + (undo ? '<button data-a="undo">Deshacer</button>' : ''); t.hidden = false;
-    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 4000);
+  let toastAction = null;
+  function toast(msg, undo, action) {
+    const t = $('#toast');
+    toastAction = action || null;
+    t.innerHTML = esc(msg) + (undo ? '<button data-a="undo">Deshacer</button>' : '') + (action ? '<button data-a="toastact">' + esc(action.label) + '</button>' : '');
+    t.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, action ? 9000 : 4000);
+  }
+  /* ---- Archivo generado: se descarga y, si el móvil lo permite, se ofrece compartir (correo, WhatsApp…) ---- */
+  function canShareFile(file) { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: [file] })); } catch (e) { return false; } }
+  async function fileReady(name, blob, label) {
+    const ok = await saveFile(name, blob);
+    if (!ok) return;
+    const file = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+    if (canShareFile(file)) toast(label + ' generado', false, { label: 'Compartir', fn: () => navigator.share({ files: [file], title: name, text: 'Mediciones · ' + name }).catch(() => {}) });
+    else toast(label + ' generado: ' + name);
+  }
+  /* ---- Instalación como app (PWA) ---- */
+  const isStandalone = () => { try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.installEvt = e; if (S.view === 'obras') render(); });
+  window.addEventListener('appinstalled', () => { S.installEvt = null; toast('Mediciona instalada. Ábrela desde el icono de tu pantalla de inicio.'); render(); });
+  function canOfferInstall() { return !isStandalone() && (!!S.installEvt || isIOS()); }
+  async function doInstall() {
+    if (S.installEvt) { const e = S.installEvt; S.installEvt = null; e.prompt(); try { await e.userChoice; } catch (er) {} render(); return; }
+    if (isIOS()) return iosGuide();
+    toast('Abre esta web en Chrome (Android) o Safari (iPhone) para instalarla.');
+  }
+  function iosGuide() {
+    if ($('.ios-guide')) return;
+    const notSafari = /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+    const d = document.createElement('div'); d.className = 'ios-guide'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Instalar en iPhone');
+    d.innerHTML = '<b class="brandtitle">Instala Mediciona en tu iPhone</b><ol>' +
+      '<li>Pulsa <span class="share"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11v9h12v-9"/></svg></span> <b>Compartir</b> en la barra de abajo' + (notSafari ? ' (o arriba, junto a la dirección)' : '') + '.</li>' +
+      '<li>Elige <b>«Añadir a pantalla de inicio»</b> (desliza hacia abajo si no lo ves).</li>' +
+      '<li>Pulsa <b>Añadir</b>. Abre Mediciona siempre desde ese icono.</li></ol>' +
+      (notSafari ? '<p class="hint">Si no aparece la opción, abre mediciona.es en Safari.</p>' : '') +
+      '<div class="row" style="justify-content:space-between"><button class="btn" data-a="iosclose">Ahora no</button><svg class="arrow" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 4v15M6 13l6 6 6-6"/></svg></div>';
+    document.body.appendChild(d);
   }
   function menuSheet() {
     const items = [['obras', ICON.obras, 'Mis obras']];
     if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
+    if (canOfferInstall()) items.push(['install', ICON.obras, 'Instalar en este móvil']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
@@ -3326,6 +3387,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (a === 'closesheet-bg') { if (ev.target === el) closeSheet(); return; }
     switch (a) {
       case 'closesheet': closeSheet(); break;
+      case 'install': closeSheet(); doInstall(); break;
+      case 'iosclose': { const g = $('.ios-guide'); if (g) g.remove(); try { localStorage.setItem('iosGuideSeen', '1'); } catch (e) {} break; }
+      case 'toastact': { $('#toast').hidden = true; const fn = toastAction && toastAction.fn; toastAction = null; if (fn) fn(); break; }
       case 'newobra': newObraSheet(); break;
       case 'open': openObra(el.dataset.id); break;
       case 'obras': closeSheet(); goObras(); break;
@@ -3434,14 +3498,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   async function exportFile(obra, kind) {
     if (!obra) return;
     if (!obra.partidas.some((p) => p.lineas.length)) return toast('La obra no tiene mediciones todavía.');
-    const base = 'Mediciones_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60);
+    const base = 'Mediciona_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60);
     try {
       const X = window.Exporters;
       const blob = kind === 'xlsx'
         ? new Blob([X.buildXLSX(obra)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
         : new Blob([X.buildBC3(obra)], { type: 'application/octet-stream' });
-      const ok = await saveFile(base + '.' + kind, blob);
-      if (ok) toast((kind === 'xlsx' ? 'Excel' : 'BC3') + ' generado: ' + base + '.' + kind);
+      await fileReady(base + '.' + kind, blob, kind === 'xlsx' ? 'Excel' : 'BC3');
     } catch (e) { console.error(e); toast('No se pudo generar el archivo: ' + e.message); }
   }
   async function exportPdf(obra) {
@@ -3449,9 +3512,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     const J = window.jspdf && window.jspdf.jsPDF;
     if (!J) return toast('El generador de PDF no está disponible.');
     const doc = buildPdf(obra, J);
-    const name = 'Mediciones_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60) + '.pdf';
-    const ok = await saveFile(name, doc.output('blob'));
-    if (ok) toast('PDF generado: ' + name);
+    const name = 'Mediciona_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60) + '.pdf';
+    await fileReady(name, new Blob([doc.output('blob')], { type: 'application/pdf' }), 'PDF');
   }
   function buildPdf(obra, J) {
     const doc = new J({ unit: 'mm', format: 'a4' });
@@ -3579,7 +3641,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       doc.setPage(i);
       doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.2); doc.line(M, 287, R, 287);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
-      doc.text(txt('Mediciones por voz · ' + obra.titulo + ' · Base: ' + ((catFor(obra) || {}).nombre || '')), M, 291, { maxWidth: 150 });
+      doc.text(txt('Mediciona · Mediciones de obra con IA · ' + obra.titulo + ' · Base: ' + ((catFor(obra) || {}).nombre || '')), M, 291, { maxWidth: 150 });
       right('Página ' + i + ' de ' + n, R, 291);
       if (wm) {
         try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.13 })); } catch (e) {}
@@ -3621,6 +3683,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     S.obras = await StorageAdapter.all('obras');
     if (!S.obras.length && !st) { const ex = exampleObra(cat); S.obras.push(ex); await StorageAdapter.put('obras', ex); await saveSettings(); }
     render();
+    // iPhone: mostrar una vez la guía de instalación
+    try { if (isIOS() && !isStandalone() && !localStorage.getItem('iosGuideSeen')) setTimeout(iosGuide, 1500); } catch (e) {}
     VoiceAdapter.init().then((m) => {
       if (m === 'none') {
         S.typing = true;
