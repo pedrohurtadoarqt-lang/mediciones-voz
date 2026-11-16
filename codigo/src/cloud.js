@@ -160,6 +160,11 @@
     if (u.error) throw new Error(errMsg(u.error));
     return { usuarios: u.data || [], sugerencias: s.data || [], ia: i.data || [], iaObras: io.data || [], iaTotales: it.data || [], precios: ip.data || [] };
   }
+  async function newSuggestions() {
+    if (!admin) return 0;
+    const { count } = await sb.from('sugerencias').select('id', { count: 'exact', head: true }).eq('estado', 'nueva');
+    return count || 0;
+  }
   async function savePrice(modelo, entrada, salida) {
     const { error } = await sb.from('ia_precios').upsert({ modelo, entrada_usd_millon: entrada, salida_usd_millon: salida, actualizado: new Date().toISOString() });
     if (error) throw new Error(errMsg(error));
@@ -174,6 +179,6 @@
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, resendConfirmation, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
     get pendingCount() { return pending.size; },
-    syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState, savePrice
+    syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
   };
 })(typeof self !== 'undefined' ? self : this);

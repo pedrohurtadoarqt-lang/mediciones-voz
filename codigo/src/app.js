@@ -610,7 +610,7 @@
     if (canOfferInstall()) items.push(['install', ICON.obras, 'Instalar en este móvil']);
     if (window.Cloud && Cloud.available()) items.push(['account', ICON.gear, Cloud.user ? 'Mi cuenta' : 'Entrar o crear cuenta']);
     if (window.Cloud && Cloud.user) items.push(['logout', ICON.undo, 'Cerrar sesión (' + Cloud.user.email + ')']);
-    if (window.Cloud && Cloud.isAdmin) items.push(['admin', ICON.list, 'Administración']);
+    if (window.Cloud && Cloud.isAdmin) items.push(['admin', ICON.list, 'Administración' + (S.sgNew ? ' · ' + S.sgNew + (S.sgNew === 1 ? ' sugerencia nueva' : ' sugerencias nuevas') : '')]);
     items.push(['sugerencias', ICON.help, 'Buzón de sugerencias']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
@@ -905,7 +905,7 @@
       case 'account': closeSheet(); accountSheet(Cloud.user ? 'perfil' : 'login'); break;
       case 'admin': closeSheet(); S.view = 'admin'; S.adminData = null; render(); loadAdmin(); break;
       case 'admtab': S.adminTab = el.dataset.tab; render(); break;
-      case 'sgstate': { try { await Cloud.setSuggestionState(+el.dataset.id, el.dataset.st); const s = (S.adminData.sugerencias || []).find((x) => x.id === +el.dataset.id); if (s) s.estado = el.dataset.st; render(); } catch (e) { toast(e.message); } break; }
+      case 'sgstate': { try { await Cloud.setSuggestionState(+el.dataset.id, el.dataset.st); if (S.sgNew) S.sgNew = Math.max(0, S.sgNew - 1); const s = (S.adminData.sugerencias || []).find((x) => x.id === +el.dataset.id); if (s) s.estado = el.dataset.st; render(); } catch (e) { toast(e.message); } break; }
       case 'logout': closeSheet(); logout(); break;
       case 'undo': closeSheet(); $('#toast').hidden = true; if (S.obra) { dialog.handle('deshacer'); render(); } break;
       case 'xlsx': case 'bc3': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) exportFile(o, a); break; }
@@ -1199,7 +1199,10 @@
       Cloud.onAuth((ev, user) => {
         applyServerPlan();
         if (ev === 'PASSWORD_RECOVERY') accountSheet('newpass');
-        if (user && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) syncNow();
+        if (user && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
+          syncNow();
+          if (Cloud.isAdmin && !S.sgNotified) Cloud.newSuggestions().then((n) => { S.sgNew = n; if (n) { S.sgNotified = true; toast(n === 1 ? 'Tienes 1 sugerencia nueva' : 'Tienes ' + n + ' sugerencias nuevas', false, { label: 'Ver', fn: () => { S.view = 'admin'; S.adminTab = 'sugerencias'; S.adminData = null; render(); loadAdmin(); } }); } render(); }).catch(() => {});
+        }
         if (S.view === 'obras' || S.view === 'ajustes') render();
       });
       window.addEventListener('online', () => { syncNow(); if (S.view === 'obras') render(); });
