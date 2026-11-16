@@ -35,3 +35,6 @@ fs.copyFileSync(path.join(__dirname, 'src', 'brand', 'logo.svg'), path.join(pwa,
 fs.mkdirSync(path.join(pwa, 'legal'), { recursive: true });
 for (const f of fs.readdirSync(path.join(__dirname, 'src', 'legal'))) fs.copyFileSync(path.join(__dirname, 'src', 'legal', f), path.join(pwa, 'legal', f));
 console.log('PWA en dist/pwa');
+
+// La función de IA del servidor usa el mismo núcleo que la app
+fs.copyFileSync(path.join(__dirname, 'src', 'ai.js'), path.join(__dirname, 'supabase', 'functions', 'ai-interpret', 'ai-core.js'));
