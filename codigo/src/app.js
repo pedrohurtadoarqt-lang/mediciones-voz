@@ -724,7 +724,7 @@
     const signup = mode === 'signup', forgot = mode === 'forgot';
     sheet('<h2>' + (signup ? 'Crear cuenta' : forgot ? 'Recuperar contraseña' : 'Entrar') + '</h2>' +
       '<form id="facc" style="display:flex;flex-direction:column;gap:10px">' +
-      (signup ? '<div class="mailnote"><b>Importante:</b> al crear la cuenta te enviaremos un <b>correo para confirmarla</b>. De momento llega desde nuestro proveedor de cuentas, <b>Supabase</b>, con el asunto <b>«Confirm Your Signup»</b>. Si no lo ves en unos minutos, mira en Spam o Promociones.</div>' : '') +
+      (signup ? '<div class="mailnote">Al crear la cuenta te enviaremos un correo de <b>Mediciona</b> (hola@mediciona.es) con el asunto <b>«Confirma tu cuenta de Mediciona»</b>. Si no lo ves en unos minutos, mira en Spam o Promociones.</div>' : '') +
       (signup ? '<div class="field"><label for="anom">Nombre y apellidos</label><input id="anom" autocomplete="name" required></div>' +
         '<div class="field"><label for="aemp">Empresa o razón social</label><input id="aemp" autocomplete="organization" required></div>' +
         '<div class="field"><label for="anif">NIF / CIF</label><input id="anif" required></div>' : '') +
@@ -778,8 +778,8 @@
     sheet('<h2>Revisa tu correo</h2>' +
       '<p>Hemos creado tu cuenta de Mediciona. Para activarla:</p>' +
       '<ol class="steps"><li>Abre el correo de <b>' + esc(email) + '</b>.</li>' +
-      '<li>Busca un mensaje de <b>Supabase</b> (nuestro proveedor de cuentas) con el asunto <b>«Confirm Your Signup»</b>. Si no está, mira en <b>Spam</b> o <b>Promociones</b>.</li>' +
-      '<li>Pulsa <b>«Confirm your mail»</b>. Se abrirá Mediciona con tu sesión iniciada.</li></ol>' +
+      '<li>Busca un mensaje de <b>Mediciona</b> (hola@mediciona.es) con el asunto <b>«Confirma tu cuenta de Mediciona»</b>. Si no está, mira en <b>Spam</b> o <b>Promociones</b>.</li>' +
+      '<li>Pulsa <b>«Confirmar mi cuenta»</b>. Se abrirá Mediciona con tu sesión iniciada.</li></ol>' +
       '<p class="hint" id="resmsg">El correo puede tardar unos minutos.</p>' +
       '<div class="row"><button class="btn" id="resend" type="button">Reenviar el correo</button><button class="btn primary" type="button" data-a="login">Ya lo he confirmado: entrar</button></div>');
     $('#resend').addEventListener('click', async () => {
