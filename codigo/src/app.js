@@ -623,7 +623,7 @@
         '<b>Exportar:</b> «exporta el PDF», «exporta en Excel», «genera el BC3»',
         '<b>Partida:</b> «siguiente partida», «ahora guarnecido de yeso», «pintura con las mismas medidas», «borra esta partida», «exporta el PDF»',
         '<b>Corregir partida:</b> «no es esa», «cambia la partida», «esa no, es solado de gres 60x60» (las medidas pasan a la nueva)',
-        '<b>Paredes:</b> «3,40», «2,80»… y luego «la altura es 2,60»',
+        '<b>Paredes:</b> «perímetro 14,20» (o «perímetro 3,40 más 2,80…», o pared a pared) y luego la altura «2,60»',
         '<b>Terminar:</b> «terminar», «he terminado», «eso es todo»',
         '<b>Diálogo:</b> «repite», «cancela», «ayuda»'].map((x) => '<div>' + x + '</div>').join('') +
       '</div><button class="btn" data-a="closesheet">Cerrar</button>');

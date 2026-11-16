@@ -853,6 +853,24 @@
       if ((m = n.match(/^(?:aplica|usa|pon|copia|coge|toma)\s+(?:las\s+)?(?:mismas\s+)?(?:medidas|superficies|mediciones|lineas)\s+(?:que|de|del)\s+(?:en\s+)?(?:el|la|los|las)?\s*(.+)$/))) return this.cmdCopyFrom(m[1]);
       if ((m = n.match(/^copia\s+(?:las\s+|los\s+)?(paredes|paramentos|suelos?|techos?|medidas)\s+(?:del|de la|de|de los)\s+(.+?)(?:\s+(?:pero\s+)?(?:descuenta|descontando|quitando|restando|y descuenta|menos)\s+(?:las\s+|los\s+)?(ventanas|puertas|huecos|carpinterias?))?$/))) return this.cmdCopyRoom(m[1], m[2], m[3]);
 
+      // Perímetro: "perímetro 14,20", "el perímetro es 3,40 más 2,80 más 3,40 más 2,80"
+      if (act && (m = n.match(/^(?:el\s+)?perimetro\s*(?:total|es|son|de|mide|:)?\s*(?:de\s+)?(.+)$/))) {
+        const pm = parseMeasure(m[1]);
+        const vals = pm.dims.concat(Object.values(pm.labeled));
+        if (vals.length) {
+          const per = round2(vals.reduce((a, b) => a + b, 0));
+          if (this.isWall(act) || act.u === 'm') {
+            const h = this.isWall(act) ? this.alturaEst(this.obra.estActiva) : null;
+            this.snapshot();
+            const nl = { id: this.nextId(act), est: this.estPrefix(), com: 'Perímetro', uds: 1, l: per, a: null, h: this.isWall(act) ? h : null };
+            if (this.isWall(act) && !h) nl.hPend = true;
+            act.lineas.push(nl); act.mod = Date.now(); this.touch(); this.io.flash && this.io.flash('ok');
+            const sumTxt = vals.length > 1 ? ' (' + vals.map((v) => fmt(v)).join(' + ') + ')' : '';
+            if (this.isWall(act) && !h) { this.state = { mode: 'altura', after: '' }; return this.ask('Perímetro de ' + fmt(per) + ' metros' + sumTxt + '. ¿Qué altura tienen las paredes, en metros?', [{ label: 'Dejarlo sin altura', value: 'sin altura', act: { skipH: true } }]); }
+            return this.ask('Perímetro de ' + fmt(per) + ' metros' + sumTxt + (h ? ' por ' + fmt(h) + ' de altura' : '') + '. Total ' + fmt(totalOf(act)) + ' ' + unitSpoken(act.u) + '. ' + (this.isWall(act) ? '¿Hay puertas o ventanas que descontar?' : '¿Algo más?'), this.idleChips());
+          }
+        }
+      }
       // Forma de la sala
       if (/\b(no es rectangular|no es cuadrad[ao]|no es regular|es irregular|forma (de|en) (l|ele|u|t)|en forma de|tiene forma|en (l|ele)$|es una (l|ele)|dos rectangulos|varios rectangulos|tiene un entrante|tiene un saliente|tiene una esquina|esta dividid[ao]|en dos partes|en varias partes|como mido|como lo mido)\b/.test(n)) return this.geoHelp();
       // Superficie total dictada directamente
@@ -921,7 +939,7 @@
     dimsAsk(p) {
       if (this.isWall(p)) {
         const h = this.alturaEst(this.obra.estActiva);
-        return h ? 'Dime la longitud de cada pared en metros; uso la altura de ' + fmt(h) + ' metros de esta estancia.' : 'Dime la longitud de cada pared en metros, una a una, por ejemplo «3,40». Al final me dices la altura de la estancia.';
+        return h ? 'Dime el perímetro de las paredes en metros, por ejemplo «perímetro 14,20»; uso la altura de ' + fmt(h) + ' metros de esta estancia.' : 'Dime el perímetro de las paredes en metros, por ejemplo «perímetro 14,20». También puedes darme cada pared una a una. Después te pido la altura.';
       }
       return dimsSpec(p).ask;
     }

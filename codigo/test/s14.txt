@@ -1,0 +1,13 @@
+#chip 0
+salón
+picar el yeso de las paredes
+sí
+perímetro 14,20
+2,60
+descuenta puerta de 0,82 por 2,03
+siguiente partida
+guarnecido de yeso
+la primera
+medidas nuevas
+el perímetro es 3,40 más 2,80 más 3,40 más 2,80
+lee las líneas
