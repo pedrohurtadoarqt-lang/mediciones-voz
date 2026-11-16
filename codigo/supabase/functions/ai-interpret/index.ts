@@ -72,8 +72,10 @@ async function agenteClaude(actx: any): Promise<{ out: any; tin: number; tout: n
   try {
     const r = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 4000,
-      system: AI.AGENT_SYSTEM,
+      max_tokens: 1500,
+      // Sin razonamiento previo (responde antes) e instrucciones fijas en caché
+      thinking: { type: 'disabled' },
+      system: [{ type: 'text', text: AI.AGENT_SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: AI.buildAgentUser(actx) }],
       output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA_AGENTE_CLAUDE } }
     } as any);
@@ -112,17 +114,21 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')!;
   const auth = req.headers.get('Authorization') || '';
   const usuario = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } } });
+  const cuerpo = req.json().catch(() => undefined);
   const { data: { user } } = await usuario.auth.getUser();
   if (!user) return new Response(JSON.stringify({ error: 'Inicia sesión para usar la IA' }), { status: 401, headers: h });
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const { data: esAdmin } = await admin.from('admins').select('user_id').eq('user_id', user.id).maybeSingle();
   const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { count } = esAdmin ? { count: 0 } : await admin.from('ia_uso').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('creado', desde);
+  const [{ data: esAdmin }, { count: usadas }] = await Promise.all([
+    admin.from('admins').select('user_id').eq('user_id', user.id).maybeSingle(),
+    admin.from('ia_uso').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('creado', desde)
+  ]);
+  const count = esAdmin ? 0 : usadas;
   if ((count || 0) >= LIMITE) return new Response(JSON.stringify({ error: 'Has llegado al límite diario de consultas a la IA' }), { status: 429, headers: h });
 
   let raw: any;
-  try { raw = await req.json(); } catch { return new Response(JSON.stringify({ error: 'Petición no válida' }), { status: 400, headers: h }); }
+  raw = await cuerpo; if (raw === undefined) { return new Response(JSON.stringify({ error: 'Petición no válida' }), { status: 400, headers: h }); }
   if (raw?.modo === 'agente') {
     const actx = saneaAgente(raw);
     if (!actx.frase) return new Response(JSON.stringify({ error: 'Falta la frase' }), { status: 400, headers: h });
@@ -130,9 +136,15 @@ Deno.serve(async (req) => {
     // 1º Claude; si no responde, Gemini como reserva
     const c = await agenteClaude(actx);
     if (c) {
-      const { data: precioC } = await admin.from('ia_precios').select('entrada_usd_millon, salida_usd_millon').eq('modelo', c.modelo).maybeSingle();
-      const costeC = precioC ? (c.tin * Number(precioC.entrada_usd_millon) + c.tout * Number(precioC.salida_usd_millon)) / 1e6 : null;
-      await admin.from('ia_uso').insert({ user_id: user.id, obra_id: actx.obra_id || null, modelo: c.modelo, tokens_entrada: c.tin, tokens_salida: c.tout, coste_usd: costeC, ms: Date.now() - t0, intent: 'agente' });
+      const ms = Date.now() - t0;
+      // El registro de coste se hace después de responder: no hace esperar al usuario
+      const registro = (async () => {
+        const { data: precioC } = await admin.from('ia_precios').select('entrada_usd_millon, salida_usd_millon').eq('modelo', c.modelo).maybeSingle();
+        const costeC = precioC ? (c.tin * Number(precioC.entrada_usd_millon) + c.tout * Number(precioC.salida_usd_millon)) / 1e6 : null;
+        await admin.from('ia_uso').insert({ user_id: user.id, obra_id: actx.obra_id || null, modelo: c.modelo, tokens_entrada: c.tin, tokens_salida: c.tout, coste_usd: costeC, ms, intent: 'agente' });
+      })();
+      const ER = (globalThis as any).EdgeRuntime;
+      if (ER && ER.waitUntil) ER.waitUntil(registro); else await registro;
       return new Response(JSON.stringify({ result: c.out, usage: { prompt_tokens: c.tin, completion_tokens: c.tout }, modelo: c.modelo }), { headers: h });
     }
     let j: any = null, usado = '';

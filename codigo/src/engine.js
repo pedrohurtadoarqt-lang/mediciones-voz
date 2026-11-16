@@ -677,6 +677,7 @@
       const n = norm(text);
       // Comandos globales que funcionan en cualquier estado
       if (text) {
+        if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n) && !/^(cancela|cancelar|olvidalo|dejalo)$/.test(n) && !this.noAgent && this.agentReady() && this.state.mode !== 'thinking') { this.changing = null; this.state = { mode: 'idle' }; return this.runAgent(text); }
         if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n)) { this.changing = null; this.state = { mode: 'idle' }; return this.ask('Cancelado. ¿Qué medimos?', this.idleChips()); }
         if (/^(repite|repitelo|como|que has dicho|perdona)\b/.test(n) && this.lastPrompt) return this.ask(this.lastPrompt.text, this.lastPrompt.chips);
         if (/^(ayuda|que puedo decir|comandos)\b/.test(n)) return this.help();
@@ -740,7 +741,11 @@
     }
     st_estancia(text, n) {
       if (/sin estancia|ninguna|general/.test(n)) { this.obra.estActiva = ''; this.touch(); this.state = { mode: 'idle' }; return this.ask('Sin estancia. Dime el trabajo a medir.'); }
-      const name = estanciaName(text.replace(/^(pasamos|vamos|empezamos|estamos)\s+(a|al|a la|en|en el|en la|por|por el|por la)?\s*/i, ''));
+      const limpio = norm(text).replace(/^(?:bueno|vale|ok|pues|ahora|venga|y)\s+/, '')
+        .replace(/^(?:vamos a |voy a |ahora )?(?:empezar|empezamos|empiezo|seguir|seguimos|sigo|continuar|continuamos|pasar|pasamos|paso|ir|vamos|estamos|estoy|entramos|entro|medir|medimos)\s*(?:con|por|a|al|en|hacia)?\s*(?:el|la|los|las)?\s+/, '');
+      // Frase larga o con verbos: que la entienda la IA
+      if (limpio.split(/\s+/).length > 3 && !this.noAgent && this.agentReady()) return this.runAgent(text, '¿En qué estancia estamos?');
+      const name = estanciaName(limpio);
       if (!name || !/[a-zñ]/i.test(norm(name))) return this.ask('¿Qué estancia? Dime su nombre, por ejemplo: baño, dormitorio 2.', this.lastPrompt.chips);
       this.setEstancia(name);
       this.state = { mode: 'idle' };
@@ -1258,7 +1263,9 @@
       if (/^superficie\b/.test(n) && cw.filter((w) => !/superficie|total/.test(w)).length === 0) return true;
       const pm = parseMeasure(text);
       const correction = /\b(no|era|eran|corrige|corregir|cambia|cambiar|mal|equivoc|perdon|mejor|en realidad|borra|la ultima|el ultimo|la primera|el primero|segund|tercer|anterior|lo mismo|igual que|aprovecha)\b/.test(n);
-      if (act && pm.count >= 1 && !correction && cw.length <= 2 && !cw.some((w) => GEO.test(w))) return true;
+      // Medida suelta ("2,40 por 3", "pared ducha 1,80 por 2,50"): sin verbos ni explicaciones
+      const habla = /\b(mide|miden|medimos|tiene|tienen|hay|son|es|era|seria|luego|tambien|despues|ademas|entonces|pues|bueno|vale|y otro|y otra|de alto|de ancho|de largo|metros de)\b/.test(n);
+      if (act && pm.count >= 1 && pm.count <= 3 && !correction && !habla && cw.length <= 2 && !cw.some((w) => GEO.test(w))) return true;
       return false;
     }
     agentContext(text, pendiente) {
@@ -1281,6 +1288,7 @@
       const token = (this.aiToken = (this.aiToken || 0) + 1);
       const pend = pendiente || (this.state.mode !== 'idle' && this.lastPrompt ? this.lastPrompt.text : '');
       const ctx = this.agentContext(text, pend);
+      this.lastAgentText = text;
       this.state = { mode: 'thinking' };
       io.note && io.note('Pensando…');
       const aviso = () => { if (!this.aiDownNoted) { this.aiDownNoted = true; io.note && io.note('La IA no responde ahora mismo; sigo en modo básico.'); } };
@@ -1304,6 +1312,15 @@
       this.snapshot();
       const cur = () => this.active();
       const num = (v) => (typeof v === 'number' && isFinite(v) && v > -1000 && v < 10000 ? round2(v) : null);
+      // La IA no hace cuentas: escribe la operación ("2*(2.20+1.60)") y se calcula aquí
+      const calc = (s) => {
+        if (typeof s !== 'string' || !s.trim()) return null;
+        const e = s.replace(/,/g, '.').replace(/\s+/g, '').replace(/[x×]/gi, '*');
+        if (!/^[\d.+\-*/()]+$/.test(e) || e.length > 120) return null;
+        try { const v = Function('"use strict";return (' + e + ')')(); return num(v); } catch (er) { return null; }
+      };
+      const hechas = [];
+      const esHueco = /(puerta|ventana|hueco|descont|desconta|resta|menos|quita|deduc|balconera|mampara fija)/.test(norm(this.lastAgentText || '')); // líneas añadidas o cambiadas, para leerlas al usuario
       const activateDoc = (d) => {
         let p = this.obra.partidas.find((x) => x.ref === d.c);
         if (!p) {
@@ -1318,6 +1335,7 @@
         try {
           switch (a.tipo) {
             case 'elegir_partida': {
+              if (!a.codigo) break; // acción vacía: se ignora
               const ex = this.obra.partidas.find((x) => x.ref === a.codigo);
               const d = cat.byCode.get(a.codigo);
               if (ex) { this.obra.activa = ex.uid; ex.mod = Date.now(); this.markActivation(ex, null, false); }
@@ -1341,15 +1359,17 @@
               const p = cur(); if (!p) { problems.push('no hay partida para anotar las medidas'); break; }
               const hEst = this.isWall(p) ? this.alturaEst(this.obra.estActiva) : null;
               for (const ln of (a.lineas_nuevas || []).slice(0, 30)) {
-                let l = num(ln.largo), w = num(ln.ancho), h = num(ln.alto), u = num(ln.uds);
+                let l = calc(ln.largo_calculo) ?? num(ln.largo), w = num(ln.ancho), h = num(ln.alto), u = num(ln.uds);
                 if (p.u === 'm2' && p.orient === 'V' && h == null && w != null) { h = w; w = null; }
                 if (p.u === 'm2' && p.orient !== 'V' && w == null && h != null) { w = h; h = null; }
                 if (p.u === 'm' || p.u === 'ud') { w = null; if (p.u === 'ud') { h = null; l = null; } }
                 if (u == null) u = 1;
-                if (ln.deduccion) u = -Math.abs(u);
+                u = Math.abs(u);
+                // Solo se descuenta si de verdad se habla de un hueco
+                if (ln.deduccion && (esHueco || /(puerta|ventana|hueco|balconera|deduc|descuento)/.test(norm(ln.comentario || '')))) u = -u;
                 const nl = { id: this.nextId(p), est: this.estPrefix(), com: cap(ln.comentario || (ln.deduccion ? 'Deducción hueco' : '')), uds: u, l, a: w, h };
                 if (this.isWall(p) && nl.h == null) { if (hEst) nl.h = hEst; else nl.hPend = true; }
-                p.lineas.push(nl); changed = true; touched = p;
+                p.lineas.push(nl); changed = true; touched = p; hechas.push(nl);
               }
               p.mod = Date.now();
               break;
@@ -1360,10 +1380,11 @@
               const c = a.campos || {};
               if (c.comentario != null) l.com = cap(c.comentario);
               if (num(c.uds) != null) l.uds = (l.uds < 0 ? -Math.abs(num(c.uds)) : num(c.uds));
-              if (num(c.largo) != null) l.l = num(c.largo);
+              const nlg = calc(c.largo_calculo) ?? num(c.largo);
+              if (nlg != null) l.l = nlg;
               if (num(c.ancho) != null) { if (p.u === 'm2' && p.orient === 'V') l.h = num(c.ancho); else l.a = num(c.ancho); }
               if (num(c.alto) != null) { if (p.u === 'm2' && p.orient !== 'V') l.a = num(c.alto); else { l.h = num(c.alto); delete l.hPend; } }
-              p.mod = Date.now(); changed = true; touched = p;
+              p.mod = Date.now(); changed = true; touched = p; hechas.push(l);
               break;
             }
             case 'borrar_lineas': {
@@ -1394,9 +1415,17 @@
       let msg = (r.mensaje || '').trim();
       if (problems.length) msg += ' (No he podido: ' + problems.join('; ') + '.)';
       const p = touched || cur();
+      // Si hay pregunta, el mensaje no debe adelantarla: se quitan sus frases interrogativas
+      if (r.pregunta && msg) { const sinQ = msg.replace(/¿[^?]*\?/g, '').replace(/\s{2,}/g, ' ').trim(); if (sinQ) msg = sinQ; }
+      // Se leen las medidas tal como han quedado anotadas (no las que diga la IA)
+      if (hechas.length && hechas.length <= 3) {
+        const d = (l) => { const dims = ['l', 'a', 'h'].filter((k) => l[k] != null).map((k) => fmt(l[k])).join(' por '); return (l.uds < 0 ? 'menos ' : '') + (l.com ? l.com.toLowerCase() + ' ' : '') + (Math.abs(l.uds || 1) !== 1 ? fmtUds(Math.abs(l.uds)) + ' de ' : '') + (dims || ''); };
+        msg += (msg ? ' ' : '') + cap(hechas.map(d).join('; ')) + '.';
+      } else if (hechas.length) msg += (msg ? ' ' : '') + 'Anotadas ' + hechas.length + ' líneas.';
       if (changed && p) {
         const pend = p.lineas.filter((l) => l.hPend && l.h == null).length;
-        msg += ' Total ' + p.r.split(',')[0] + ': ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '.' + (pend && !r.pregunta ? ' Falta la altura de ' + (pend === 1 ? '1 pared' : pend + ' paredes') + '.' : '');
+        if (!msg.includes(fmt(totalOf(p)))) msg += ' Total ' + p.r.split(',')[0] + ': ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '.';
+        if (pend && !r.pregunta) msg += ' Falta la altura de ' + (pend === 1 ? '1 pared' : pend + ' paredes') + '.';
       }
       if (orden) {
         this.io.note && msg && this.io.note(msg);
@@ -1932,7 +1961,12 @@
     st_cmconfirm(text, n, input) {
       const st = this.state; const a = input && input.act;
       let yes = a && a.cm !== undefined ? a.cm : /^(si|centimetros|vale|ok|correcto|eso)\b/.test(n) ? true : /^(no|metros|son metros)\b/.test(n) ? false : null;
-      if (yes === null) { if (this.escape(text, n)) return; return this.ask('¿Son centímetros o metros?', this.lastPrompt.chips); }
+      if (yes === null) {
+        if (this.escape(text, n)) return;
+        // Responde otra cosa ("me he equivocado, el largo es 2,20"): que lo interprete la IA con el contexto
+        if (!this.noAgent && this.agentReady()) { this.state = { mode: 'idle' }; return this.runAgent(text, this.lastPrompt ? this.lastPrompt.text : ''); }
+        return this.ask('¿Son centímetros o metros?', this.lastPrompt.chips);
+      }
       const pm = st.pm;
       if (yes) {
         const c = (v) => (v >= 10 ? round2(v / 100) : v);

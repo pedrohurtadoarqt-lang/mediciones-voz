@@ -121,8 +121,10 @@
     '- "elegir_partida": usa "codigo" de la lista de candidatas o de las partidas de la obra. Nunca inventes códigos.',
     '- "crear_partida": si ninguna candidata corresponde de verdad. "descripcion" breve y profesional, "unidad" (ud, m, m2, m3) y "orientacion" ("paredes", "suelo", "techo" o null).',
     '- "anadir_lineas": añade líneas a la partida activa (o a la recién elegida/creada en esta misma respuesta). Cada línea: "comentario", "uds", "largo", "ancho", "alto" en METROS (null si no aplica) y "deduccion" (true para huecos que se restan).',
+    '   · NO HAGAS CUENTAS: si el largo sale de una operación (perímetro, suma de paredes), escribe la operación en "largo_calculo" con números y + - * / ( ), por ejemplo "2*(2.20+1.60)", y deja "largo" a null: la app la calcula. Si el largo es un dato directo, "largo_calculo" vacío.',
     '   · m2 de suelo o techo: largo y ancho. m2 de paredes: largo (longitud o perímetro) y alto. m: largo. m3: largo, ancho y alto. ud: uds.',
-    '- "editar_linea": "linea" (número de línea de la partida activa) y en "campos" solo los valores que cambian.',
+    '- "editar_linea": "linea" (número de línea de la partida activa) y en "campos" solo los valores que cambian (también aquí, si el nuevo largo es una operación, ponla en "largo_calculo").',
+    '   · Si el usuario corrige una medida de la que salió un perímetro (p. ej. "el largo es 2,20" cuando la línea es el perímetro de un rectángulo de 2 por 1,60), recalcula esa línea: "largo_calculo" "2*(2.20+1.60)".',
     '- "borrar_lineas": "lineas" con los números a borrar.',
     '- "copiar_lineas": copia a la partida activa las líneas de otra partida de la obra ("desde": su código), opcionalmente solo de la estancia activa ("solo_estancia": true).',
     '- "fijar_altura": "altura" de la estancia en metros (se aplica a las paredes que no la tengan).',
@@ -138,7 +140,7 @@
     '6. Si dudas de verdad, no adivines: no hagas acciones y pon una pregunta clara y corta en "pregunta", con opciones si ayudan.',
     '7. Si eliges una partida que no es evidente, dilo en el mensaje para que el usuario pueda corregir.',
     '',
-    'EL MENSAJE: en español de España, natural y breve (una o dos frases), como un compañero de obra. Di lo que has hecho y lo que necesitas a continuación. Cuando hayas calculado algo, di el cálculo ("perímetro 2 por 4,20 más 3,10, 14,60 metros"). No repitas el total: la app lo añade.'
+    'EL MENSAJE: en español de España, como un compañero de obra, MUY breve: una sola frase de 20 palabras como mucho, porque se lee en voz alta. Di qué partida has elegido o qué has entendido, SIN NÚMEROS NI MEDIDAS: la app lee después las medidas anotadas y el total. Si pones "pregunta", el mensaje NO la repite ni la adelanta: la pregunta es una sola, corta, y pide una sola cosa. No ofrezcas alternativas ni explicaciones si no te las piden.'
   ].join('\n');
 
   const NUM = { type: ['number', 'null'] };
@@ -155,9 +157,9 @@
             descripcion: { type: ['string', 'null'] },
             unidad: { type: ['string', 'null'], enum: ['ud', 'm', 'm2', 'm3', null] },
             orientacion: { type: ['string', 'null'], enum: ['paredes', 'suelo', 'techo', null] },
-            lineas_nuevas: { type: 'array', items: { type: 'object', properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, ancho: NUM, alto: NUM, deduccion: { type: 'boolean' } }, required: ['comentario', 'uds', 'largo', 'ancho', 'alto', 'deduccion'], additionalProperties: false } },
+            lineas_nuevas: { type: 'array', items: { type: 'object', properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, largo_calculo: { type: 'string' }, ancho: NUM, alto: NUM, deduccion: { type: 'boolean' } }, required: ['comentario', 'uds', 'largo', 'largo_calculo', 'ancho', 'alto', 'deduccion'], additionalProperties: false } },
             linea: { type: ['integer', 'null'] },
-            campos: { type: ['object', 'null'], properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, ancho: NUM, alto: NUM }, required: ['comentario', 'uds', 'largo', 'ancho', 'alto'], additionalProperties: false },
+            campos: { type: ['object', 'null'], properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, largo_calculo: { type: 'string' }, ancho: NUM, alto: NUM }, required: ['comentario', 'uds', 'largo', 'largo_calculo', 'ancho', 'alto'], additionalProperties: false },
             lineas: { type: 'array', items: { type: 'integer' } },
             desde: { type: ['string', 'null'] },
             solo_estancia: { type: ['boolean', 'null'] },
