@@ -99,7 +99,11 @@
     function pickVoice(uri) {
       if (!synth) return;
       const vs = synth.getVoices().filter((v) => /^es/i.test(v.lang));
-      voice = vs.find((v) => v.voiceURI === uri) || vs.find((v) => /es-ES/i.test(v.lang) && /google|monica|mónica|lucia|lucía|elena|helena|laura|paulina|jorge/i.test(v.name)) || vs.find((v) => /es-ES/i.test(v.lang)) || vs[0] || null;
+      // Se elige la voz más natural disponible: neuronales/«mejoradas» > de red > español de España
+      const score = (v) => (/natural|neural|online|premium|mejorad|enhanced|wavenet/i.test(v.name) ? 8 : 0) + (v.localService === false ? 3 : 0) +
+        (/es-ES/i.test(v.lang) ? 4 : 0) + (/google/i.test(v.name) ? 2 : 0) + (/elvira|alvaro|álvaro|monica|mónica|lucia|lucía|marisol|helena|jorge/i.test(v.name) ? 1 : 0) - (/compact|eloquence|espeak|sandy|shelley|grandma|grandpa|rocko|flo|reed|eddy/i.test(v.name) ? 6 : 0);
+      const best = vs.slice().sort((a, b) => score(b) - score(a))[0] || null;
+      voice = vs.find((v) => v.voiceURI === uri) || best;
     }
     if (synth) { pickVoice(); try { synth.addEventListener('voiceschanged', () => pickVoice(voice && voice.voiceURI)); } catch (e) {} }
     const state = () => cb.onState({ listening, speaking, needTap, micState });
@@ -226,6 +230,7 @@
       get micState() { return micState; }, get inFrame() { return inFrame; },
       setRate(r) { rate = r; }, setVoice(uri) { pickVoice(uri); },
       voices() { return synth ? synth.getVoices().filter((v) => /^es/i.test(v.lang)) : []; },
+      get voiceName() { return voice ? voice.name : ''; },
       get voiceURI() { return voice && voice.voiceURI; },
       canSpeak: !!(synth)
     };
@@ -533,7 +538,13 @@
       (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>';
     return planCard +
       '<div class="card"><h3>Voz</h3><div class="meta">Reconocimiento: ' + ({ native: 'del navegador (es-ES)', claude: 'dictado de Claude', none: 'no disponible, usa el teclado' }[VoiceAdapter.mode]) + '.</div>' +
-      (vs.length ? '<div class="field"><label for="selvoice">Voz del asistente</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' : '') +
+      (vs.length ? '<div class="field"><label for="selvoice">Voz del asistente</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' +
+        '<div class="row"><button class="btn small" data-a="testvoice" type="button">Probar la voz</button></div>' +
+        '<details class="hint"><summary>¿Suena robótica? Instala una voz mejor (gratis)</summary>' +
+        '<p><b>Android:</b> Ajustes → Accesibilidad → Salida de texto a voz → Motor preferido: «Servicios de voz de Google» → icono de ajustes → Instalar datos de voz → Español (España) → elige una voz y descárgala. Después reinicia el navegador.</p>' +
+        '<p><b>iPhone / iPad:</b> Ajustes → Accesibilidad → Contenido leído → Voces → Español (España) → descarga una voz «Mejorada» o «Premium» (por ejemplo Mónica o Jorge). Después cierra y vuelve a abrir Mediciona.</p>' +
+        '<p><b>Ordenador:</b> en Microsoft Edge aparecen voces «Natural» (Elvira, Álvaro) muy humanas; en Chrome, «Google español».</p>' +
+        '<p>Mediciona elige sola la mejor voz que tenga el dispositivo; también puedes escogerla arriba.</p></details>' : '') +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkia"' + (S.settings.ia !== false ? ' checked' : '') + '> Usar la IA cuando la app no entienda algo (necesita cuenta y conexión)</label>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
       '<div class="field"><label for="rate">Velocidad de lectura: ' + S.settings.rate.toFixed(2) + '</label><input id="rate" type="range" min="0.7" max="1.6" step="0.05" value="' + S.settings.rate + '"></div></div>' +
@@ -937,6 +948,7 @@
       case 'plan': S.settings.plan = el.dataset.p; await saveSettings(); render(); break;
       case 'unlock': await BillingGuard.unlockObra(S.obra); await saveObra(); render(); toast('Obra desbloqueada: PDF sin marca de agua'); break;
       case 'backup': backup(); break;
+      case 'testvoice': VoiceAdapter.speak('Hola, soy el asistente de Mediciona. Dime la partida y vamos midiendo.'); break;
     }
   });
   document.addEventListener('input', (ev) => {

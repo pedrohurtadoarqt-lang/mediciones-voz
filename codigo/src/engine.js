@@ -616,8 +616,10 @@
   }
   /** Lee un recorrido dictado ("pared uno 6 metros, a la izquierda, pared dos 3...") sin IA.
    *  Devuelve los tramos o null si la frase no sigue ese patrón con claridad. */
+  const ANGULOS = new Set([30, 45, 60, 90, 120, 135, 150, 180, 270]);
   function parseRecorrido(text) {
-    const n = norm(text);
+    // "4 m, 90°": la coma separa la medida del ángulo (no es 4,90)
+    const n = norm(String(text).replace(/(\d+)\s*[°º]/g, '$1 grados').replace(/,\s+(?=\d+\s*grados)/g, ' y ').replace(/,\s+(?=(?:a\s+)?(?:30|45|60|90|120|135|150|180|270)\b)/g, ' y '));
     const parts = n.split(/\b(?:pared|la ultima|ultima|otra pared|siguiente pared)\b/);
     if (parts.length < 2) return null;
     const out = [];
@@ -625,8 +627,13 @@
       const tk = tokenize(ch);
       const nums = [];
       let ang = 90, giro = '';
+      const hayGiro = /(izquierda|derecha|giro|gira|grados)/.test(ch);
       tk.forEach((t, i) => {
-        if (t.k === 'N') { const nx = tk[i + 1]; if (nx && nx.k === 'W' && /^grados?$/.test(nx.n)) ang = t.v; else nums.push(t); }
+        if (t.k === 'N') {
+          const nx = tk[i + 1];
+          // "90 grados", o "a 90 a la derecha": es un ángulo, no una pared
+          if ((nx && nx.k === 'W' && /^grados?$/.test(nx.n)) || (hayGiro && ANGULOS.has(t.v) && !t.unit && nums.length >= 1)) ang = t.v; else nums.push(t);
+        }
         else if (t.k === 'W' && (t.n === 'izquierda' || t.n === 'derecha')) giro = t.n;
       });
       let l;
@@ -857,6 +864,15 @@
       this.changing = null; // si se abandona una corrección de partida a medias, se descarta
       if (input && input.act) return this.handleAct(input.act);
       if (!text) return;
+      // Recorrido de paredes dictado con su patrón ("pared uno 4 metros, a la derecha..."): lo resuelve la app al instante
+      if (/(pared|ultima)/.test(n) && /(izquierda|derecha|giro|gira|grados|cierr)/.test(n + text)) {
+        const det = parseRecorrido(text);
+        if (det) {
+          this.lastAgentText = text;
+          const r = { acciones: [{ tipo: 'recorrido', tramos: det.map((d) => ({ largo: d.l, giro: d.giro, angulo: d.ang })), continuar: true, cerrar: /(cierr|ya esta|termin|principio)/.test(n) }], mensaje: '', pregunta: null, opciones: [] };
+          return this.applyAgent(r);
+        }
+      }
       // IA primero: todo lo que no sea una medida suelta o una orden exacta lo interpreta la IA con el contexto completo
       if (!this.noAgent && this.agentReady() && !this.isTrivial(text, n)) return this.runAgent(text);
       const act = this.active();
@@ -1349,7 +1365,7 @@
       const pm = parseMeasure(text);
       const correction = /\b(no|era|eran|corrige|corregir|cambia|cambiar|mal|equivoc|perdon|mejor|en realidad|borra|la ultima|el ultimo|la primera|el primero|segund|tercer|anterior|lo mismo|igual que|aprovecha)\b/.test(n);
       // Medida suelta ("2,40 por 3", "pared ducha 1,80 por 2,50"): sin verbos ni explicaciones
-      const habla = /\b(mide|miden|medimos|tiene|tienen|hay|son|es|era|seria|luego|tambien|despues|ademas|entonces|pues|bueno|vale|y otro|y otra|de alto|de ancho|de largo|metros de)\b/.test(n);
+      const habla = /(grados|°|º|\bgir|izquierda|derecha|recorrido)/.test(n + text) || /\b(mide|miden|medimos|tiene|tienen|hay|son|es|era|seria|luego|tambien|despues|ademas|entonces|pues|bueno|vale|y otro|y otra|de alto|de ancho|de largo|metros de)\b/.test(n);
       if (act && pm.count >= 1 && pm.count <= 3 && !correction && !habla && cw.length <= 2 && !cw.some((w) => GEO.test(w))) return true;
       return false;
     }
@@ -1422,7 +1438,13 @@
         this.obra.activa = p.uid; p.mod = Date.now();
         return p;
       };
+      // Si la IA mete líneas dentro de otra acción (p. ej. al elegir partida), se anotan igualmente
+      const acciones = [];
       for (const a of r.acciones.slice(0, 20)) {
+        acciones.push(a);
+        if (a.tipo !== 'anadir_lineas' && Array.isArray(a.lineas_nuevas) && a.lineas_nuevas.length) acciones.push({ tipo: 'anadir_lineas', lineas_nuevas: a.lineas_nuevas });
+      }
+      for (const a of acciones) {
         try {
           switch (a.tipo) {
             case 'elegir_partida': {
@@ -1453,7 +1475,7 @@
                 let l = calc(ln.largo_calculo) ?? num(ln.largo), w = num(ln.ancho), h = num(ln.alto), u = num(ln.uds);
                 const pl = ln.medida_planta && this.plantaDe(this.obra.estActiva);
                 if (pl && !pl.abierta) {
-                  if (ln.medida_planta === 'superficie') { l = pl.area; w = null; if (!(p.u === 'm2' && p.orient === 'V')) h = null; }
+                  if (ln.medida_planta === 'superficie') { l = pl.area; w = null; h = null; }
                   else if (ln.medida_planta === 'perimetro') { l = pl.perimetro; w = null; }
                   if (!ln.comentario) ln.comentario = ln.medida_planta === 'superficie' ? 'Superficie según planta' : 'Perímetro según planta';
                 } else if (ln.medida_planta) continue; // se anotará sola al cerrar la planta
@@ -1466,7 +1488,9 @@
                 if (ln.deduccion && (esHueco || /(puerta|ventana|hueco|balconera|deduc|descuento)/.test(norm(ln.comentario || '')))) u = -u;
                 const nl = { id: this.nextId(p), est: this.estPrefix(), com: cap(ln.comentario || (ln.deduccion ? 'Deducción hueco' : '')), uds: u, l, a: w, h };
                 if (pl && !pl.abierta && ln.medida_planta) nl.dePlanta = ln.medida_planta;
-                if (this.isWall(p) && nl.h == null) { if (hEst) nl.h = hEst; else nl.hPend = true; }
+                // Altura de la estancia solo en líneas de pared (no en techos/suelos ni en superficies ya calculadas)
+                const horiz = ln.medida_planta === 'superficie' || w != null || /(techo|suelo|superficie|planta|falso)/.test(norm(ln.comentario || '')) || /\btecho/.test(norm(this.lastAgentText || ''));
+                if (this.isWall(p) && nl.h == null && !horiz) { if (hEst) nl.h = hEst; else nl.hPend = true; }
                 p.lineas.push(nl); changed = true; touched = p; hechas.push(nl);
               }
               p.mod = Date.now();
@@ -1501,7 +1525,7 @@
               let tr = (a.tramos || []).map((t) => ({ l: num(t.largo), giro: t.giro || '', ang: num(t.angulo) || 90 })).filter((t) => t.l && t.l > 0 && t.l < 200);
               // Los números dictados se leen aquí (la IA confunde "pared cinco cuatro metros")
               const det = parseRecorrido(this.lastAgentText || '');
-              if (det && det.length === tr.length) tr = det.map((d, i) => ({ l: d.l, giro: d.giro || tr[i].giro, ang: d.ang !== 90 ? d.ang : tr[i].ang }));
+              if (det) tr = det.map((d, i) => ({ l: d.l, giro: d.giro || (tr[i] && tr[i].giro) || '', ang: d.ang !== 90 ? d.ang : (tr[i] && tr[i].ang) || 90 }));
               const key = norm(this.obra.estActiva || '');
               this.obra.plantas = this.obra.plantas || {};
               const prev = this.obra.plantas[key];
