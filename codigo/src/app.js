@@ -468,6 +468,7 @@
         '<div class="row"><button class="btn primary" data-a="open" data-id="' + o.id + '">Abrir</button><button class="btn" data-a="pdf" data-id="' + o.id + '">PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">BC3</button><button class="btn danger" data-a="delobra" data-id="' + o.id + '">Borrar</button></div></div>';
     });
     h += '<p class="hint">Tus obras se guardan en este dispositivo. La búsqueda de partidas, el diálogo y el cálculo funcionan sin conexión.</p>';
+    h += '<button class="btn" data-a="sugerencias">Buzón de sugerencias</button>';
     h += '<p class="hint legal-links"><a href="legal/aviso-legal.html">Aviso legal</a> · <a href="legal/privacidad.html">Privacidad</a> · <a href="legal/cookies.html">Cookies</a></p>';
     return h;
   }
@@ -594,6 +595,7 @@
     const items = [['obras', ICON.obras, 'Mis obras']];
     if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
     if (canOfferInstall()) items.push(['install', ICON.obras, 'Instalar en este móvil']);
+    items.push(['sugerencias', ICON.help, 'Buzón de sugerencias']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
@@ -654,6 +656,29 @@
     };
     $('#pq').addEventListener('input', upd); upd();
   }
+  /* ---- Buzón de sugerencias ----
+   * Ahora: abre el correo con el mensaje preparado hacia el buzón del dominio.
+   * Con el servidor (Supabase) se guardará en la base de datos y se verá en el panel de administración. */
+  const SUGERENCIAS_BUZON = 'sugerencias' + '@' + 'mediciona.es';
+  function suggestionSheet() {
+    sheet('<h2>Buzón de sugerencias</h2><p class="hint">Cuéntanos qué mejorarías, qué echas en falta o qué no ha funcionado. Lo leemos todo.</p>' +
+      '<div class="row" id="sgtype">' + ['Sugerencia', 'Algo no funciona', 'Partida que falta', 'Otra cosa'].map((t, i) => '<button type="button" class="btn small' + (i === 0 ? ' primary' : '') + '" data-t="' + t + '">' + t + '</button>').join('') + '</div>' +
+      '<div class="field"><label for="sgtext">Tu mensaje</label><textarea id="sgtext" rows="5" placeholder="Ej.: cuando digo «quitar gotelé» no encuentra la partida…"></textarea></div>' +
+      (S.obra ? '<label class="row" style="gap:10px"><input type="checkbox" id="sglog" checked> Adjuntar lo último que dije y respondió la app (ayuda a corregir fallos)</label>' : '') +
+      '<div class="row"><button class="btn primary" id="sgsend" type="button">Enviar</button><button class="btn" data-a="closesheet" type="button">Cancelar</button></div>');
+    let tipo = 'Sugerencia';
+    $('#sgtype').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; tipo = b.dataset.t; [...$('#sgtype').children].forEach((x) => x.classList.toggle('primary', x === b)); });
+    $('#sgsend').addEventListener('click', () => {
+      const msg = $('#sgtext').value.trim();
+      if (!msg) return $('#sgtext').focus();
+      let body = msg + '\n\n— Tipo: ' + tipo + '\n— Dispositivo: ' + navigator.userAgent.slice(0, 160);
+      if ($('#sglog') && $('#sglog').checked && S.obra && S.obra.registro) body += '\n\nÚltima conversación:\n' + S.obra.registro.slice(-20).map((r) => (r.who === 'user' ? 'OÍDO: ' : 'APP: ') + r.text).join('\n');
+      closeSheet();
+      location.href = 'mailto:' + SUGERENCIAS_BUZON + '?subject=' + encodeURIComponent('Mediciona · ' + tipo) + '&body=' + encodeURIComponent(body.slice(0, 1800));
+      toast('Abriendo tu correo para enviar la sugerencia. ¡Gracias!');
+    });
+    setTimeout(() => { const t = $('#sgtext'); t && t.focus(); }, 50);
+  }
   async function exportLog() {
     const o = S.obra || S.obras[0]; if (!o) return toast('No hay obra abierta.');
     const lines = (o.registro || []).map((r) => r.t.replace('T', ' ').slice(0, 19) + ' | ' + (r.who === 'user' ? 'OÍDO' : 'APP ') + ' | ' + (r.est || '-') + ' | ' + (r.partida || '-') + ' | ' + r.text);
@@ -686,6 +711,7 @@
       case 'catalogos': closeSheet(); S.view = 'catalogos'; render(); break;
       case 'ajustes': closeSheet(); S.view = 'ajustes'; render(); break;
       case 'ayuda': helpSheet(); break;
+      case 'sugerencias': closeSheet(); suggestionSheet(); break;
       case 'undo': closeSheet(); $('#toast').hidden = true; if (S.obra) { dialog.handle('deshacer'); render(); } break;
       case 'xlsx': case 'bc3': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) exportFile(o, a); break; }
       case 'pdf': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) { await loadCatalog(o.catalogo || 'palma48'); exportPdf(o); } break; }

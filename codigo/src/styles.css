@@ -193,3 +193,4 @@ button.resumen.linklike { background: none; border: 0; padding: 0; text-align: l
 @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
 .brandtitle { font-family: var(--brand); font-weight: 800; letter-spacing: -.01em; }
 .legal-links a { color: var(--muted); }
+.field textarea { min-height: 110px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); padding: 10px 12px; width: 100%; resize: vertical; font: inherit; color: inherit; }
