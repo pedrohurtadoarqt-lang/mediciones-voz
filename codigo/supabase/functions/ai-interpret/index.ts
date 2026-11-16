@@ -6,6 +6,7 @@
 // Secretos: GEMINI_API_KEY. Opcionales: AI_MODEL, AI_LIMITE_DIA.
 // ============================================================
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import Anthropic from 'npm:@anthropic-ai/sdk@1.4.0';
 import '../_shared/engine-shim.js';
 import './ai-core.js';
 import { cors } from '../_shared/cors.ts';
@@ -35,6 +36,56 @@ function saneaAgente(b: any) {
     historial: Array.isArray(b?.historial) ? b.historial.slice(-8).map((m: any) => ({ who: m?.who === 'user' ? 'user' : 'app', text: s(m?.text, 500) })) : [],
     candidatas: (Array.isArray(b?.candidatas) ? b.candidatas.slice(0, 60) : []).map((d: any) => ({ c: s(d?.c, 40), u: s(d?.u, 8), r: s(d?.r, 300), path: s(d?.path, 200) })).filter((d: any) => d.c && d.r)
   };
+}
+// ---------- Claude (Anthropic) ----------
+const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') || 'claude-haiku-5-5';
+const CLAUDE_KEY = Deno.env.get('ANTHROPIC_API_KEY') || Deno.env.get('anthroic-api-key') || Deno.env.get('anthropic-api-key') || '';
+const anthropic = CLAUDE_KEY ? new Anthropic({ apiKey: CLAUDE_KEY, timeout: 25000, maxRetries: 1 }) : null;
+/** El esquema JSON de la app usa "type: [x, 'null']"; para Claude lo expresamos con anyOf. */
+function paraClaude(sch: any): any {
+  if (Array.isArray(sch)) return sch.map(paraClaude);
+  if (!sch || typeof sch !== 'object') return sch;
+  const o: any = {};
+  for (const [k, v] of Object.entries(sch)) o[k] = (k === 'properties' && v && typeof v === 'object') ? Object.fromEntries(Object.entries(v as any).map(([pk, pv]) => [pk, paraClaude(pv)])) : (k === 'items' ? paraClaude(v) : v);
+  // Claude limita los campos opcionales (uniones): sin "null"; vacío = "" en textos y 0 en números
+  if (Array.isArray(o.type) && o.type.includes('null')) {
+    o.type = o.type.filter((t: string) => t !== 'null')[0];
+    if (Array.isArray(o.enum)) o.enum = o.enum.map((x: unknown) => (x === null ? '' : x));
+  }
+  return o;
+}
+/** Deshace la convención anterior: "" y 0 vuelven a ser null. */
+function normalizaClaude(out: any) {
+  const N = (v: unknown) => (v === '' || v === 0 ? null : v);
+  for (const a of out?.acciones || []) {
+    for (const k of ['codigo', 'descripcion', 'unidad', 'orientacion', 'desde', 'estancia', 'texto', 'altura', 'linea']) a[k] = N(a[k]);
+    if (a.campos) { for (const k of Object.keys(a.campos)) a.campos[k] = N(a.campos[k]); if (Object.values(a.campos).every((v) => v == null)) a.campos = null; }
+    for (const l of a.lineas_nuevas || []) for (const k of ['comentario', 'uds', 'largo', 'ancho', 'alto']) l[k] = N(l[k]);
+  }
+  if (out && out.pregunta === '') out.pregunta = null;
+  return out;
+}
+const ESQUEMA_AGENTE_CLAUDE = paraClaude(AI.AGENT_SCHEMA);
+let ultimoErrorClaude = '';
+async function agenteClaude(actx: any): Promise<{ out: any; tin: number; tout: number; modelo: string } | null> {
+  if (!anthropic) { ultimoErrorClaude = 'sin clave de Anthropic'; return null; }
+  try {
+    const r = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4000,
+      system: AI.AGENT_SYSTEM,
+      messages: [{ role: 'user', content: AI.buildAgentUser(actx) }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA_AGENTE_CLAUDE } }
+    } as any);
+    if (r.stop_reason === 'refusal' || r.stop_reason === 'max_tokens') { ultimoErrorClaude = 'stop_reason ' + r.stop_reason; return null; }
+    const txt = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    const out = normalizaClaude(JSON.parse(txt));
+    return { out, tin: r.usage?.input_tokens || 0, tout: r.usage?.output_tokens || 0, modelo: CLAUDE_MODEL };
+  } catch (e) {
+    ultimoErrorClaude = e instanceof Anthropic.APIError ? e.status + ' ' + e.message : String(e);
+    console.error('Claude no disponible:', ultimoErrorClaude);
+    return null;
+  }
 }
 async function llamar(body: unknown) {
   return await fetch(URL_GEMINI, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + Deno.env.get('GEMINI_API_KEY') }, body: JSON.stringify(body) });
@@ -76,6 +127,14 @@ Deno.serve(async (req) => {
     const actx = saneaAgente(raw);
     if (!actx.frase) return new Response(JSON.stringify({ error: 'Falta la frase' }), { status: 400, headers: h });
     const t0 = Date.now();
+    // 1º Claude; si no responde, Gemini como reserva
+    const c = await agenteClaude(actx);
+    if (c) {
+      const { data: precioC } = await admin.from('ia_precios').select('entrada_usd_millon, salida_usd_millon').eq('modelo', c.modelo).maybeSingle();
+      const costeC = precioC ? (c.tin * Number(precioC.entrada_usd_millon) + c.tout * Number(precioC.salida_usd_millon)) / 1e6 : null;
+      await admin.from('ia_uso').insert({ user_id: user.id, obra_id: actx.obra_id || null, modelo: c.modelo, tokens_entrada: c.tin, tokens_salida: c.tout, coste_usd: costeC, ms: Date.now() - t0, intent: 'agente' });
+      return new Response(JSON.stringify({ result: c.out, usage: { prompt_tokens: c.tin, completion_tokens: c.tout }, modelo: c.modelo }), { headers: h });
+    }
     let j: any = null, usado = '';
     for (const m of MODELOS_AGENTE) {
       const r = await llamar(AI.agentRequestBody(actx, m));
@@ -89,7 +148,7 @@ Deno.serve(async (req) => {
     const { data: precio } = await admin.from('ia_precios').select('entrada_usd_millon, salida_usd_millon').eq('modelo', usado).maybeSingle();
     const coste = precio ? (tin * Number(precio.entrada_usd_millon) + tout * Number(precio.salida_usd_millon)) / 1e6 : null;
     await admin.from('ia_uso').insert({ user_id: user.id, obra_id: actx.obra_id || null, modelo: usado, tokens_entrada: tin, tokens_salida: tout, coste_usd: coste, ms: Date.now() - t0, intent: 'agente' });
-    return new Response(JSON.stringify({ result: out, usage: j.usage, modelo: usado }), { headers: h });
+    return new Response(JSON.stringify({ result: out, usage: j.usage, modelo: usado, ...(esAdmin ? { aviso_claude: ultimoErrorClaude } : {}) }), { headers: h });
   }
   let ctx;
   try { ctx = sanea(raw); } catch { return new Response(JSON.stringify({ error: 'Petición no válida' }), { status: 400, headers: h }); }
