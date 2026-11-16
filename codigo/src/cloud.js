@@ -55,6 +55,10 @@
     if (error) throw new Error(errMsg(error));
     return { needsConfirm: !data.session };
   }
+  async function resendConfirmation(email) {
+    const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) throw new Error(errMsg(error));
+  }
   async function signIn(email, password) {
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw new Error(errMsg(error));
@@ -168,7 +172,7 @@
   root.Cloud = {
     available, init, onAuth: (f) => listeners.push(f),
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
-    signUp, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
+    signUp, resendConfirmation, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
     get pendingCount() { return pending.size; },
     syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState, savePrice
   };

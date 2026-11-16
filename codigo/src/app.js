@@ -724,13 +724,13 @@
     const signup = mode === 'signup', forgot = mode === 'forgot';
     sheet('<h2>' + (signup ? 'Crear cuenta' : forgot ? 'Recuperar contraseña' : 'Entrar') + '</h2>' +
       '<form id="facc" style="display:flex;flex-direction:column;gap:10px">' +
+      (signup ? '<div class="mailnote"><b>Importante:</b> al crear la cuenta te enviaremos un <b>correo para confirmarla</b>. De momento llega desde nuestro proveedor de cuentas, <b>Supabase</b>, con el asunto <b>«Confirm Your Signup»</b>. Si no lo ves en unos minutos, mira en Spam o Promociones.</div>' : '') +
       (signup ? '<div class="field"><label for="anom">Nombre y apellidos</label><input id="anom" autocomplete="name" required></div>' +
         '<div class="field"><label for="aemp">Empresa o razón social</label><input id="aemp" autocomplete="organization" required></div>' +
         '<div class="field"><label for="anif">NIF / CIF</label><input id="anif" required></div>' : '') +
       '<div class="field"><label for="amail">Correo electrónico</label><input id="amail" type="email" autocomplete="email" required></div>' +
       (forgot ? '' : '<div class="field"><label for="apass">Contraseña' + (signup ? ' (mínimo 8 caracteres)' : '') + '</label><input id="apass" type="password" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" minlength="8" required></div>') +
-      (signup ? '<p class="hint mailnote">Te enviaremos un correo para <b>confirmar tu cuenta de Mediciona</b>. De momento llega desde nuestro proveedor de cuentas, <b>Supabase</b> (asunto «Confirm Your Signup»). Si no lo ves en unos minutos, mira en Spam o Promociones.</p>' : '') +
-      (signup ? '<label class="row" style="gap:10px;align-items:flex-start"><input type="checkbox" id="alegal" required> <span class="hint" style="margin:0">Soy profesional o empresa y acepto el <a href="legal/aviso-legal.html" target="_blank">aviso legal</a> y la <a href="legal/privacidad.html" target="_blank">política de privacidad</a>.</span></label>' : '') +
+      (signup ? '<label class="checkline"><input type="checkbox" id="alegal" required><span>Soy profesional o empresa y acepto el <a href="legal/aviso-legal.html" target="_blank">aviso legal</a> y la <a href="legal/privacidad.html" target="_blank">política de privacidad</a>.</span></label>' : '') +
       '<div class="row"><button class="btn primary" type="submit">' + (signup ? 'Crear cuenta' : forgot ? 'Enviar enlace' : 'Entrar') + '</button><button class="btn" type="button" data-a="closesheet">Cancelar</button></div>' +
       '<p class="hint" id="accmsg" role="status"></p>' +
       '<p class="hint">' + (signup ? '¿Ya tienes cuenta? <button class="linkbtn" type="button" data-a="login">Entrar</button>' : forgot ? '<button class="linkbtn" type="button" data-a="login">Volver a entrar</button>' : '¿No tienes cuenta? <button class="linkbtn" type="button" data-a="signup">Crear cuenta</button> · <button class="linkbtn" type="button" id="aforgot">He olvidado la contraseña</button>') + '</p></form>');
@@ -743,7 +743,7 @@
         if (forgot) { await C.resetPassword(email); msg.textContent = 'Si existe una cuenta con ese correo, te hemos enviado un enlace para crear una contraseña nueva.'; btn.disabled = false; return; }
         if (signup) {
           const r = await C.signUp({ email, password: $('#apass').value, nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif: $('#anif').value.trim().toUpperCase() });
-          if (r.needsConfirm) { msg.innerHTML = '<b>Cuenta creada.</b> Revisa tu correo: te llegará un mensaje de <b>Supabase</b> (nuestro proveedor de cuentas) con el asunto «Confirm Your Signup». Pulsa el enlace para confirmar tu cuenta de Mediciona. Si no lo ves, mira en Spam o Promociones.'; btn.disabled = false; return; }
+          if (r.needsConfirm) return checkEmailSheet(email);
         } else await C.signIn(email, $('#apass').value);
         closeSheet(); toast(signup ? 'Cuenta creada. ¡Bienvenido a Mediciona!' : 'Sesión iniciada');
       } catch (er) { msg.textContent = er.message; btn.disabled = false; }
@@ -773,6 +773,18 @@
     const pro = !!(C && C.user && (C.isAdmin || (C.perfil && C.perfil.plan === 'pro' && (!C.perfil.pro_hasta || new Date(C.perfil.pro_hasta) > new Date()))));
     BillingGuard.plan = pro ? 'pro' : (C && C.user ? 'demo' : S.settings.plan);
     S.serverPlan = C && C.user ? (pro ? (C.isAdmin ? 'admin' : 'pro') : 'demo') : null;
+  }
+  function checkEmailSheet(email) {
+    sheet('<h2>Revisa tu correo</h2>' +
+      '<p>Hemos creado tu cuenta de Mediciona. Para activarla:</p>' +
+      '<ol class="steps"><li>Abre el correo de <b>' + esc(email) + '</b>.</li>' +
+      '<li>Busca un mensaje de <b>Supabase</b> (nuestro proveedor de cuentas) con el asunto <b>«Confirm Your Signup»</b>. Si no está, mira en <b>Spam</b> o <b>Promociones</b>.</li>' +
+      '<li>Pulsa <b>«Confirm your mail»</b>. Se abrirá Mediciona con tu sesión iniciada.</li></ol>' +
+      '<p class="hint" id="resmsg">El correo puede tardar unos minutos.</p>' +
+      '<div class="row"><button class="btn" id="resend" type="button">Reenviar el correo</button><button class="btn primary" type="button" data-a="login">Ya lo he confirmado: entrar</button></div>');
+    $('#resend').addEventListener('click', async () => {
+      try { await Cloud.resendConfirmation(email); $('#resmsg').textContent = 'Correo reenviado. Revisa también Spam y Promociones.'; } catch (e) { $('#resmsg').textContent = e.message; }
+    });
   }
   async function syncNow() {
     if (!window.Cloud || !Cloud.user) return;
@@ -1203,6 +1215,8 @@
       render();
     });
   }
+  // Versión nueva publicada: se ofrece actualizar (sin recargar a mitad de una medición)
+  window.MedicionaUpdate = () => toast('Hay una versión nueva de Mediciona', false, { label: 'Actualizar', fn: async () => { if (window.Cloud) await Cloud.flush(); location.reload(); } });
   window.MedicionesApp = { S, dialog, buildPdf, exportPdf, exportFile };
   boot();
 })();
