@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + Deno.env.get('RESEND_API_KEY') },
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (Deno.env.get('RESEND_API_KEY') || Deno.env.get('Resend-api-key') || Deno.env.get('resend-api-key') || '') },
     body: JSON.stringify({ from: REMITENTE, to: [user.email], subject: 'Mediciona · Archivos de «' + String(b?.titulo || 'tu medición').slice(0, 100) + '»', html, attachments: archivos })
   });
   const j = await r.json().catch(() => null);
