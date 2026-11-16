@@ -140,13 +140,21 @@
 
   /* ---------------- Administración ---------------- */
   async function adminData() {
-    const [u, s, i] = await Promise.all([
+    const desde = new Date(Date.now() - 30 * 864e5).toISOString();
+    const [u, s, i, io, it, ip] = await Promise.all([
       sb.rpc('admin_usuarios'),
       sb.from('sugerencias').select('*').order('creada', { ascending: false }).limit(200),
-      sb.from('ia_uso').select('user_id, modelo, tokens_entrada, tokens_salida, ms, intent, creado').gte('creado', new Date(Date.now() - 30 * 864e5).toISOString()).order('creado', { ascending: false }).limit(5000)
+      sb.from('ia_uso').select('user_id, modelo, tokens_entrada, tokens_salida, ms, intent, creado').gte('creado', desde).order('creado', { ascending: false }).limit(5000),
+      sb.rpc('admin_ia_obras'),
+      sb.rpc('admin_ia_totales'),
+      sb.from('ia_precios').select('*')
     ]);
     if (u.error) throw new Error(errMsg(u.error));
-    return { usuarios: u.data || [], sugerencias: s.data || [], ia: i.data || [] };
+    return { usuarios: u.data || [], sugerencias: s.data || [], ia: i.data || [], iaObras: io.data || [], iaTotales: it.data || [], precios: ip.data || [] };
+  }
+  async function savePrice(modelo, entrada, salida) {
+    const { error } = await sb.from('ia_precios').upsert({ modelo, entrada_usd_millon: entrada, salida_usd_millon: salida, actualizado: new Date().toISOString() });
+    if (error) throw new Error(errMsg(error));
   }
   async function setSuggestionState(id, estado) {
     const { error } = await sb.from('sugerencias').update({ estado }).eq('id', id);
@@ -157,6 +165,6 @@
     available, init, onAuth: (f) => listeners.push(f),
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
-    syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState
+    syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState, savePrice
   };
 })(typeof self !== 'undefined' ? self : this);

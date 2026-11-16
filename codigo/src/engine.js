@@ -1222,7 +1222,7 @@
       io.note && io.note('Lo consulto con la IA…');
       const act = this.active();
       const ctx = {
-        frase, motivo, estancia: this.obra.estActiva || '',
+        obra_id: this.obra.id, frase, motivo, estancia: this.obra.estActiva || '',
         activa: act ? { ref: act.ref, r: act.r, u: act.u } : null,
         rechazadas: [...(this.rejected || [])].slice(-20),
         historial: (io.history ? io.history() : []).slice(-6),

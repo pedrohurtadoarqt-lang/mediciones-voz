@@ -19,6 +19,7 @@ const s = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) 
 function sanea(b: any) {
   const cand = Array.isArray(b?.candidatas) ? b.candidatas.slice(0, 80) : [];
   return {
+    obra_id: s(b?.obra_id, 60),
     frase: s(b?.frase, 500),
     motivo: s(b?.motivo, 200),
     estancia: s(b?.estancia, 80),
@@ -60,6 +61,9 @@ Deno.serve(async (req) => {
   let out = null;
   try { out = JSON.parse(j.choices[0].message.content); } catch { /* respuesta no JSON */ }
   const res = AI.validate(out, ctx);
-  await admin.from('ia_uso').insert({ user_id: user.id, modelo: MODEL, tokens_entrada: j.usage?.prompt_tokens, tokens_salida: j.usage?.completion_tokens, ms: Date.now() - t0, intent: res.intent });
+  const tin = j.usage?.prompt_tokens || 0, tout = j.usage?.completion_tokens || 0;
+  const { data: precio } = await admin.from('ia_precios').select('entrada_usd_millon, salida_usd_millon').eq('modelo', MODEL).maybeSingle();
+  const coste = precio ? (tin * Number(precio.entrada_usd_millon) + tout * Number(precio.salida_usd_millon)) / 1e6 : null;
+  await admin.from('ia_uso').insert({ user_id: user.id, obra_id: ctx.obra_id || null, modelo: MODEL, tokens_entrada: tin, tokens_salida: tout, coste_usd: coste, ms: Date.now() - t0, intent: res.intent });
   return new Response(JSON.stringify({ result: res, usage: j.usage, modelo: MODEL }), { headers: h });
 });

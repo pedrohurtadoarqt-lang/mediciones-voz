@@ -2044,7 +2044,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       io.note && io.note('Lo consulto con la IA…');
       const act = this.active();
       const ctx = {
-        frase, motivo, estancia: this.obra.estActiva || '',
+        obra_id: this.obra.id, frase, motivo, estancia: this.obra.estActiva || '',
         activa: act ? { ref: act.ref, r: act.r, u: act.u } : null,
         rechazadas: [...(this.rejected || [])].slice(-20),
         historial: (io.history ? io.history() : []).slice(-6),
@@ -3179,13 +3179,21 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
 
   /* ---------------- Administración ---------------- */
   async function adminData() {
-    const [u, s, i] = await Promise.all([
+    const desde = new Date(Date.now() - 30 * 864e5).toISOString();
+    const [u, s, i, io, it, ip] = await Promise.all([
       sb.rpc('admin_usuarios'),
       sb.from('sugerencias').select('*').order('creada', { ascending: false }).limit(200),
-      sb.from('ia_uso').select('user_id, modelo, tokens_entrada, tokens_salida, ms, intent, creado').gte('creado', new Date(Date.now() - 30 * 864e5).toISOString()).order('creado', { ascending: false }).limit(5000)
+      sb.from('ia_uso').select('user_id, modelo, tokens_entrada, tokens_salida, ms, intent, creado').gte('creado', desde).order('creado', { ascending: false }).limit(5000),
+      sb.rpc('admin_ia_obras'),
+      sb.rpc('admin_ia_totales'),
+      sb.from('ia_precios').select('*')
     ]);
     if (u.error) throw new Error(errMsg(u.error));
-    return { usuarios: u.data || [], sugerencias: s.data || [], ia: i.data || [] };
+    return { usuarios: u.data || [], sugerencias: s.data || [], ia: i.data || [], iaObras: io.data || [], iaTotales: it.data || [], precios: ip.data || [] };
+  }
+  async function savePrice(modelo, entrada, salida) {
+    const { error } = await sb.from('ia_precios').upsert({ modelo, entrada_usd_millon: entrada, salida_usd_millon: salida, actualizado: new Date().toISOString() });
+    if (error) throw new Error(errMsg(error));
   }
   async function setSuggestionState(id, estado) {
     const { error } = await sb.from('sugerencias').update({ estado }).eq('id', id);
@@ -3196,7 +3204,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     available, init, onAuth: (f) => listeners.push(f),
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
-    syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState
+    syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState, savePrice
   };
 })(typeof self !== 'undefined' ? self : this);
 </script>
@@ -3958,6 +3966,14 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     } catch (e) { /* sin conexión: se reintenta luego */ }
   }
   /* ---- Panel de administración ---- */
+  document.addEventListener('submit', async (ev) => {
+    const f = ev.target.closest('.pricef'); if (!f) return;
+    ev.preventDefault();
+    const num = (v) => parseFloat(String(v).replace(',', '.'));
+    const i = num(f.elements.in.value), o = num(f.elements.out.value);
+    if (isNaN(i) || isNaN(o) || i < 0 || o < 0) return toast('Escribe los dos precios, por ejemplo 0,10 y 0,40.');
+    try { await Cloud.savePrice(f.dataset.m, i, o); toast('Precio guardado'); S.adminTab = 'coste'; loadAdmin(); } catch (e) { toast(e.message); }
+  });
   async function loadAdmin() {
     try { S.adminData = await Cloud.adminData(); } catch (e) { S.adminData = { error: e.message }; }
     if (S.view === 'admin') render();
@@ -3975,7 +3991,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       '<div class="kpi"><b>' + d.usuarios.reduce((a, u) => a + Number(u.obras_pagadas || 0), 0) + '</b><span>obras pagadas</span></div>' +
       '<div class="kpi"><b>' + nuevas + '</b><span>sugerencias nuevas</span></div>' +
       '<div class="kpi"><b>' + d.ia.length + '</b><span>consultas IA (30 días)</span></div></div>';
-    h += '<div class="chips">' + [['usuarios', 'Usuarios'], ['sugerencias', 'Sugerencias' + (nuevas ? ' (' + nuevas + ')' : '')], ['ia', 'Uso de la IA']].map(([k, l]) => '<button class="chip' + (tab === k ? ' primary' : '') + '" data-a="admtab" data-tab="' + k + '">' + l + '</button>').join('') + '<button class="chip ghost" data-a="admin">Actualizar</button></div>';
+    h += '<div class="chips">' + [['usuarios', 'Usuarios'], ['sugerencias', 'Sugerencias' + (nuevas ? ' (' + nuevas + ')' : '')], ['coste', 'Coste IA'], ['ia', 'Uso de la IA']].map(([k, l]) => '<button class="chip' + (tab === k ? ' primary' : '') + '" data-a="admtab" data-tab="' + k + '">' + l + '</button>').join('') + '<button class="chip ghost" data-a="admin">Actualizar</button></div>';
     const fd = (x) => x ? new Date(x).toLocaleDateString('es-ES') : '—';
     if (tab === 'usuarios') {
       h += '<div class="tablewrap"><table class="lines admin"><thead><tr><th>Usuario</th><th>Empresa · NIF</th><th>Teléfono</th><th>Plan</th><th>Obras</th><th>IA</th><th>Alta</th><th>Actividad</th></tr></thead><tbody>' +
@@ -3991,6 +4007,25 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
           (s.conversacion ? '<details><summary class="meta">Conversación adjunta (' + s.conversacion.length + ' mensajes)</summary><div class="meta" style="white-space:pre-wrap">' + esc(s.conversacion.map((r) => (r.who === 'user' ? 'OÍDO: ' : 'APP: ') + r.text).join('\n')) + '</div></details>' : '') +
           '<div class="row">' + ['leida', 'hecha', 'descartada'].map((st) => '<button class="btn small" data-a="sgstate" data-id="' + s.id + '" data-st="' + st + '">' + { leida: 'Leída', hecha: 'Hecha', descartada: 'Descartar' }[st] + '</button>').join('') + '</div></div>';
       });
+    } else if (tab === 'coste') {
+      const usd = (v) => v == null ? '—' : '$' + Number(v).toLocaleString('es-ES', { minimumFractionDigits: v < 1 ? 4 : 2, maximumFractionDigits: v < 1 ? 4 : 2 });
+      const tot = Object.fromEntries((d.iaTotales || []).map((r) => [r.periodo, r]));
+      const sinPrecio = !(d.precios || []).length;
+      const T = (k) => tot[k] || { consultas: 0, obras: 0, coste_usd: null };
+      const medio = T('total').obras ? Number(T('total').coste_usd || 0) / Number(T('total').obras) : null;
+      h += '<div class="kpis">' +
+        '<div class="kpi"><b>' + usd(T('hoy').coste_usd) + '</b><span>hoy · ' + T('hoy').consultas + ' consultas</span></div>' +
+        '<div class="kpi"><b>' + usd(T('mes').coste_usd) + '</b><span>este mes · ' + T('mes').consultas + ' consultas</span></div>' +
+        '<div class="kpi"><b>' + usd(T('total').coste_usd) + '</b><span>total · ' + T('total').obras + ' mediciones</span></div>' +
+        '<div class="kpi"><b>' + usd(medio) + '</b><span>coste medio por medición</span></div></div>';
+      if (sinPrecio) h += '<p class="hint" style="color:var(--accent)">Introduce el precio del modelo para ver el coste en dólares. Hasta entonces se muestran los tokens.</p>';
+      const modelos = [...new Set((d.ia || []).map((x) => x.modelo).concat((d.precios || []).map((p) => p.modelo)).concat(['gemini-flash-lite-latest']).filter(Boolean))];
+      h += '<div class="card"><h3>Precio del modelo (USD por millón de tokens)</h3><p class="hint">Cópialo de la página de precios de la API de Gemini (plan de pago). Se aplica a las consultas nuevas y a las antiguas que no tenían precio.</p>' +
+        modelos.map((m) => { const p = (d.precios || []).find((x) => x.modelo === m) || {}; return '<form class="row pricef" data-m="' + esc(m) + '" style="align-items:flex-end"><div class="field" style="flex:1 1 160px"><label>Modelo</label><input value="' + esc(m) + '" disabled></div><div class="field" style="flex:1 1 100px"><label>Entrada</label><input name="in" inputmode="decimal" value="' + (p.entrada_usd_millon != null ? String(p.entrada_usd_millon).replace('.', ',') : '') + '" placeholder="0,10"></div><div class="field" style="flex:1 1 100px"><label>Salida</label><input name="out" inputmode="decimal" value="' + (p.salida_usd_millon != null ? String(p.salida_usd_millon).replace('.', ',') : '') + '" placeholder="0,40"></div><button class="btn primary" type="submit">Guardar</button></form>'; }).join('') + '</div>';
+      const rows = d.iaObras || [];
+      h += '<div class="tablewrap"><table class="lines admin"><thead><tr><th>Medición (obra)</th><th>Usuario</th><th>Consultas</th><th>Tokens entrada / salida</th><th>Coste</th><th>Última</th></tr></thead><tbody>' +
+        rows.map((r) => '<tr><td class="com">' + esc(r.titulo || (r.obra_id ? 'Obra sin sincronizar' : 'Sin obra')) + '<span class="e">' + esc(r.obra_id || '') + '</span></td><td class="com">' + esc(r.empresa || '') + '<span class="e">' + esc(r.email || '') + '</span></td><td>' + r.consultas + '</td><td>' + Number(r.tokens_entrada || 0).toLocaleString('es-ES') + ' / ' + Number(r.tokens_salida || 0).toLocaleString('es-ES') + '</td><td class="p">' + usd(r.coste_usd) + '</td><td>' + fd(r.ultima) + '</td></tr>').join('') + '</tbody></table></div>';
+      if (!rows.length) h += '<p class="hint">Todavía no hay consultas a la IA.</p>';
     } else {
       const byIntent = {}; d.ia.forEach((x) => { byIntent[x.intent || '—'] = (byIntent[x.intent || '—'] || 0) + 1; });
       const ms = d.ia.length ? Math.round(d.ia.reduce((a, x) => a + (x.ms || 0), 0) / d.ia.length) : 0;
