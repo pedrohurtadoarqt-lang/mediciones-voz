@@ -140,6 +140,17 @@
     return data;
   }
 
+  /* ---------------- Envío de archivos al correo ---------------- */
+  async function sendFiles(body) {
+    if (!user) throw new Error('Entra en tu cuenta para enviar archivos.');
+    const { data, error } = await sb.functions.invoke('enviar-archivos', { body });
+    if (error) {
+      let msg = errMsg(error);
+      try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    return data || {};
+  }
   /* ---------------- Sugerencias ---------------- */
   async function suggestion(s) {
     const { error } = await sb.from('sugerencias').insert({ user_id: user.id, tipo: s.tipo, mensaje: s.mensaje, conversacion: s.conversacion || null, dispositivo: (s.dispositivo || '').slice(0, 300) });
@@ -179,6 +190,6 @@
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, resendConfirmation, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
     get pendingCount() { return pending.size; },
-    syncObras, queue, flush, deleteObra, ai, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
+    syncObras, queue, flush, deleteObra, ai, sendFiles, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
   };
 })(typeof self !== 'undefined' ? self : this);

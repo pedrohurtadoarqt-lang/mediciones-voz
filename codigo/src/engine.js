@@ -845,6 +845,7 @@
       if ((m = n.match(/^(?:cambia|corrige|modifica)\s+la\s+(?:ultima\s+linea|linea\s+(\S+))\s+(?:a|por|en)\s+(.+)$/))) return this.replaceLine(m[1] ? parseIndex(m[1]) : -1, m[2]);
       if ((m = n.match(/^(?:que|cuanto)\s+(?:llevo|llevamos|tengo|tenemos|hay|he|hemos)\s+(?:medido\s+)?(?:en|del|de)\s+(?:el|la)?\s*(.+)$/)) || (m = n.match(/^resumen\s+(?:de|del)\s+(?:la\s+|el\s+)?(.+)$/))) return this.summaryEstancia(m[1]);
       if (/^(resumen|total)( de la obra| general)?$|^que llevo medido$/.test(n)) return this.summaryObra();
+      if (/\b(envia|enviame|enviar|manda|mandame|mandar)\b.*\b(correo|email|mail|e-mail)\b|\b(por|al|a mi) correo\b/.test(n) && this.io.sendEmail) { this.io.sendEmail(); return this.ask('Elige qué archivos quieres recibir y pulsa Enviar.', this.idleChips(), { listen: false }); }
       if (/^(exporta|exportar|genera|generar|saca|sacar|crea|crear|descarga|descargar|pasa|pasar)\b.*\b(excel|xls|xlsx|hoja de calculo|hoja)\b/.test(n)) { this.io.exportXlsx && this.io.exportXlsx(); return this.ask('Generando el Excel de mediciones.'); }
       if (/^(exporta|exportar|genera|generar|saca|sacar|crea|crear|descarga|descargar|pasa|pasar)\b.*\b(bc3|be ce tres|bece3|presto|arquimedes|fiebdc)\b/.test(n)) { this.io.exportBc3 && this.io.exportBc3(); return this.ask('Generando el BC3 de mediciones.'); }
       if (/^(exporta|exportar|genera|generar|saca|sacar|crea|crear|descarga|descargar)\s+(el\s+|un\s+)?(pdf|informe|listado)/.test(n)) { this.io.exportPdf(); return this.ask('Generando el PDF de mediciones.'); }
@@ -994,7 +995,7 @@
       const nl = ps.reduce((a, p) => a + p.lineas.length, 0);
       const pend = this.obra.partidas.reduce((a, p) => a + p.lineas.filter((l) => l.hPend && l.h == null).length, 0);
       this.ask('Medición terminada. Llevas ' + ps.length + (ps.length === 1 ? ' partida' : ' partidas') + ' y ' + nl + (nl === 1 ? ' línea' : ' líneas') + ((this.obra.estancias || []).length ? ' en ' + (this.obra.estancias || []).length + ((this.obra.estancias || []).length === 1 ? ' estancia.' : ' estancias.') : '.') + (pend ? ' Quedan ' + pend + ' paredes sin altura.' : '') + ' Puedes generar el PDF, el Excel o el BC3, o seguir midiendo cuando quieras.',
-        [{ label: 'Generar PDF', value: 'genera el pdf' }, { label: 'Excel', value: 'exporta el excel' }, { label: 'BC3', value: 'exporta el bc3' }, { label: 'Seguir midiendo', value: 'seguir midiendo' }], { listen: false, end: true });
+        [{ label: 'Enviar a mi correo', value: 'envíame los archivos por correo' }, { label: 'Generar PDF', value: 'genera el pdf' }, { label: 'Excel', value: 'exporta el excel' }, { label: 'BC3', value: 'exporta el bc3' }, { label: 'Seguir midiendo', value: 'seguir midiendo' }], { listen: false, end: true });
     }
     looksLikeMeasure(pm, text, act) {
       if (pm.ded) return true;
