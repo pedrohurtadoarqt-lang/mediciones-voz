@@ -615,6 +615,7 @@
       ['<b>Trabajo:</b> «picado de azulejos», «pintura plástica en techo», «nueva partida rozas»',
         '<b>Medidas:</b> «pared ducha 1,80 por 2,50», «tres con cuarenta por dos cincuenta», «2 de 1,20 por 1,40», «largo 4 alto 2,6»',
         '<b>Huecos:</b> «descuenta puerta de 0,82 por 2,03»',
+        '<b>Salas en L o irregulares:</b> «4 por 3 y 2 por 1,5», «superficie 18,5», o el rectángulo grande y «descuenta 1,5 por 2». Si dices «no es rectangular» te lo explico',
         '<b>Estancias:</b> «pasamos al baño», «estancia dormitorio 2», «siguiente estancia»',
         '<b>Revisión:</b> «revisa la última partida», «muéstrame la demolición de alicatado», «lee las líneas», «qué llevo medido en la cocina», «resumen»',
         '<b>Corrección:</b> «borra la última línea», «borra la línea 3», «cambia el largo de la línea 2 a 3 con 40», «cambia la última línea a 3 por 2,5», «deshacer»',

@@ -122,6 +122,9 @@
           t2.push({ k: 'N', v: a.v + c.v / Math.pow(10, c.str.length), dec: true, orig: a.orig + ' m ' + c.orig }); i += 2; continue;
         }
       }
+      if (a.k === 'N' && !a.dec && t1[i + 1] && t1[i + 1].k === 'W' && t1[i + 1].n === 'y' && t1[i + 2] && t1[i + 2].k === 'W' && /^medi[oa]$/.test(t1[i + 2].n)) {
+        t2.push({ k: 'N', v: a.v + 0.5, dec: true, orig: a.orig + ' y medio' }); i += 2; continue;
+      }
       if (a.k === 'N') {
         const b = t1[i + 1];
         if (b && b.k === 'W' && /^(centimetros?|cm|cms)$/.test(b.n)) { t2.push({ k: 'N', v: a.v / 100, dec: true, orig: a.orig + ' cm' }); i++; continue; }
@@ -149,6 +152,7 @@
     'unidad tramos tramo veces iguales descuenta descontar descuento deduce deducir deduccion resta restar menos quita quitar es son ' +
     'vale bien ok mas y tambien hay punto de mide').split(' '));
   const DEDUC = /^(descuenta|descontar|descuento|deduce|deducir|deduccion|deducimos|resta|restar|restamos|menos|descontamos|quita|quitamos)$/;
+  const DEDUC_ANY = /\b(descuenta|descontar|descontando|deduce|deduciendo|deduccion|resta|restando|menos|quita|quitando)\b/;
   const NWORDS = /^(unidades|unidad|uds|ud|veces|tramos|tramo|iguales|piezas|puntos)$/;
 
   /**
@@ -605,7 +609,8 @@
   };
   function ambitoFromText(t) {
     const n = norm(t);
-    if (/integral|vivienda|piso|casa|reforma completa|toda la/.test(n)) return { id: 'vivienda' };
+    if (/parcial|una estancia|solo una|solo un|una habitacion|una zona|pequena|algunas estancias|un par de/.test(n)) return { id: 'estancia' };
+    if (/integral|vivienda|piso|casa|reforma completa|toda la|reforma|chalet|apartamento|edificio/.test(n)) return { id: 'vivienda' };
     if (/carpinter|ventana|puerta|huecos/.test(n)) return { id: 'carpinteria' };
     if (/instalac|electric|fontaner|clima|calefac|aire/.test(n)) return { id: 'instalaciones' };
     if (/libre|sin restric|cualquier/.test(n)) return { id: 'libre' };
@@ -636,7 +641,7 @@
       this.ask('Obra ' + obra.titulo + ' abierta.' + est + (act ? ' Partida activa: ' + act.r + '.' : '') + ' Dime el trabajo a medir.', this.idleChips());
     }
     /* ---- helpers de salida ---- */
-    ask(text, chips, opts) { this.lastPrompt = { text, chips, opts }; this.io.say(text, chips || [], Object.assign({ listen: true }, opts || {})); }
+    ask(text, chips, opts) { if (this.muteAsk) return; this.lastPrompt = { text, chips, opts }; this.io.say(text, chips || [], Object.assign({ listen: true }, opts || {})); }
     tell(text, chips) { this.ask(text, chips, { listen: true }); }
     idleChips() {
       const c = [];
@@ -702,20 +707,25 @@
     }
     st_ambito(text, n, input) {
       const r = input && input.act && input.act.ambito ? { id: input.act.ambito } : ambitoFromText(text);
-      if (!r) return this.ask('No te he entendido. ¿Vivienda, estancia específica, carpintería, instalaciones o libre?', this.lastPrompt.chips);
+      if (!r) {
+        // No bloquear: si no se entiende el ámbito, se sigue como vivienda (permite cualquier estancia y partida)
+        if (this.escape(text, n)) return;
+        this.obra.ambito = 'vivienda'; this.touch();
+        return this.askEstancia(false, 'Lo trato como reforma de vivienda. ');
+      }
       this.obra.ambito = r.id;
       if (r.est) { this.setEstancia(r.est, true); this.touch(); this.state = { mode: 'idle' }; return this.ask('Perfecto, medimos ' + art(r.est) + '. ¿Cuál es el primer trabajo? Por ejemplo: picado de azulejos.'); }
       this.touch();
       if (r.id === 'libre') { this.state = { mode: 'idle' }; return this.ask('Medición libre. Dime el primer trabajo a medir.'); }
       return this.askEstancia(r.id === 'instalaciones');
     }
-    askEstancia(optional) {
+    askEstancia(optional, prefix) {
       this.state = { mode: 'estancia' };
       const used = this.obra.estancias || [];
       const sugg = (this.obra.ambito === 'estancia' ? ['Baño', 'Cocina', 'Aseo', 'Local'] : DEFAULT_ESTANCIAS).filter((e) => !used.includes(e));
       const chips = sugg.slice(0, 7).map((e) => ({ label: e, value: e }));
       if (optional) chips.push({ label: 'Sin estancia', value: 'sin estancia' });
-      this.ask(used.length ? '¿A qué estancia pasamos?' : '¿Por qué estancia empezamos?', chips);
+      this.ask((prefix || '') + (used.length ? '¿A qué estancia pasamos?' : '¿Por qué estancia empezamos?'), chips);
     }
     st_estancia(text, n) {
       if (/sin estancia|ninguna|general/.test(n)) { this.obra.estActiva = ''; this.touch(); this.state = { mode: 'idle' }; return this.ask('Sin estancia. Dime el trabajo a medir.'); }
@@ -750,6 +760,18 @@
 
       if (this.tryCommands(text, n) !== false) return;
 
+      // Varios rectángulos en una frase: "4 por 3 y 2 por 1,5" / "4 por 3 más 2 por 1,5"
+      if (act && (n.match(/\bpor\b/g) || []).length >= 2 && !DEDUC_ANY.test(n)) {
+        const parts = text.split(/\s+(?:y|mas|más|\+|otro de|otra de|otro|otra)\s+(?=(?:[\w,áéíóú]+\s+){0,4}?(?:\d|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b[^]*?\bpor\b)/i).filter((x) => parseMeasure(x).count >= 2);
+        if (parts.length >= 2) {
+          this.geo = this.geo && this.geo.uid === act.uid ? this.geo : { uid: act.uid, est: this.obra.estActiva || '', n: 0 };
+          const n0 = act.lineas.length;
+          this.muteAsk = true;
+          try { parts.forEach((x) => { this.state = { mode: 'idle' }; this.st_idle(x, norm(x)); }); } finally { this.muteAsk = false; }
+          const added = act.lineas.slice(n0);
+          return this.ask('Anotadas ' + added.length + ' partes: ' + added.map((l) => fmt(parcial(l))).join(' más ') + '. Total ' + fmt(totalOf(act)) + ' ' + unitSpoken(act.u) + '. ¿Otra medida?', this.idleChips());
+        }
+      }
       // Medida + hueco en la misma frase: "3,40 por 2,60 y quita la ventana de 1,20 por 1,10" → dos líneas
       if (act) {
         const mm = text.match(/^(.+?)\s*,?\s+(?:y\s+)?((?:descuenta|descontando|descontar|quita|quitando|resta|restando|menos|deduce|deduciendo)\b.+)$/i);
@@ -774,7 +796,22 @@
         if (f.length === cands.length || !f.length || (act && f.some((r) => r.doc.c === act.ref))) return this.ask('En la base no hay otra variante' + (act ? '; sigo con ' + act.r + '. ' + this.dimsAsk(act) : '.'), this.idleChips());
         return this.funnelStart(this.lastQuery + ' ' + text, f, []);
       }
+      // Con una partida en marcha, una frase corta y ambigua puede ser una aclaración, no un trabajo nuevo: que decida la IA
+      if (act && this.io.aiReady && this.io.aiReady() && contentWords(text).length <= 3) {
+        const r0 = this.cat.index.search(text, this.boostFn());
+        const strong = r0.length && r0[0].miss === 0 && r0[0].nKey >= 2 && r0[0].s >= 0.6;
+        if (!strong) return this.aiOr(text, 'hay una partida en marcha («' + act.r + '», en ' + unitSpoken(act.u) + '); decide si es una medida, una aclaración sobre la forma de medir, una orden o un trabajo nuevo', () => this.selectWork(text));
+      }
       return this.selectWork(text);
+    }
+    /* ---- Geometría: salas en L o irregulares ---- */
+    geoHelp() {
+      const act = this.active();
+      if (!act) return this.ask('Primero dime el trabajo a medir; luego te ayudo con la forma de la sala.', this.idleChips());
+      this.geo = { uid: act.uid, est: this.obra.estActiva || '', n: 0 };
+      if (act.u === 'm2' && act.orient === 'V') return this.ask('Sin problema: en paredes da igual la forma de la sala. Dime la longitud de cada tramo de pared, uno a uno, y al final la altura.', this.idleChips());
+      return this.ask('Sin problema. Divide la sala en rectángulos y dímelos uno a uno, por ejemplo «4 por 3» y luego «2 por 1,5». También puedes decir los dos a la vez («4 por 3 y 2 por 1,5»), darme la superficie total («superficie 18,5») o medir el rectángulo grande y descontar el trozo que falta («descuenta 1,5 por 2»).',
+        [{ label: 'Ya está', value: 'siguiente partida' }, { label: 'Leer líneas', value: 'lee las líneas' }]);
     }
     /** Comandos reconocibles en cualquier momento. Devuelve false si no es un comando. */
     tryCommands(text, n) {
@@ -805,6 +842,18 @@
       if ((m = n.match(/^(?:aplica|usa|pon|copia|coge|toma)\s+(?:las\s+)?(?:mismas\s+)?(?:medidas|superficies|mediciones|lineas)\s+(?:que|de|del)\s+(?:en\s+)?(?:el|la|los|las)?\s*(.+)$/))) return this.cmdCopyFrom(m[1]);
       if ((m = n.match(/^copia\s+(?:las\s+|los\s+)?(paredes|paramentos|suelos?|techos?|medidas)\s+(?:del|de la|de|de los)\s+(.+?)(?:\s+(?:pero\s+)?(?:descuenta|descontando|quitando|restando|y descuenta|menos)\s+(?:las\s+|los\s+)?(ventanas|puertas|huecos|carpinterias?))?$/))) return this.cmdCopyRoom(m[1], m[2], m[3]);
 
+      // Forma de la sala
+      if (/\b(no es rectangular|no es cuadrad[ao]|no es regular|es irregular|forma (de|en) (l|ele|u|t)|en forma de|tiene forma|en (l|ele)$|es una (l|ele)|dos rectangulos|varios rectangulos|tiene un entrante|tiene un saliente|tiene una esquina|esta dividid[ao]|en dos partes|en varias partes|como mido|como lo mido)\b/.test(n)) return this.geoHelp();
+      // Superficie total dictada directamente
+      if (act && ['m2', 'm3'].includes(act.u) && (m = n.match(/^(?:la\s+)?(?:superficie|area|total|superficie total)\s*(?:total|es|son|de|mide|:)?\s*(?:de\s+)?(.+?)(?:\s*metros cuadrados|\s*m2)?$/) || n.match(/^(?:son|mide|tiene)\s+(.+?)\s*(?:metros cuadrados|m2)$/))) {
+        const v = parseNumber(m[1]);
+        if (v !== null && v > 0 && contentWords(m[1].replace(/metros?|cuadrados?/g, '')).length <= 1) {
+          this.snapshot();
+          const nl = { id: this.nextId(act), est: this.estPrefix(), com: 'Superficie total', uds: 1, l: v, a: null, h: null };
+          act.lineas.push(nl); act.mod = Date.now(); this.touch(); this.io.flash && this.io.flash('ok');
+          return this.ask('Anotada la superficie de ' + fmt(v) + ' metros cuadrados. Total ' + fmt(totalOf(act)) + '. ¿Algo más?', this.idleChips());
+        }
+      }
       // Altura común de la estancia ("la altura es 2,60")
       if (!this.state.pending && (m = n.match(/^(?:y\s+)?(?:la\s+)?(?:altura|alto)(?:\s+(?:libre|de (?:la )?(?:estancia|habitacion|pared|paredes|las paredes|suelo a techo|techo)))?\s*(?:es|son|de|a|:|=)?\s*(.+)$/) || n.match(/^(?:la\s+)?(?:estancia|habitacion)\s+tiene\s+(.+?)\s+de\s+altura$/))) {
         const v = parseNumber(m[1]);
@@ -1070,7 +1119,7 @@
       c.forEach((x, i) => { x.short = short[i]; });
       const chips = c.map((x, i) => ({ label: (i + 1) + '. ' + x.doc.r + ' (' + unitLabel(x.doc.u) + ')', value: x.doc.r, act: { pick: i } }));
       chips.push({ label: 'Ninguna: crear partida nueva', value: 'ninguna', act: { create: true } });
-      this.ask(text + ' Si no es ninguna, di «crear nueva».', chips, { long: true });
+      this.ask(text.replace(/ Dime el número\.?/, '') + ' Dime el número o el nombre; si no es ninguna, di «crear nueva».', chips, { long: true });
     }
     st_funnel(text, n, input) {
       const st = this.state;
@@ -1618,7 +1667,9 @@
       const ded = pm.ded || (pend && pend.ded);
       if (ded) line.uds = -Math.abs(line.uds || 1);
       this.snapshot();
-      const nl = { id: this.nextId(p), est: this.estPrefix(), com: ded ? cap('Deducción ' + (com ? com.toLowerCase() : 'hueco')) : com, uds: line.uds, l: line.l, a: line.a, h: line.h };
+      let com2 = com;
+      if (!ded && !com && this.geo && this.geo.uid === p.uid && this.geo.est === (this.obra.estActiva || '')) com2 = 'Parte ' + (++this.geo.n);
+      const nl = { id: this.nextId(p), est: this.estPrefix(), com: ded ? cap('Deducción ' + (com ? com.toLowerCase() : 'hueco')) : com2, uds: line.uds, l: line.l, a: line.a, h: line.h };
       if (pm.orientHint && p.u === 'm2') nl.grp = pm.orientHint;
       if (line.hueco) { nl.hueco = line.hueco; if (!nl.com) nl.com = fmt(line.hueco.a) + ' x ' + fmt(line.hueco.h); else nl.com += ' ' + fmt(line.hueco.a) + ' x ' + fmt(line.hueco.h); }
       p.lineas.push(nl); p.mod = Date.now();
@@ -1759,7 +1810,8 @@
   function shortName(r) { const w = (r || '').split(/\s+/); return (w.length > 5 ? w.slice(0, 5).join(' ') : r).replace(/[,;]$/, '').toLowerCase(); }
   function art(est) {
     const n = norm(est);
-    if (/^(cocina|terraza|galeria|entrada|habitacion|escalera|azotea|cubierta|fachada|despensa|zona|planta|oficina|sala|suite|bodega|tienda|nave|piscina)/.test(n)) return 'la ' + est.toLowerCase().replace(/^\w/, (c) => c);
+    const w0 = n.split(' ')[0];
+    if (/^(cocina|terraza|galeria|entrada|habitacion|escalera|azotea|cubierta|fachada|despensa|zona|planta|oficina|sala|suite|bodega|tienda|nave|piscina)/.test(n) || (/(a|ion)$/.test(w0) && !/^(dia|sofa|clima|sistema|tema|programa)$/.test(w0))) return 'la ' + est.toLowerCase();
     return 'el ' + est.toLowerCase();
   }
 
