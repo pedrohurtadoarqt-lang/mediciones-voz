@@ -207,3 +207,4 @@ button.resumen.linklike { background: none; border: 0; padding: 0; text-align: l
 .kpi span { font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 table.admin td { white-space: normal; font-size: var(--fs-xs); }
 details summary { cursor: pointer; }
+.mailnote { background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0; }

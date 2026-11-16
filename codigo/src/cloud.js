@@ -41,7 +41,7 @@
   const errMsg = (e) => {
     const m = (e && (e.message || e.error_description || e.msg)) || String(e);
     if (/Invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos.';
-    if (/Email not confirmed/i.test(m)) return 'Tienes que confirmar tu correo: revisa tu bandeja de entrada (y el correo no deseado).';
+    if (/Email not confirmed/i.test(m)) return 'Tienes que confirmar tu correo: busca un mensaje de Supabase (nuestro proveedor de cuentas) con el asunto «Confirm Your Signup», también en Spam o Promociones.';
     if (/already registered|already been registered/i.test(m)) return 'Ya existe una cuenta con ese correo. Prueba a entrar o a recuperar la contraseña.';
     if (/Password should be at least/i.test(m)) return 'La contraseña debe tener al menos 8 caracteres.';
     if (/rate limit/i.test(m)) return 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.';

@@ -727,6 +727,7 @@
         '<div class="field"><label for="anif">NIF / CIF</label><input id="anif" required></div>' : '') +
       '<div class="field"><label for="amail">Correo electrónico</label><input id="amail" type="email" autocomplete="email" required></div>' +
       (forgot ? '' : '<div class="field"><label for="apass">Contraseña' + (signup ? ' (mínimo 8 caracteres)' : '') + '</label><input id="apass" type="password" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" minlength="8" required></div>') +
+      (signup ? '<p class="hint mailnote">Te enviaremos un correo para <b>confirmar tu cuenta de Mediciona</b>. De momento llega desde nuestro proveedor de cuentas, <b>Supabase</b> (asunto «Confirm Your Signup»). Si no lo ves en unos minutos, mira en Spam o Promociones.</p>' : '') +
       (signup ? '<label class="row" style="gap:10px;align-items:flex-start"><input type="checkbox" id="alegal" required> <span class="hint" style="margin:0">Soy profesional o empresa y acepto el <a href="legal/aviso-legal.html" target="_blank">aviso legal</a> y la <a href="legal/privacidad.html" target="_blank">política de privacidad</a>.</span></label>' : '') +
       '<div class="row"><button class="btn primary" type="submit">' + (signup ? 'Crear cuenta' : forgot ? 'Enviar enlace' : 'Entrar') + '</button><button class="btn" type="button" data-a="closesheet">Cancelar</button></div>' +
       '<p class="hint" id="accmsg" role="status"></p>' +
@@ -740,7 +741,7 @@
         if (forgot) { await C.resetPassword(email); msg.textContent = 'Si existe una cuenta con ese correo, te hemos enviado un enlace para crear una contraseña nueva.'; btn.disabled = false; return; }
         if (signup) {
           const r = await C.signUp({ email, password: $('#apass').value, nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif: $('#anif').value.trim().toUpperCase() });
-          if (r.needsConfirm) { msg.textContent = 'Cuenta creada. Te hemos enviado un correo para confirmarla: ábrelo desde este móvil y vuelve a entrar.'; btn.disabled = false; return; }
+          if (r.needsConfirm) { msg.innerHTML = '<b>Cuenta creada.</b> Revisa tu correo: te llegará un mensaje de <b>Supabase</b> (nuestro proveedor de cuentas) con el asunto «Confirm Your Signup». Pulsa el enlace para confirmar tu cuenta de Mediciona. Si no lo ves, mira en Spam o Promociones.'; btn.disabled = false; return; }
         } else await C.signIn(email, $('#apass').value);
         closeSheet(); toast(signup ? 'Cuenta creada. ¡Bienvenido a Mediciona!' : 'Sesión iniciada');
       } catch (er) { msg.textContent = er.message; btn.disabled = false; }
