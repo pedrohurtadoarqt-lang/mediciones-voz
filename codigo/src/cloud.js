@@ -17,7 +17,9 @@
   function available() { return !!(CFG && root.supabase && root.supabase.createClient); }
   function init() {
     if (!available() || sb) return !!sb;
-    sb = root.supabase.createClient(CFG.url, CFG.anonKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'mediciona-auth' } });
+    sb = root.supabase.createClient(CFG.url, CFG.anonKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'mediciona-auth',
+      // Sin bloqueo entre pestañas: una pestaña antigua colgada no puede bloquear a las demás
+      lock: async (_name, _timeout, fn) => await fn() } });
     // Importante: no llamar a Supabase dentro de este aviso (bloquearía la sesión y dejaría
     // colgadas todas las peticiones). Se difiere al siguiente ciclo.
     sb.auth.onAuthStateChange((ev, session) => {
