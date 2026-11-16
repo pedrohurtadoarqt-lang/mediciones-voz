@@ -140,6 +140,12 @@
     return data;
   }
 
+  async function agent(ctx) {
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.functions.invoke('ai-interpret', { body: Object.assign({ modo: 'agente' }, ctx) });
+    if (error) throw new Error(errMsg(error));
+    return data;
+  }
   /* ---------------- Envío de archivos al correo ---------------- */
   async function sendFiles(body) {
     if (!user) throw new Error('Entra en tu cuenta para enviar archivos.');
@@ -190,6 +196,6 @@
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, resendConfirmation, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
     get pendingCount() { return pending.size; },
-    syncObras, queue, flush, deleteObra, ai, sendFiles, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
+    syncObras, queue, flush, deleteObra, ai, agent, sendFiles, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
   };
 })(typeof self !== 'undefined' ? self : this);

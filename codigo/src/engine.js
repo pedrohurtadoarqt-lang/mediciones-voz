@@ -767,6 +767,8 @@
       this.changing = null; // si se abandona una corrección de partida a medias, se descarta
       if (input && input.act) return this.handleAct(input.act);
       if (!text) return;
+      // IA primero: todo lo que no sea una medida suelta o una orden exacta lo interpreta la IA con el contexto completo
+      if (!this.noAgent && this.agentReady() && !this.isTrivial(text, n)) return this.runAgent(text);
       const act = this.active();
 
       if (this.tryCommands(text, n) !== false) return;
@@ -962,6 +964,7 @@
       const skip = (input && input.act && input.act.skipH) || /^(sin altura|luego|despues|mas tarde|no|ahora no|dejalo)/.test(n);
       if (!skip) {
         const v = parseNumber(text);
+        if ((v === null || v <= 0.3 || v >= 20 || contentWords(text).filter((w) => !/altura|alto|metros?/.test(w)).length) && this.agentReady()) { this.state = { mode: 'idle' }; return this.runAgent(text, 'la app había preguntado la altura de las paredes de la estancia'); }
         if (v === null || v <= 0.3 || v >= 20) return this.ask('Dime la altura, por ejemplo: 2,60.', this.lastPrompt.chips);
         this.state = { mode: 'idle' };
         this.applyAltura(v);
@@ -1210,6 +1213,7 @@
     /* ---- IA de respaldo ----
      * Solo cuando el motor no está seguro. Si no hay IA (sin sesión, sin conexión) o falla, se usa el plan B. */
     aiOr(frase, motivo, fallback) {
+      if (!this.noAgent && this.agentReady()) return this.runAgent(frase, motivo, fallback);
       const io = this.io;
       const AIm = root.AI;
       if (!io.ai || !AIm || !io.aiReady || !io.aiReady()) return fallback();
@@ -1237,6 +1241,177 @@
         this.state = { mode: 'idle' };
         this.applyAI(r, frase, fallback);
       }).catch(() => { clearTimeout(timer); if (token !== this.aiToken) return; this.state = { mode: 'idle' }; fallback(); });
+    }
+    /* ============================================================
+     * MODO AGENTE (IA primero)
+     * ============================================================ */
+    agentReady() { return !!(this.io.agent && this.io.aiReady && this.io.aiReady() && root.AI); }
+    /** Lo que el motor resuelve al instante sin IA: medidas sueltas y órdenes exactas. */
+    isTrivial(text, n) {
+      const act = this.active();
+      if (/^(siguiente partida|nueva partida|otra partida|siguiente estancia|otra estancia|cambiar estancia|terminar|termina|terminado|he terminado|fin|eso es todo|lee las lineas|leer lineas|lee la partida|para|parar|stop|basta|pausa|silencio|deshacer|deshaz|atras|ayuda|repite|cancela|cancelar|resumen|no|nada|nada mas|si|vale|ok|seguir midiendo|mismas medidas|las mismas|medidas nuevas|exporta el pdf|exporta el excel|exporta el bc3|genera el pdf|envíame los archivos por correo|enviame los archivos por correo)$/.test(n)) return true;
+      if (/^(?:pasamos|vamos|estamos|entramos)\s+(?:a|al|a la|en|en el|en la)\s+\S+(\s+\d+)?$/.test(n) || /^estancia\s+\S+/.test(n)) return true;
+      const cw = contentWords(text);
+      const GEO = /(rectangul|parte|forma|irregular|perimetro|altura|alto|ancho|largo|superficie|total|igual|mismo|aprovech|antes|anterior)/;
+      if (/^(?:la\s+)?(?:altura|alto)(?:\s+es|\s+de)?\s+[\d,.\s]+(?:metros|m|centimetros|cm)?$/.test(n)) return true;
+      if (/^(?:el\s+)?perimetro\b/.test(n) && tokenize(n.replace(/^(?:el\s+)?perimetro\s*(?:total|es|son|de|mide|:)?/, '')).every((x) => x.k === 'N' || /^(mas|y|con|coma|metros?|m|centimetros?|cm|de|es|total)$/.test(x.n))) return true;
+      if (/^superficie\b/.test(n) && cw.filter((w) => !/superficie|total/.test(w)).length === 0) return true;
+      const pm = parseMeasure(text);
+      const correction = /\b(no|era|eran|corrige|corregir|cambia|cambiar|mal|equivoc|perdon|mejor|en realidad|borra|la ultima|el ultimo|la primera|el primero|segund|tercer|anterior|lo mismo|igual que|aprovecha)\b/.test(n);
+      if (act && pm.count >= 1 && !correction && cw.length <= 2 && !cw.some((w) => GEO.test(w))) return true;
+      return false;
+    }
+    agentContext(text, pendiente) {
+      const est = this.obra.estActiva || '';
+      const ne = norm(est);
+      const act = this.active();
+      const pack = (p) => ({ ref: p.ref, r: p.r, u: p.u, orient: p.orient, total: totalOf(p), lineas: p.lineas.map((l) => ({ est: l.est, com: l.com, uds: l.uds, l: l.l, a: l.a, h: l.h, hPend: !!(l.hPend && l.h == null), p: parcial(l) })) });
+      const otras = this.obra.partidas.filter((p) => p !== act && p.lineas.some((l) => norm(l.est || '') === ne)).sort((a, b) => (b.mod || 0) - (a.mod || 0)).slice(0, 6)
+        .map((p) => Object.assign(pack(p), { lineas: pack(p).lineas.filter((l) => norm(l.est || '') === ne) }));
+      const resto = this.obra.partidas.filter((p) => p !== act && !otras.some((o) => o.ref === p.ref)).slice(0, 30).map((p) => p.ref + ' · ' + p.r);
+      return {
+        obra_id: this.obra.id, frase: text, estancia: est, altura: this.alturaEst(est),
+        activa: act ? pack(act) : null, otras, resto, pendiente: pendiente || '',
+        historial: (this.io.history ? this.io.history() : []).slice(-8),
+        candidatas: root.AI.candidates(this.cat, text).slice(0, 50).map((d) => ({ c: d.c, u: d.u, r: d.r, path: d.path }))
+      };
+    }
+    runAgent(text, pendiente, fallback) {
+      const io = this.io;
+      const token = (this.aiToken = (this.aiToken || 0) + 1);
+      const pend = pendiente || (this.state.mode !== 'idle' && this.lastPrompt ? this.lastPrompt.text : '');
+      const ctx = this.agentContext(text, pend);
+      this.state = { mode: 'thinking' };
+      io.note && io.note('Pensando…');
+      const aviso = () => { if (!this.aiDownNoted) { this.aiDownNoted = true; io.note && io.note('La IA no responde ahora mismo; sigo en modo básico.'); } };
+      const plan0 = fallback || (() => { this.noAgent = true; try { this.state = { mode: 'idle' }; this.st_idle(text, norm(text)); } finally { this.noAgent = false; } });
+      const plan = () => { aviso(); plan0(); };
+      const timer = setTimeout(() => { if (token === this.aiToken) { this.aiToken++; this.state = { mode: 'idle' }; plan(); } }, 20000);
+      Promise.resolve(io.agent(ctx)).then((raw) => {
+        clearTimeout(timer);
+        if (token !== this.aiToken) return;
+        const r = raw && raw.result ? raw.result : raw;
+        this.state = { mode: 'idle' };
+        if (!r || !Array.isArray(r.acciones)) return plan();
+        this.aiDownNoted = false;
+        this.applyAgent(r);
+      }).catch(() => { clearTimeout(timer); if (token !== this.aiToken) return; this.state = { mode: 'idle' }; plan(); });
+    }
+    applyAgent(r) {
+      const cat = this.cat;
+      const problems = [];
+      let changed = false, orden = null, touched = null;
+      this.snapshot();
+      const cur = () => this.active();
+      const num = (v) => (typeof v === 'number' && isFinite(v) && v > -1000 && v < 10000 ? round2(v) : null);
+      const activateDoc = (d) => {
+        let p = this.obra.partidas.find((x) => x.ref === d.c);
+        if (!p) {
+          p = { uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ref: d.c, u: d.u, r: d.r, t: d.t, chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder, subTitle: d.subTitle, lineas: [], creada: Date.now() };
+          p.orient = orientOf(p); this.obra.partidas.push(p);
+        }
+        this.markActivation(p, this.lastQuery, !p.lineas.length);
+        this.obra.activa = p.uid; p.mod = Date.now();
+        return p;
+      };
+      for (const a of r.acciones.slice(0, 20)) {
+        try {
+          switch (a.tipo) {
+            case 'elegir_partida': {
+              const ex = this.obra.partidas.find((x) => x.ref === a.codigo);
+              const d = cat.byCode.get(a.codigo);
+              if (ex) { this.obra.activa = ex.uid; ex.mod = Date.now(); this.markActivation(ex, null, false); }
+              else if (d) activateDoc(d);
+              else problems.push('no encuentro la partida ' + a.codigo);
+              break;
+            }
+            case 'crear_partida': {
+              if (!a.descripcion || !['ud', 'm', 'm2', 'm3'].includes(a.unidad)) { problems.push('faltan datos para crear la partida'); break; }
+              this.obra.propiaSeq = (this.obra.propiaSeq || 0) + 1;
+              const code = 'PROPIA.' + String(this.obra.propiaSeq).padStart(3, '0');
+              const res = cat.index.search(a.descripcion);
+              const isDem = /demol|levant|picad|picar|quitar|retir|arranc|desmont|elimin|derrib|rascad/.test(norm(a.descripcion));
+              const g = (isDem && (res.find((x) => /DEMOLIC/i.test(x.doc.chapTitle)) || {}).doc) || (res.length && res[0].s > 0.12 ? res[0].doc : null);
+              const p = { uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ref: code, propia: true, u: a.unidad, r: cap(a.descripcion), t: cap(a.descripcion), chap: g ? g.chap : 'PROPIAS', chapTitle: g ? g.chapTitle : 'PARTIDAS PROPIAS', chapOrder: g ? g.chapOrder : 9999, subTitle: g ? g.subTitle : '', lineas: [], creada: Date.now() };
+              p.orient = a.orientacion === 'paredes' ? 'V' : a.orientacion ? 'H' : orientOf(p);
+              this.obra.partidas.push(p); this.obra.activa = p.uid; this.markActivation(p, null, true);
+              break;
+            }
+            case 'anadir_lineas': {
+              const p = cur(); if (!p) { problems.push('no hay partida para anotar las medidas'); break; }
+              const hEst = this.isWall(p) ? this.alturaEst(this.obra.estActiva) : null;
+              for (const ln of (a.lineas_nuevas || []).slice(0, 30)) {
+                let l = num(ln.largo), w = num(ln.ancho), h = num(ln.alto), u = num(ln.uds);
+                if (p.u === 'm2' && p.orient === 'V' && h == null && w != null) { h = w; w = null; }
+                if (p.u === 'm2' && p.orient !== 'V' && w == null && h != null) { w = h; h = null; }
+                if (p.u === 'm' || p.u === 'ud') { w = null; if (p.u === 'ud') { h = null; l = null; } }
+                if (u == null) u = 1;
+                if (ln.deduccion) u = -Math.abs(u);
+                const nl = { id: this.nextId(p), est: this.estPrefix(), com: cap(ln.comentario || (ln.deduccion ? 'Deducción hueco' : '')), uds: u, l, a: w, h };
+                if (this.isWall(p) && nl.h == null) { if (hEst) nl.h = hEst; else nl.hPend = true; }
+                p.lineas.push(nl); changed = true; touched = p;
+              }
+              p.mod = Date.now();
+              break;
+            }
+            case 'editar_linea': {
+              const p = cur(); const l = p && p.lineas[(a.linea || 0) - 1];
+              if (!l) { problems.push('no existe la línea ' + a.linea); break; }
+              const c = a.campos || {};
+              if (c.comentario != null) l.com = cap(c.comentario);
+              if (num(c.uds) != null) l.uds = (l.uds < 0 ? -Math.abs(num(c.uds)) : num(c.uds));
+              if (num(c.largo) != null) l.l = num(c.largo);
+              if (num(c.ancho) != null) { if (p.u === 'm2' && p.orient === 'V') l.h = num(c.ancho); else l.a = num(c.ancho); }
+              if (num(c.alto) != null) { if (p.u === 'm2' && p.orient !== 'V') l.a = num(c.alto); else { l.h = num(c.alto); delete l.hPend; } }
+              p.mod = Date.now(); changed = true; touched = p;
+              break;
+            }
+            case 'borrar_lineas': {
+              const p = cur(); if (!p) break;
+              [...new Set(a.lineas || [])].sort((x, y) => y - x).forEach((i) => { if (p.lineas[i - 1]) { p.lineas.splice(i - 1, 1); changed = true; } });
+              touched = p; break;
+            }
+            case 'copiar_lineas': {
+              const p = cur(); const src = this.obra.partidas.find((x) => x.ref === a.desde);
+              if (!p || !src || src === p) { problems.push('no puedo copiar esas medidas'); break; }
+              const est = a.solo_estancia ? this.obra.estActiva : null;
+              this.muteAsk = true; try { this.copyLines(src, p, { est }); } finally { this.muteAsk = false; }
+              changed = true; touched = p; break;
+            }
+            case 'fijar_altura': {
+              const v = num(a.altura); if (!v || v <= 0.3 || v >= 20) { problems.push('la altura no es válida'); break; }
+              this.obra.alturas = this.obra.alturas || {}; this.obra.alturas[norm(this.obra.estActiva || '')] = v;
+              this.pendingWalls(this.obra.estActiva).forEach(([pp, l]) => { l.h = v; delete l.hPend; });
+              changed = true; touched = touched || cur(); break;
+            }
+            case 'cambiar_estancia': if (a.estancia) this.setEstancia(estanciaName(a.estancia)); break;
+            case 'orden': if (a.texto) orden = a.texto; break;
+          }
+        } catch (e) { problems.push('error al aplicar una acción'); }
+      }
+      this.touch();
+      if (changed) this.io.flash && this.io.flash('ok');
+      let msg = (r.mensaje || '').trim();
+      if (problems.length) msg += ' (No he podido: ' + problems.join('; ') + '.)';
+      const p = touched || cur();
+      if (changed && p) {
+        const pend = p.lineas.filter((l) => l.hPend && l.h == null).length;
+        msg += ' Total ' + p.r.split(',')[0] + ': ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '.' + (pend && !r.pregunta ? ' Falta la altura de ' + (pend === 1 ? '1 pared' : pend + ' paredes') + '.' : '');
+      }
+      if (orden) {
+        this.io.note && msg && this.io.note(msg);
+        const t = norm(orden);
+        if (this.tryCommands(orden, t) === false) this.ask(msg || 'Hecho.', this.idleChips());
+        return;
+      }
+      if (r.pregunta) {
+        this.state = { mode: 'idle' };
+        const chips = (r.opciones || []).slice(0, 5).map((o) => ({ label: cap(o), value: o }));
+        return this.ask((msg ? msg + ' ' : '') + r.pregunta, chips.length ? chips : this.idleChips());
+      }
+      const a0 = cur();
+      if (!changed && a0 && !msg) msg = 'Partida ' + a0.r + '. ' + this.dimsAsk(a0);
+      this.ask(msg || 'Hecho.', this.idleChips());
     }
     st_thinking(text, n, input) {
       // Si el usuario habla mientras la IA piensa, se abandona la consulta y se atiende lo nuevo
@@ -1297,6 +1472,7 @@
         if (/^(si|vale|ok|correcto|esa|eso|exacto|perfecto|de acuerdo|afirmativo|claro|sí)\b/.test(n)) yes = true;
         else if (/^(no|otra|tampoco|esa no|incorrecto|negativo|no es)\b/.test(n)) yes = false;
       }
+      if (yes === null && this.agentReady() && contentWords(text).length >= 2) { this.state = { mode: 'idle' }; return this.runAgent(text, this.lastPrompt ? this.lastPrompt.text : ''); }
       if (yes === null) {
         const pm = parseMeasure(text);
         if (pm.count >= 1 && contentWords(text).length <= 3) { this.pickDoc(st.d, '', st.query); if (this.state.mode !== 'idle') this.state = { mode: 'idle' }; return this.addMeasure(pm, text); }
@@ -1404,6 +1580,7 @@
         else if (/^(la )?(primera|primero)$/.test(n)) i = 0;
         else if (/^(la )?(segunda|segundo)$/.test(n)) i = st.srcs[1] ? 1 : -1;
       }
+      if (i === null && this.agentReady() && contentWords(text).length >= 2) { this.state = { mode: 'idle' }; return this.runAgent(text, this.lastPrompt ? this.lastPrompt.text : ''); }
       if (i === null) {
         const pm = parseMeasure(text);
         if (pm.count >= 1 && this.looksLikeMeasure(pm, text, st.p)) { this.state = { mode: 'idle' }; return this.addMeasure(pm, text); }
@@ -1687,10 +1864,15 @@
     addMeasure(pm, text) {
       const p = this.active();
       // Números muy grandes sin unidad: probablemente centímetros → preguntar
+      // Huecos (puertas, ventanas): nunca miden más de 10 m → lo que pase de 10 son centímetros
+      if (pm.ded && !pm.metros) {
+        const c = (v) => (v > 10 ? round2(v / 100) : v);
+        if (pm.dims.some((v) => v > 10) || Object.values(pm.labeled).some((v) => v > 10)) { pm.dims = pm.dims.map(c); Object.keys(pm.labeled).forEach((k) => { pm.labeled[k] = c(pm.labeled[k]); }); pm.cm = true; }
+      }
       if (!pm.cm && !pm.metros && !this.cmOk && ['m', 'm2', 'm3'].includes(p.u)) {
         const vals = pm.dims.concat(Object.values(pm.labeled));
         const lim = p.u === 'm' ? 100 : 30;
-        if (vals.length && vals.some((v) => v >= lim) && vals.every((v) => Number.isInteger(v) || v >= lim)) {
+        if (vals.length && vals.some((v) => v >= lim)) {
           const conv = vals.map((v) => fmt(v >= 10 ? v / 100 : v));
           this.state = { mode: 'cmconfirm', pm, text };
           return this.ask('¿Son centímetros? Lo anotaría como ' + conv.join(' por ') + ' metros.', [{ label: 'Sí, centímetros', value: 'sí', act: { cm: true } }, { label: 'No, son metros', value: 'no', act: { cm: false } }]);

@@ -251,6 +251,7 @@
     exportBc3: () => exportFile(S.obra, 'bc3'),
     aiReady: () => S.settings.ia !== false && !!(window.Cloud && Cloud.user) && navigator.onLine !== false,
     ai: (ctx) => Cloud.ai(ctx),
+    agent: (ctx) => Cloud.agent(ctx),
     history: () => S.log.slice(-6),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },

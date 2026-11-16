@@ -107,7 +107,103 @@
     return r;
   }
 
-  const api = { SYSTEM, SCHEMA, candidates, buildUser, requestBody, validate, interpret };
+  /* ============================================================
+   * MODO AGENTE: la IA entiende la frase con todo el contexto de la
+   * medición y devuelve ACCIONES que la app valida y ejecuta.
+   * ============================================================ */
+  const AGENT_SYSTEM = [
+    'Eres el asistente de Mediciona, una app para tomar mediciones de obra hablando, usada por arquitectos técnicos, jefes de obra y constructores en España.',
+    'Hablas con el usuario mientras recorre la obra. Entiendes el lenguaje natural de obra, con rodeos, correcciones y referencias a lo dicho antes ("lo mismo que el suelo", "no, el segundo era 4,20", "quita la última", "ahora pintamos esas paredes").',
+    'Recibes: la frase del usuario (transcrita por voz, puede tener errores), el estado de la medición (estancia, partida activa con sus líneas numeradas, otras partidas medidas en la estancia, altura de la estancia) y partidas candidatas de la base de datos.',
+    'Decides qué quiere y respondes SOLO con el JSON pedido: una lista de acciones que la app ejecutará y un mensaje corto para decirle en voz alta.',
+    '',
+    'ACCIONES (campo "tipo"):',
+    '- "elegir_partida": usa "codigo" de la lista de candidatas o de las partidas de la obra. Nunca inventes códigos.',
+    '- "crear_partida": si ninguna candidata corresponde de verdad. "descripcion" breve y profesional, "unidad" (ud, m, m2, m3) y "orientacion" ("paredes", "suelo", "techo" o null).',
+    '- "anadir_lineas": añade líneas a la partida activa (o a la recién elegida/creada en esta misma respuesta). Cada línea: "comentario", "uds", "largo", "ancho", "alto" en METROS (null si no aplica) y "deduccion" (true para huecos que se restan).',
+    '   · m2 de suelo o techo: largo y ancho. m2 de paredes: largo (longitud o perímetro) y alto. m: largo. m3: largo, ancho y alto. ud: uds.',
+    '- "editar_linea": "linea" (número de línea de la partida activa) y en "campos" solo los valores que cambian.',
+    '- "borrar_lineas": "lineas" con los números a borrar.',
+    '- "copiar_lineas": copia a la partida activa las líneas de otra partida de la obra ("desde": su código), opcionalmente solo de la estancia activa ("solo_estancia": true).',
+    '- "fijar_altura": "altura" de la estancia en metros (se aplica a las paredes que no la tengan).',
+    '- "cambiar_estancia": "estancia" con el nombre (Salón, Baño 1, Dormitorio 2...).',
+    '- "orden": "texto" con una de estas órdenes: "siguiente partida", "terminar", "deshacer", "lee las líneas", "siguiente estancia", "para", "exporta el pdf", "envíame los archivos por correo".',
+    '',
+    'CÓMO RAZONAR:',
+    '1. Las correcciones se refieren normalmente a lo último que se ha medido o dicho. Si el usuario corrige ("no, era 4,20", "el ancho es 3,10", "esa no"), edita la línea concreta en vez de añadir otra.',
+    '2. Reutiliza lo que ya se sabe de la estancia: si pide una partida de paredes y ya hay paredes medidas (perímetro y altura) en otra partida, cópialas. Si solo hay medidas de suelo, puedes deducir el perímetro SOLO si la forma es inequívoca: un rectángulo L×A tiene perímetro 2·(L+A). Si el suelo son varios rectángulos y no sabes cómo se unen, NO lo deduzcas: pregunta el perímetro.',
+    '3. Para paredes necesitas perímetro (o longitudes) y altura. Si falta la altura y la estancia no la tiene, añade las líneas con alto null y pregunta la altura.',
+    '4. Distingue demolición/retirada (quitar, picar, levantar, eliminar, arrancar, rascar) de obra nueva (colocar, poner, alicatar, solar, pintar).',
+    '5. Medidas en metros. Convierte centímetros ("340 centímetros" = 3,40) y números hablados ("tres con cuarenta" = 3,40; "dos cincuenta" = 2,50). Números grandes sin unidad (340) son centímetros.',
+    '6. Si dudas de verdad, no adivines: no hagas acciones y pon una pregunta clara y corta en "pregunta", con opciones si ayudan.',
+    '7. Si eliges una partida que no es evidente, dilo en el mensaje para que el usuario pueda corregir.',
+    '',
+    'EL MENSAJE: en español de España, natural y breve (una o dos frases), como un compañero de obra. Di lo que has hecho y lo que necesitas a continuación. Cuando hayas calculado algo, di el cálculo ("perímetro 2 por 4,20 más 3,10, 14,60 metros"). No repitas el total: la app lo añade.'
+  ].join('\n');
+
+  const NUM = { type: ['number', 'null'] };
+  const AGENT_SCHEMA = {
+    type: 'object',
+    properties: {
+      acciones: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            tipo: { type: 'string', enum: ['elegir_partida', 'crear_partida', 'anadir_lineas', 'editar_linea', 'borrar_lineas', 'copiar_lineas', 'fijar_altura', 'cambiar_estancia', 'orden'] },
+            codigo: { type: ['string', 'null'] },
+            descripcion: { type: ['string', 'null'] },
+            unidad: { type: ['string', 'null'], enum: ['ud', 'm', 'm2', 'm3', null] },
+            orientacion: { type: ['string', 'null'], enum: ['paredes', 'suelo', 'techo', null] },
+            lineas_nuevas: { type: 'array', items: { type: 'object', properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, ancho: NUM, alto: NUM, deduccion: { type: 'boolean' } }, required: ['comentario', 'uds', 'largo', 'ancho', 'alto', 'deduccion'], additionalProperties: false } },
+            linea: { type: ['integer', 'null'] },
+            campos: { type: ['object', 'null'], properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, ancho: NUM, alto: NUM }, required: ['comentario', 'uds', 'largo', 'ancho', 'alto'], additionalProperties: false },
+            lineas: { type: 'array', items: { type: 'integer' } },
+            desde: { type: ['string', 'null'] },
+            solo_estancia: { type: ['boolean', 'null'] },
+            altura: NUM,
+            estancia: { type: ['string', 'null'] },
+            texto: { type: ['string', 'null'] }
+          },
+          required: ['tipo', 'codigo', 'descripcion', 'unidad', 'orientacion', 'lineas_nuevas', 'linea', 'campos', 'lineas', 'desde', 'solo_estancia', 'altura', 'estancia', 'texto'],
+          additionalProperties: false
+        }
+      },
+      mensaje: { type: 'string' },
+      pregunta: { type: ['string', 'null'] },
+      opciones: { type: 'array', items: { type: 'string' } }
+    },
+    required: ['acciones', 'mensaje', 'pregunta', 'opciones'],
+    additionalProperties: false
+  };
+
+  const f2 = (v) => (v == null ? '-' : String(Math.round(v * 100) / 100).replace('.', ','));
+  function lineTxt(l, i) {
+    return '  ' + (i + 1) + '. ' + [l.est, l.com].filter(Boolean).join(' · ') + ' | uds ' + f2(l.uds) + ' | largo ' + f2(l.l) + ' | ancho ' + f2(l.a) + ' | alto ' + f2(l.h) + (l.hPend ? ' (falta altura)' : '') + ' | parcial ' + f2(l.p);
+  }
+  function buildAgentUser(ctx) {
+    const P = (p, all) => p.ref + ' · ' + p.r + ' (' + E.unitLabel(p.u) + (p.u === 'm2' ? (p.orient === 'V' ? ', paredes' : ', suelo/techo') : '') + ')' + '\n' + (p.lineas.length ? p.lineas.slice(-(all ? 40 : 12)).map(lineTxt).join('\n') + '\n  TOTAL ' + f2(p.total) : '  (sin líneas)');
+    const c = (ctx.candidatas || []).map((d) => d.c + ' | ' + E.unitLabel(d.u) + ' | ' + d.r + ' | ' + (d.path || '')).join('\n');
+    return [
+      'FRASE DEL USUARIO: «' + ctx.frase + '»',
+      'ESTANCIA ACTIVA: ' + (ctx.estancia || '(ninguna)') + (ctx.altura ? ' · altura conocida ' + f2(ctx.altura) + ' m' : ''),
+      'PARTIDA ACTIVA: ' + (ctx.activa ? P(ctx.activa, true) : '(ninguna)'),
+      ctx.otras && ctx.otras.length ? 'OTRAS PARTIDAS MEDIDAS EN ESTA ESTANCIA:\n' + ctx.otras.map((p) => P(p, false)).join('\n') : '',
+      ctx.resto && ctx.resto.length ? 'PARTIDAS DE LA OBRA EN OTRAS ESTANCIAS (código · resumen): ' + ctx.resto.join('; ') : '',
+      ctx.pendiente ? 'LA APP ESTABA ESPERANDO: ' + ctx.pendiente : '',
+      ctx.historial && ctx.historial.length ? 'CONVERSACIÓN RECIENTE:\n' + ctx.historial.slice(-8).map((m) => (m.who === 'user' ? 'Usuario: ' : 'App: ') + m.text).join('\n') : '',
+      c ? 'PARTIDAS CANDIDATAS DE LA BASE (código | unidad | resumen | capítulo):\n' + c : ''
+    ].filter(Boolean).join('\n\n');
+  }
+  function agentRequestBody(ctx, model) {
+    return {
+      model,
+      messages: [{ role: 'system', content: AGENT_SYSTEM }, { role: 'user', content: buildAgentUser(ctx) }],
+      response_format: { type: 'json_schema', json_schema: { name: 'acciones', strict: true, schema: AGENT_SCHEMA } },
+      temperature: 0
+    };
+  }
+  const api = { SYSTEM, SCHEMA, AGENT_SYSTEM, AGENT_SCHEMA, candidates, buildUser, buildAgentUser, requestBody, agentRequestBody, validate, interpret };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AI = api;
 })(typeof self !== 'undefined' ? self : this);
