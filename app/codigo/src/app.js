@@ -246,6 +246,8 @@
     render: () => render(),
     getCatalog: () => catFor(S.obra),
     exportPdf: () => exportPdf(S.obra),
+    exportXlsx: () => exportFile(S.obra, 'xlsx'),
+    exportBc3: () => exportFile(S.obra, 'bc3'),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },
     note: (t) => { S.log.push({ who: 'app', text: t }); logObra('app', t); renderTalk(); },
@@ -461,7 +463,7 @@
       const np = o.partidas.filter((p) => p.lineas.length).length, nl = o.partidas.reduce((a, p) => a + p.lineas.length, 0);
       h += '<div class="card"><div class="row" style="justify-content:space-between"><h3>' + esc(o.titulo) + '</h3>' + (o.ejemplo ? '<span class="badge ex">Ejemplo</span>' : o.unlocked ? '<span class="badge pro">Desbloqueada</span>' : '') + '</div>' +
         '<div class="meta">' + esc([o.cliente, o.ubicacion].filter(Boolean).join(' · ')) + (o.cliente || o.ubicacion ? ' · ' : '') + (o.ambito ? esc(E.AMBITOS[o.ambito].label) + ' · ' : '') + np + ' partidas · ' + nl + ' líneas · ' + new Date(o.updated || o.created).toLocaleDateString('es-ES') + '</div>' +
-        '<div class="row"><button class="btn primary" data-a="open" data-id="' + o.id + '">Abrir</button><button class="btn" data-a="pdf" data-id="' + o.id + '">PDF</button><button class="btn danger" data-a="delobra" data-id="' + o.id + '">Borrar</button></div></div>';
+        '<div class="row"><button class="btn primary" data-a="open" data-id="' + o.id + '">Abrir</button><button class="btn" data-a="pdf" data-id="' + o.id + '">PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">BC3</button><button class="btn danger" data-a="delobra" data-id="' + o.id + '">Borrar</button></div></div>';
     });
     h += '<p class="hint">Todo se guarda en este dispositivo. La búsqueda de partidas, el diálogo y el cálculo funcionan sin conexión y sin coste de servicios externos.</p>';
     return h;
@@ -483,7 +485,7 @@
       });
       h += '</div>';
     });
-    h += '<div class="row"><button class="btn primary" data-a="pdf" data-id="' + o.id + '">Exportar PDF</button><button class="btn" data-a="back2obra">Volver a medir</button></div>';
+    h += '<div class="row"><button class="btn primary" data-a="pdf" data-id="' + o.id + '">Exportar PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Exportar Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">Exportar BC3</button><button class="btn" data-a="back2obra">Volver a medir</button></div>';
     return h;
   }
   function viewCatalogos() {
@@ -551,9 +553,9 @@
   }
   function menuSheet() {
     const items = [['obras', ICON.obras, 'Mis obras']];
-    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
+    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
-    sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
+    sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
   function helpSheet() {
     sheet('<h2>Qué puedo decir</h2><div class="hint" style="display:flex;flex-direction:column;gap:6px">' +
@@ -564,6 +566,7 @@
         '<b>Revisión:</b> «revisa la última partida», «muéstrame la demolición de alicatado», «lee las líneas», «qué llevo medido en la cocina», «resumen»',
         '<b>Corrección:</b> «borra la última línea», «borra la línea 3», «cambia el largo de la línea 2 a 3 con 40», «cambia la última línea a 3 por 2,5», «deshacer»',
         '<b>Herencia:</b> «aplica las mismas medidas que en el pavimento», «copia las paredes del salón pero descuenta las ventanas»',
+        '<b>Exportar:</b> «exporta el PDF», «exporta en Excel», «genera el BC3»',
         '<b>Partida:</b> «siguiente partida», «ahora guarnecido de yeso», «pintura con las mismas medidas», «borra esta partida», «exporta el PDF»',
         '<b>Corregir partida:</b> «no es esa», «cambia la partida», «esa no, es solado de gres 60x60» (las medidas pasan a la nueva)',
         '<b>Paredes:</b> «3,40», «2,80»… y luego «la altura es 2,60»',
@@ -641,6 +644,7 @@
       case 'ajustes': closeSheet(); S.view = 'ajustes'; render(); break;
       case 'ayuda': helpSheet(); break;
       case 'undo': closeSheet(); $('#toast').hidden = true; if (S.obra) { dialog.handle('deshacer'); render(); } break;
+      case 'xlsx': case 'bc3': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) exportFile(o, a); break; }
       case 'pdf': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) { await loadCatalog(o.catalogo || 'palma48'); exportPdf(o); } break; }
       case 'delobra': { const o = S.obras.find((x) => x.id === el.dataset.id); confirmSheet('¿Borrar la obra «' + o.titulo + '»?', 'Borrar obra', async () => { S.obras = S.obras.filter((x) => x.id !== o.id); await StorageAdapter.del('obras', o.id); if (S.obra && S.obra.id === o.id) S.obra = null; render(); }); break; }
       case 'estancia': if (S.obra.ambito) { VoiceAdapter.stopSpeaking(); dialog.handle('siguiente estancia'); } break;
@@ -735,6 +739,20 @@
   /* ============================================================
    * EXPORTADOR PDF — Estado de mediciones (formato Presto/Arquímedes)
    * ============================================================ */
+  /** Excel (.xlsx) y BC3 (FIEBDC-3 con mediciones, sin precios). */
+  async function exportFile(obra, kind) {
+    if (!obra) return;
+    if (!obra.partidas.some((p) => p.lineas.length)) return toast('La obra no tiene mediciones todavía.');
+    const base = 'Mediciones_' + obra.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 60);
+    try {
+      const X = window.Exporters;
+      const blob = kind === 'xlsx'
+        ? new Blob([X.buildXLSX(obra)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+        : new Blob([X.buildBC3(obra)], { type: 'application/octet-stream' });
+      const ok = await saveFile(base + '.' + kind, blob);
+      if (ok) toast((kind === 'xlsx' ? 'Excel' : 'BC3') + ' generado: ' + base + '.' + kind);
+    } catch (e) { console.error(e); toast('No se pudo generar el archivo: ' + e.message); }
+  }
   async function exportPdf(obra) {
     if (!obra) return;
     const J = window.jspdf && window.jspdf.jsPDF;
@@ -920,6 +938,6 @@
       render();
     });
   }
-  window.MedicionesApp = { S, dialog, buildPdf, exportPdf };
+  window.MedicionesApp = { S, dialog, buildPdf, exportPdf, exportFile };
   boot();
 })();

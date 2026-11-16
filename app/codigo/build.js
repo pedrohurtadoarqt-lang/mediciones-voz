@@ -9,7 +9,7 @@ const fontB64 = (n) => fs.readFileSync(path.join(__dirname, 'src', 'fonts', 'Lib
 const fontJs = 'window.PDF_FONTS={regular:"' + fontB64('Regular') + '",bold:"' + fontB64('Bold') + '",italic:"' + fontB64('Italic') + '"};';
 const catJs = 'window.CATALOGO_BASE=' + JSON.stringify(cat).replace(/<\//g, '<\\/') + ';';
 const head = '<title>Mediciones por Voz</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n<meta name="theme-color" content="#0F172A">\n<style>\n' + src('styles.css') + '</style>\n';
-const scripts = ['<script>' + safe(src('vendor-jspdf.umd.min.js')) + '</script>', '<script>' + catJs + '</script>', '<script>' + fontJs + '</script>', '<script>' + safe(src('bc3.js')) + '</script>', '<script>' + safe(src('engine.js')) + '</script>', '<script>' + safe(src('app.js')) + '</script>'].join('\n');
+const scripts = ['<script>' + safe(src('vendor-jspdf.umd.min.js')) + '</script>', '<script>' + catJs + '</script>', '<script>' + fontJs + '</script>', '<script>' + safe(src('bc3.js')) + '</script>', '<script>' + safe(src('engine.js')) + '</script>', '<script>' + safe(src('export.js')) + '</script>', '<script>' + safe(src('app.js')) + '</script>'].join('\n');
 const body = src('body.html');
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'dist', 'mediciones-voz.html'), '<!doctype html>\n<html lang="es">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n' + head + '</head>\n<body>\n' + body + scripts + '\n</body>\n</html>\n');
