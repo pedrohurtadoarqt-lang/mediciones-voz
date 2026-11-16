@@ -29,7 +29,7 @@ function saneaPartida(p: any, maxL: number) {
 }
 function saneaAgente(b: any) {
   return {
-    obra_id: s(b?.obra_id, 60), frase: s(b?.frase, 600), estancia: s(b?.estancia, 80), altura: num(b?.altura), pendiente: s(b?.pendiente, 600),
+    obra_id: s(b?.obra_id, 60), frase: s(b?.frase, 600), estancia: s(b?.estancia, 80), altura: num(b?.altura), pendiente: s(b?.pendiente, 600), planta: s(b?.planta, 500),
     activa: saneaPartida(b?.activa, 60),
     otras: (Array.isArray(b?.otras) ? b.otras.slice(0, 6) : []).map((p: any) => saneaPartida(p, 15)).filter(Boolean),
     resto: (Array.isArray(b?.resto) ? b.resto.slice(0, 30) : []).map((x: unknown) => s(x, 200)),

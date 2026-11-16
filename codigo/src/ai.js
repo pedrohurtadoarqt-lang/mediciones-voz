@@ -48,12 +48,19 @@
   };
 
   /** Candidatas con buena cobertura: las mejores por puntuación + las mejores por cada palabra clave. */
+  // Palabras de medida y relleno que no describen el trabajo (contaminan la búsqueda: "altura" → barandillas)
+  const RUIDO = /^(altura|alto|alta|ancho|largo|metro|metros|centimetros|perimetro|superficie|mide|miden|medir|medimos|tiene|tienen|giro|izquierda|derecha|grados|ultima|primera|segunda|luego|ahora|vamos|tambien|toda|todo|sala|estancia|nuevo|nueva|otra|otro|mismo|misma|hay|que|para|con|las|los|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|medio|coma|por|cierro|cierra)$/;
+  const VERBOS = [[/^pint/, 'pintura'], [/^alicat/, 'alicatado'], [/^sola[rmd]/, 'solado'], [/^enluc/, 'enlucido'], [/^enfosc/, 'enfoscado'], [/^demol|^derrib/, 'demolición'], [/^pic(ar|amos|ado)/, 'picado'], [/^levant/, 'levantado'], [/^arranc|^quit|^retir/, 'demolición'], [/^impermeab/, 'impermeabilización'], [/^aisl/, 'aislamiento'], [/^rodapi/, 'rodapié'], [/^tabic/, 'tabique']];
   function candidates(cat, text, extra) {
     const idx = cat.index;
     const seen = new Map();
     const add = (r) => { if (r && !seen.has(r.doc.c)) seen.set(r.doc.c, r.doc); };
-    idx.search(text).slice(0, 30).forEach(add);
-    E.words(text).filter((w) => w.length > 3).forEach((w) => idx.search(w).slice(0, 12).forEach(add));
+    const ws = E.words(text).filter((w) => w.length > 2 && !/\d/.test(w) && !RUIDO.test(w));
+    const extras = []; ws.forEach((w) => VERBOS.forEach(([re, q]) => { if (re.test(w) && !extras.includes(q)) extras.push(q); }));
+    const limpio = ws.join(' ');
+    extras.forEach((q) => { idx.search(q + ' ' + limpio).slice(0, 20).forEach(add); idx.search(q).slice(0, 25).forEach(add); });
+    if (limpio) idx.search(limpio).slice(0, 30).forEach(add);
+    ws.filter((w) => w.length > 3).forEach((w) => idx.search(w).slice(0, 10).forEach(add));
     (extra || []).forEach((q) => idx.search(q).slice(0, 10).forEach(add));
     return [...seen.values()].slice(0, 70);
   }
@@ -121,15 +128,20 @@
     '- "elegir_partida": usa "codigo" de la lista de candidatas o de las partidas de la obra. Nunca inventes códigos.',
     '- "crear_partida": si ninguna candidata corresponde de verdad. "descripcion" breve y profesional, "unidad" (ud, m, m2, m3) y "orientacion" ("paredes", "suelo", "techo" o null).',
     '- "anadir_lineas": añade líneas a la partida activa (o a la recién elegida/creada en esta misma respuesta). Cada línea: "comentario", "uds", "largo", "ancho", "alto" en METROS (null si no aplica) y "deduccion" (true para huecos que se restan).',
+    '   · Si la estancia tiene PLANTA (ver contexto) o la describes con "recorrido" en esta misma respuesta, no pongas números: usa "medida_planta": "superficie" (suelo, techo) o "perimetro" (paredes con su alto, rodapiés), y la app pone el valor. Pon "recorrido" ANTES que "anadir_lineas".',
     '   · NO HAGAS CUENTAS: si el largo sale de una operación (perímetro, suma de paredes), escribe la operación en "largo_calculo" con números y + - * / ( ), por ejemplo "2*(2.20+1.60)", y deja "largo" a null: la app la calcula. Si el largo es un dato directo, "largo_calculo" vacío.',
     '   · m2 de suelo o techo: largo y ancho. m2 de paredes: largo (longitud o perímetro) y alto. m: largo. m3: largo, ancho y alto. ud: uds.',
     '- "editar_linea": "linea" (número de línea de la partida activa) y en "campos" solo los valores que cambian (también aquí, si el nuevo largo es una operación, ponla en "largo_calculo").',
     '   · Si el usuario corrige una medida de la que salió un perímetro (p. ej. "el largo es 2,20" cuando la línea es el perímetro de un rectángulo de 2 por 1,60), recalcula esa línea: "largo_calculo" "2*(2.20+1.60)".',
     '- "borrar_lineas": "lineas" con los números a borrar.',
     '- "copiar_lineas": copia a la partida activa las líneas de otra partida de la obra ("desde": su código), opcionalmente solo de la estancia activa ("solo_estancia": true).',
+    '- "recorrido": el usuario describe la planta de la estancia pared a pared ("pared uno 4 metros, giro 90 a la derecha, pared dos 2,50..."). En "tramos" pon cada pared en orden: "largo" en metros, "giro" que hace DESPUÉS de esa pared ("izquierda", "derecha" o "" si no lo dice) y "angulo" en grados (90 si no lo dice). "continuar": true si son más paredes de un recorrido que ya estaba en curso. "cerrar": true si ha descrito la sala entera en la frase o dice que ha terminado ("cierra", "ya está", "y vuelvo al principio"); false si va dictando pared a pared y aún no ha acabado. La app dibuja la planta, cierra la última pared si falta y calcula superficie y perímetro exactos.',
     '- "fijar_altura": "altura" de la estancia en metros (se aplica a las paredes que no la tengan).',
     '- "cambiar_estancia": "estancia" con el nombre (Salón, Baño 1, Dormitorio 2...).',
     '- "orden": "texto" con una de estas órdenes: "siguiente partida", "terminar", "deshacer", "lee las líneas", "siguiente estancia", "para", "exporta el pdf", "envíame los archivos por correo".',
+    '',
+    'FORMA DE TRABAJAR: primero se define la partida; dentro de ella el usuario da las medidas (de una o varias estancias, pared a pared si quiere); al terminar pasa a otra partida. No cambies de partida por tu cuenta mientras está midiendo: solo cuando él lo pida. Si da medidas sin partida activa, pregunta qué partida es. Al empezar una partida nueva puede referenciar las medidas de otra ya medida ("las mismas que la pintura"): usa "copiar_lineas".',
+    'En los recorridos, "pared uno", "pared cinco"... es el NÚMERO de la pared, no una medida: "pared cinco cuatro metros" es una pared de 4 metros.',
     '',
     'CÓMO RAZONAR:',
     '1. Las correcciones se refieren normalmente a lo último que se ha medido o dicho. Si el usuario corrige ("no, era 4,20", "el ancho es 3,10", "esa no"), edita la línea concreta en vez de añadir otra.',
@@ -152,12 +164,15 @@
         items: {
           type: 'object',
           properties: {
-            tipo: { type: 'string', enum: ['elegir_partida', 'crear_partida', 'anadir_lineas', 'editar_linea', 'borrar_lineas', 'copiar_lineas', 'fijar_altura', 'cambiar_estancia', 'orden'] },
+            tipo: { type: 'string', enum: ['elegir_partida', 'crear_partida', 'anadir_lineas', 'editar_linea', 'borrar_lineas', 'copiar_lineas', 'recorrido', 'fijar_altura', 'cambiar_estancia', 'orden'] },
+            tramos: { type: 'array', items: { type: 'object', properties: { largo: { type: 'number' }, giro: { type: 'string', enum: ['izquierda', 'derecha', ''] }, angulo: { type: 'number' } }, required: ['largo', 'giro', 'angulo'], additionalProperties: false } },
+            continuar: { type: 'boolean' },
+            cerrar: { type: 'boolean' },
             codigo: { type: ['string', 'null'] },
             descripcion: { type: ['string', 'null'] },
             unidad: { type: ['string', 'null'], enum: ['ud', 'm', 'm2', 'm3', null] },
             orientacion: { type: ['string', 'null'], enum: ['paredes', 'suelo', 'techo', null] },
-            lineas_nuevas: { type: 'array', items: { type: 'object', properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, largo_calculo: { type: 'string' }, ancho: NUM, alto: NUM, deduccion: { type: 'boolean' } }, required: ['comentario', 'uds', 'largo', 'largo_calculo', 'ancho', 'alto', 'deduccion'], additionalProperties: false } },
+            lineas_nuevas: { type: 'array', items: { type: 'object', properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, largo_calculo: { type: 'string' }, medida_planta: { type: 'string', enum: ['', 'superficie', 'perimetro'] }, ancho: NUM, alto: NUM, deduccion: { type: 'boolean' } }, required: ['comentario', 'uds', 'largo', 'largo_calculo', 'medida_planta', 'ancho', 'alto', 'deduccion'], additionalProperties: false } },
             linea: { type: ['integer', 'null'] },
             campos: { type: ['object', 'null'], properties: { comentario: { type: ['string', 'null'] }, uds: NUM, largo: NUM, largo_calculo: { type: 'string' }, ancho: NUM, alto: NUM }, required: ['comentario', 'uds', 'largo', 'largo_calculo', 'ancho', 'alto'], additionalProperties: false },
             lineas: { type: 'array', items: { type: 'integer' } },
@@ -167,7 +182,7 @@
             estancia: { type: ['string', 'null'] },
             texto: { type: ['string', 'null'] }
           },
-          required: ['tipo', 'codigo', 'descripcion', 'unidad', 'orientacion', 'lineas_nuevas', 'linea', 'campos', 'lineas', 'desde', 'solo_estancia', 'altura', 'estancia', 'texto'],
+          required: ['tipo', 'tramos', 'continuar', 'cerrar', 'codigo', 'descripcion', 'unidad', 'orientacion', 'lineas_nuevas', 'linea', 'campos', 'lineas', 'desde', 'solo_estancia', 'altura', 'estancia', 'texto'],
           additionalProperties: false
         }
       },
@@ -189,6 +204,7 @@
     return [
       'FRASE DEL USUARIO: «' + ctx.frase + '»',
       'ESTANCIA ACTIVA: ' + (ctx.estancia || '(ninguna)') + (ctx.altura ? ' · altura conocida ' + f2(ctx.altura) + ' m' : ''),
+      ctx.planta ? 'PLANTA DE LA ESTANCIA: ' + ctx.planta : '',
       'PARTIDA ACTIVA: ' + (ctx.activa ? P(ctx.activa, true) : '(ninguna)'),
       ctx.otras && ctx.otras.length ? 'OTRAS PARTIDAS MEDIDAS EN ESTA ESTANCIA:\n' + ctx.otras.map((p) => P(p, false)).join('\n') : '',
       ctx.resto && ctx.resto.length ? 'PARTIDAS DE LA OBRA EN OTRAS ESTANCIAS (código · resumen): ' + ctx.resto.join('; ') : '',

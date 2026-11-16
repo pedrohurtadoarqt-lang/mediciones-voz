@@ -580,6 +580,91 @@
   }
   const totalOf = (p) => round2(p.lineas.reduce((a, l) => a + parcial(l), 0));
 
+  /* ---------------- Planta dibujada a partir de un recorrido de paredes ---------------- */
+  /** tramos: [{ l, giro: 'izquierda'|'derecha'|'', ang }] → polígono, superficie, perímetro y cierre. */
+  function calcPlanta(tramos) {
+    const pts = [[0, 0]];
+    let hd = 0, x = 0, y = 0, dir = 1;
+    tramos.forEach((t, i) => {
+      x += t.l * Math.cos(hd); y += t.l * Math.sin(hd); pts.push([x, y]);
+      if (t.giro === 'izquierda') dir = 1; else if (t.giro === 'derecha') dir = -1;
+      hd += dir * ((t.ang || 90) * Math.PI / 180);
+    });
+    const r = { pts, cierre: 'exacto', aviso: '', supuestas: [] };
+    const eps = 0.03;
+    const [x0, y0] = pts[0];
+    const dx = x0 - x, dy = y0 - y, gap = Math.hypot(dx, dy);
+    const recto = tramos.every((t) => !t.ang || Math.abs(t.ang - 90) < 0.5);
+    if (gap <= eps) pts.pop();
+    else if (tramos.length < 2) { r.aviso = 'faltan paredes'; r.abierta = true; }
+    else if (!recto || Math.min(Math.abs(dx), Math.abs(dy)) <= eps) { r.cierre = '1'; r.supuestas.push(round2(gap)); }
+    else {
+      // Con giros de 90°: faltan dos paredes perpendiculares; la primera sigue perpendicular a la última dicha
+      const hx = Math.cos(hd - dir * Math.PI / 2), hy = Math.sin(hd - dir * Math.PI / 2); // dirección de la última pared
+      const c = Math.abs(hx) > 0.5 ? [x, y0] : [x0, y];
+      pts.push(c); r.cierre = '2';
+      r.supuestas.push(round2(Math.hypot(c[0] - x, c[1] - y)), round2(Math.hypot(x0 - c[0], y0 - c[1])));
+    }
+    let a = 0, per = 0;
+    for (let i = 0; i < pts.length; i++) { const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length]; a += ax * by - bx * ay; per += Math.hypot(bx - ax, by - ay); }
+    r.area = round2(Math.abs(a) / 2); r.perimetro = round2(per);
+    // Comprobación: un polígono que se cruza consigo mismo es una medida mal tomada
+    const segs = pts.map((p, i) => [p, pts[(i + 1) % pts.length]]);
+    const cruza = (p1, p2, p3, p4) => { const d = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); return d(p1, p2, p3) * d(p1, p2, p4) < -1e-6 && d(p3, p4, p1) * d(p3, p4, p2) < -1e-6; };
+    for (let i = 0; i < segs.length; i++) for (let j = i + 2; j < segs.length; j++) { if (i === 0 && j === segs.length - 1) continue; if (cruza(segs[i][0], segs[i][1], segs[j][0], segs[j][1])) r.aviso = 'las paredes se cruzan: alguna medida o giro no cuadra'; }
+    return r;
+  }
+  /** Lee un recorrido dictado ("pared uno 6 metros, a la izquierda, pared dos 3...") sin IA.
+   *  Devuelve los tramos o null si la frase no sigue ese patrón con claridad. */
+  function parseRecorrido(text) {
+    const n = norm(text);
+    const parts = n.split(/\b(?:pared|la ultima|ultima|otra pared|siguiente pared)\b/);
+    if (parts.length < 2) return null;
+    const out = [];
+    for (const ch of parts.slice(1)) {
+      const tk = tokenize(ch);
+      const nums = [];
+      let ang = 90, giro = '';
+      tk.forEach((t, i) => {
+        if (t.k === 'N') { const nx = tk[i + 1]; if (nx && nx.k === 'W' && /^grados?$/.test(nx.n)) ang = t.v; else nums.push(t); }
+        else if (t.k === 'W' && (t.n === 'izquierda' || t.n === 'derecha')) giro = t.n;
+      });
+      let l;
+      if (nums.length === 1) l = nums[0].v;
+      else if (nums.length === 2 && Number.isInteger(nums[0].v) && nums[0].v <= 30 && !nums[0].unit) l = nums[1].v; // "pared cinco, cuatro metros"
+      else return null;
+      if (!(l > 0 && l < 200)) return null;
+      out.push({ l: round2(l), giro, ang });
+    }
+    return out.length ? out : null;
+  }
+  /** Croquis SVG de la planta con la longitud de cada pared (se dibuja en el móvil, sin IA). */
+  function plantaSVG(pl) {
+    const pts = pl.pts; if (!pts || pts.length < 3) return '';
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const W = 260, pad = 34, sc = Math.min((W - 2 * pad) / Math.max(maxX - minX, 0.1), (W - 2 * pad) / Math.max(maxY - minY, 0.1));
+    const H = Math.round((maxY - minY) * sc + 2 * pad);
+    const P = (p) => [round2(pad + (p[0] - minX) * sc), round2(H - pad - (p[1] - minY) * sc)];
+    const sp = pts.map(P);
+    const nReal = pl.tramos.length;
+    const cx = sp.reduce((t, q) => t + q[0], 0) / sp.length, cy = sp.reduce((t, q) => t + q[1], 0) / sp.length;
+    let lab = '';
+    sp.forEach((a, i) => {
+      const b = sp[(i + 1) % sp.length], o = pts[i], q = pts[(i + 1) % pts.length];
+      const len = Math.hypot(q[0] - o[0], q[1] - o[1]);
+      const sup = i >= nReal;
+      // Cota hacia fuera de la sala
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, sl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      let nx = -(b[1] - a[1]) / sl, ny = (b[0] - a[0]) / sl;
+      if ((mx + nx - cx) * nx + (my + ny - cy) * ny < 0) { nx = -nx; ny = -ny; }
+      lab += '<text x="' + round2(mx + nx * 14) + '" y="' + round2(my + ny * 12 + 4) + '" text-anchor="middle" font-size="11" fill="currentColor"' + (sup ? ' font-style="italic" opacity=".7"' : '') + '>' + fmt(len) + '</text>';
+    });
+    return '<svg class="planta-svg" viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="max-width:' + W + 'px" role="img" aria-label="Croquis de la planta">' +
+      '<polygon points="' + sp.map((p) => p.join(',')).join(' ') + '" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
+      '<circle cx="' + sp[0][0] + '" cy="' + sp[0][1] + '" r="3.5" fill="currentColor"/>' + lab + '</svg>';
+  }
+
   /* ---------------- Herencia geométrica ---------------- */
   function inheritGroup(p, query) {
     const r = norm(p.r + ' ' + (p.subTitle || '')), q = norm(query || '');
@@ -1268,6 +1353,12 @@
       if (act && pm.count >= 1 && pm.count <= 3 && !correction && !habla && cw.length <= 2 && !cw.some((w) => GEO.test(w))) return true;
       return false;
     }
+    plantaDe(est) { const pl = this.obra.plantas && this.obra.plantas[norm(est || '')]; return pl || null; }
+    plantaTxt(est) {
+      const pl = this.plantaDe(est); if (!pl) return '';
+      if (pl.abierta) return 'recorrido EN CURSO con ' + pl.tramos.length + ' paredes (' + pl.tramos.map((t) => fmt(t.l)).join(', ') + '); si dice más paredes usa "recorrido" con "continuar": true.';
+      return 'cerrada, ' + (pl.tramos.length + (pl.cierre === '2' ? 2 : pl.cierre === '1' ? 1 : 0)) + ' paredes, superficie ' + fmt(pl.area) + ' m², perímetro ' + fmt(pl.perimetro) + ' m. Para usarla: "medida_planta".';
+    }
     agentContext(text, pendiente) {
       const est = this.obra.estActiva || '';
       const ne = norm(est);
@@ -1277,7 +1368,7 @@
         .map((p) => Object.assign(pack(p), { lineas: pack(p).lineas.filter((l) => norm(l.est || '') === ne) }));
       const resto = this.obra.partidas.filter((p) => p !== act && !otras.some((o) => o.ref === p.ref)).slice(0, 30).map((p) => p.ref + ' · ' + p.r);
       return {
-        obra_id: this.obra.id, frase: text, estancia: est, altura: this.alturaEst(est),
+        obra_id: this.obra.id, frase: text, estancia: est, altura: this.alturaEst(est), planta: this.plantaTxt(est),
         activa: act ? pack(act) : null, otras, resto, pendiente: pendiente || '',
         historial: (this.io.history ? this.io.history() : []).slice(-8),
         candidatas: root.AI.candidates(this.cat, text).slice(0, 50).map((d) => ({ c: d.c, u: d.u, r: d.r, path: d.path }))
@@ -1308,7 +1399,7 @@
     applyAgent(r) {
       const cat = this.cat;
       const problems = [];
-      let changed = false, orden = null, touched = null;
+      let changed = false, orden = null, touched = null, plantaMsg = null;
       this.snapshot();
       const cur = () => this.active();
       const num = (v) => (typeof v === 'number' && isFinite(v) && v > -1000 && v < 10000 ? round2(v) : null);
@@ -1360,6 +1451,12 @@
               const hEst = this.isWall(p) ? this.alturaEst(this.obra.estActiva) : null;
               for (const ln of (a.lineas_nuevas || []).slice(0, 30)) {
                 let l = calc(ln.largo_calculo) ?? num(ln.largo), w = num(ln.ancho), h = num(ln.alto), u = num(ln.uds);
+                const pl = ln.medida_planta && this.plantaDe(this.obra.estActiva);
+                if (pl && !pl.abierta) {
+                  if (ln.medida_planta === 'superficie') { l = pl.area; w = null; if (!(p.u === 'm2' && p.orient === 'V')) h = null; }
+                  else if (ln.medida_planta === 'perimetro') { l = pl.perimetro; w = null; }
+                  if (!ln.comentario) ln.comentario = ln.medida_planta === 'superficie' ? 'Superficie según planta' : 'Perímetro según planta';
+                } else if (ln.medida_planta) continue; // se anotará sola al cerrar la planta
                 if (p.u === 'm2' && p.orient === 'V' && h == null && w != null) { h = w; w = null; }
                 if (p.u === 'm2' && p.orient !== 'V' && w == null && h != null) { w = h; h = null; }
                 if (p.u === 'm' || p.u === 'ud') { w = null; if (p.u === 'ud') { h = null; l = null; } }
@@ -1368,6 +1465,7 @@
                 // Solo se descuenta si de verdad se habla de un hueco
                 if (ln.deduccion && (esHueco || /(puerta|ventana|hueco|balconera|deduc|descuento)/.test(norm(ln.comentario || '')))) u = -u;
                 const nl = { id: this.nextId(p), est: this.estPrefix(), com: cap(ln.comentario || (ln.deduccion ? 'Deducción hueco' : '')), uds: u, l, a: w, h };
+                if (pl && !pl.abierta && ln.medida_planta) nl.dePlanta = ln.medida_planta;
                 if (this.isWall(p) && nl.h == null) { if (hEst) nl.h = hEst; else nl.hPend = true; }
                 p.lineas.push(nl); changed = true; touched = p; hechas.push(nl);
               }
@@ -1381,7 +1479,7 @@
               if (c.comentario != null) l.com = cap(c.comentario);
               if (num(c.uds) != null) l.uds = (l.uds < 0 ? -Math.abs(num(c.uds)) : num(c.uds));
               const nlg = calc(c.largo_calculo) ?? num(c.largo);
-              if (nlg != null) l.l = nlg;
+              if (nlg != null) { l.l = nlg; delete l.dePlanta; }
               if (num(c.ancho) != null) { if (p.u === 'm2' && p.orient === 'V') l.h = num(c.ancho); else l.a = num(c.ancho); }
               if (num(c.alto) != null) { if (p.u === 'm2' && p.orient !== 'V') l.a = num(c.alto); else { l.h = num(c.alto); delete l.hPend; } }
               p.mod = Date.now(); changed = true; touched = p; hechas.push(l);
@@ -1398,6 +1496,46 @@
               const est = a.solo_estancia ? this.obra.estActiva : null;
               this.muteAsk = true; try { this.copyLines(src, p, { est }); } finally { this.muteAsk = false; }
               changed = true; touched = p; break;
+            }
+            case 'recorrido': {
+              let tr = (a.tramos || []).map((t) => ({ l: num(t.largo), giro: t.giro || '', ang: num(t.angulo) || 90 })).filter((t) => t.l && t.l > 0 && t.l < 200);
+              // Los números dictados se leen aquí (la IA confunde "pared cinco cuatro metros")
+              const det = parseRecorrido(this.lastAgentText || '');
+              if (det && det.length === tr.length) tr = det.map((d, i) => ({ l: d.l, giro: d.giro || tr[i].giro, ang: d.ang !== 90 ? d.ang : tr[i].ang }));
+              const key = norm(this.obra.estActiva || '');
+              this.obra.plantas = this.obra.plantas || {};
+              const prev = this.obra.plantas[key];
+              const frase = norm(this.lastAgentText || '');
+              // Si había un recorrido a medias, se sigue con él salvo que diga que empieza de nuevo
+              const sigue = prev && prev.abierta && (a.continuar || !/(empez|de nuevo|desde el principio|otra vez desde|borra)/.test(frase));
+              const tramos = (sigue ? prev.tramos : []).concat(tr);
+              if (!tramos.length) { problems.push('no he entendido las paredes'); break; }
+              const res = calcPlanta(tramos);
+              // Si la última pared acaba con un giro, el usuario va a seguir: solo se cierra si lo dice
+              const pideCierre = /(cierr|ya esta|termin|principio|eso es todo|vuelvo al|hasta el inicio|toda la sala)/.test(frase);
+              const cerrar = pideCierre || (a.cerrar && !(tr.length && tr[tr.length - 1].giro));
+              const abierta = !cerrar && res.cierre !== 'exacto';
+              const pl = { est: this.obra.estActiva || '', tramos, pts: res.pts.map((q) => [round2(q[0]), round2(q[1])]), area: res.area, perimetro: res.perimetro, cierre: res.cierre, supuestas: res.supuestas, aviso: res.aviso, abierta: abierta || !!res.abierta, fecha: Date.now() };
+              this.obra.plantas[key] = pl;
+              plantaMsg = pl;
+              // Al cerrar la planta, su medida pasa a la partida activa (salvo que ya venga en esta respuesta o ya esté)
+              const pa = cur();
+              const yaViene = r.acciones.some((x) => x.tipo === 'anadir_lineas' && (x.lineas_nuevas || []).some((l) => l.medida_planta));
+              if (!pl.abierta && pa && !yaViene && !pa.lineas.some((l) => l.dePlanta && norm(l.est || '') === key)) {
+                const pared = pa.u === 'm2' && pa.orient === 'V';
+                const med = pa.u === 'm' || pared ? 'perimetro' : pa.u === 'm2' ? 'superficie' : null;
+                if (med) {
+                  const h = pared ? this.alturaEst(this.obra.estActiva) : null;
+                  const nl = { id: this.nextId(pa), est: this.estPrefix(), com: med === 'superficie' ? 'Superficie según planta' : 'Perímetro según planta', uds: 1, l: med === 'superficie' ? pl.area : pl.perimetro, a: null, h: pared ? h : null, dePlanta: med };
+                  if (pared && !h) nl.hPend = true;
+                  pa.lineas.push(nl); pa.mod = Date.now(); changed = true; touched = pa; hechas.push(nl);
+                }
+              }
+              // Las líneas que salieron de la planta se actualizan con la nueva
+              if (!pl.abierta) this.obra.partidas.forEach((pp) => pp.lineas.forEach((l) => {
+                if (l.dePlanta && norm(l.est || '') === key) { l.l = l.dePlanta === 'superficie' ? pl.area : pl.perimetro; pp.mod = Date.now(); changed = true; }
+              }));
+              break;
             }
             case 'fijar_altura': {
               const v = num(a.altura); if (!v || v <= 0.3 || v >= 20) { problems.push('la altura no es válida'); break; }
@@ -1417,6 +1555,16 @@
       const p = touched || cur();
       // Si hay pregunta, el mensaje no debe adelantarla: se quitan sus frases interrogativas
       if (r.pregunta && msg) { const sinQ = msg.replace(/¿[^?]*\?/g, '').replace(/\s{2,}/g, ' ').trim(); if (sinQ) msg = sinQ; }
+      if (plantaMsg) {
+        const pl = plantaMsg;
+        if (pl.abierta) msg += (msg ? ' ' : '') + 'Llevo ' + pl.tramos.length + (pl.tramos.length === 1 ? ' pared' : ' paredes') + ': ' + pl.tramos.map((t) => fmt(t.l)).join(', ') + '. Sigue con la siguiente, o di «cierra».';
+        else {
+          msg += (msg ? ' ' : '') + 'Planta: ' + fmt(pl.area) + ' metros cuadrados de superficie y ' + fmt(pl.perimetro) + ' de perímetro' +
+            (pl.cierre === '1' ? ', cerrando con una pared de ' + fmt(pl.supuestas[0]) : pl.cierre === '2' ? ', cerrando con dos paredes de ' + fmt(pl.supuestas[0]) + ' y ' + fmt(pl.supuestas[1]) : '') + '.' +
+            (pl.aviso ? ' Ojo: ' + pl.aviso + '.' : '');
+          this.io.sketch && this.io.sketch(plantaSVG(pl), 'Planta ' + (pl.est || ''));
+        }
+      }
       // Se leen las medidas tal como han quedado anotadas (no las que diga la IA)
       if (hechas.length && hechas.length <= 3) {
         const d = (l) => { const dims = ['l', 'a', 'h'].filter((k) => l[k] != null).map((k) => fmt(l[k])).join(' por '); return (l.uds < 0 ? 'menos ' : '') + (l.com ? l.com.toLowerCase() + ' ' : '') + (Math.abs(l.uds || 1) !== 1 ? fmtUds(Math.abs(l.uds)) + ' de ' : '') + (dims || ''); };
@@ -2105,7 +2253,7 @@
     return caps;
   }
 
-  const api = { norm, words, stem, tokenize, parseMeasure, parseNumber, parseIndex, Index, prepareCatalog, bestSplit, prefilter, matchOption, orientOf, dimsSpec, buildLine, parcial, totalOf, inheritGroup, estanciaName, matchEstancia, ambitoFromText, Dialog, obraChapters, fmt, fmtUds, unitLabel, unitSpoken, AMBITOS, DEFAULT_ESTANCIAS, isCarpinteria, round2 };
+  const api = { norm, words, stem, tokenize, parseMeasure, parseNumber, parseIndex, Index, prepareCatalog, bestSplit, prefilter, matchOption, orientOf, dimsSpec, buildLine, parcial, totalOf, calcPlanta, plantaSVG, parseRecorrido, inheritGroup, estanciaName, matchEstancia, ambitoFromText, Dialog, obraChapters, fmt, fmtUds, unitLabel, unitSpoken, AMBITOS, DEFAULT_ESTANCIAS, isCarpinteria, round2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Engine = api;
 })(typeof self !== 'undefined' ? self : this);

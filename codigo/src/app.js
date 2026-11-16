@@ -252,10 +252,12 @@
     aiReady: () => S.settings.ia !== false && !!(window.Cloud && Cloud.user) && navigator.onLine !== false,
     ai: (ctx) => Cloud.ai(ctx),
     agent: (ctx) => Cloud.agent(ctx),
-    history: () => S.log.slice(-6),
+    history: () => S.log.filter((m) => !m.svg).slice(-6),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },
     note: (t) => { S.log.push({ who: 'app', text: t }); logObra('app', t); renderTalk(); },
+    // Croquis de la planta: solo en la conversación (se guarda en la obra; no va en el PDF ni en los archivos)
+    sketch: (svg, titulo) => { if (!svg) return; S.log.push({ who: 'app', text: titulo || 'Planta', svg }); renderTalk(); },
     confirmPick: () => S.settings.confirm !== false,
     pause: () => { sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); VoiceAdapter.needTap = true; }
   });
@@ -425,7 +427,7 @@
   function renderTalk() {
     const el = $('#talk'); if (!el) return;
     const last = S.log.slice(-4);
-    el.innerHTML = last.map((m, i) => '<div class="bub ' + m.who + (i < last.length - 2 ? ' old' : '') + '">' + esc(m.text) + '</div>').join('') +
+    el.innerHTML = last.map((m, i) => '<div class="bub ' + m.who + (m.svg ? ' sketch' : '') + (i < last.length - 2 && !m.svg ? ' old' : '') + '">' + (m.svg ? '<div class="sketch-t">' + esc(m.text) + '</div>' + m.svg : esc(m.text)) + '</div>').join('') +
       (S.partial ? '<div class="bub user live">' + esc(S.partial) + '…</div>' : '');
     el.scrollTop = el.scrollHeight;
   }

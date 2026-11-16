@@ -213,3 +213,8 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .checkline { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; font-size: var(--fs-s); color: var(--muted); line-height: 1.45; }
 .checkline input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .sheet a, .hint a { color: var(--accent); }
+
+/* Croquis de planta en la conversación */
+.bub.sketch { padding: 8px 10px; color: var(--fg); }
+.bub.sketch .sketch-t { font-size: 12px; opacity: .75; margin-bottom: 4px; }
+.bub.sketch svg { display: block; }
