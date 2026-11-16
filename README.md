@@ -1,32 +1,8 @@
-# Mediciones por voz
+# Mediciona · Mediciones de obra con IA
 
-## Versión actual: medición guiada por voz → [`app/`](app/)
-Diálogo guiado por voz (la app pregunta y escucha), base **Precios de Mallorca 2026** embebida, embudo de partidas, control dimensional por unidad, herencia suelo/techo/paredes y PDF tipo Presto/Arquímedes.
-En GitHub Pages: `https://pedrohurtadoarqt-lang.github.io/mediciones-voz/app/` (abrir en Chrome en Android o Safari en iPhone; «Añadir a pantalla de inicio»). Código fuente en [`app/codigo/`](app/codigo/).
+PWA para tomar mediciones de obra por voz sobre bases FIEBDC-3 (BC3) y exportarlas a PDF, Excel y BC3.
 
----
-
-## Prototipo anterior (raíz del repositorio)
-
-Herramienta web 100 % cliente para tomar mediciones a pie de obra dictando, sobre una base de precios FIEBDC-3 (.bc3).
-
-## Arrancar
-- Rápido: abrir `index.html` en Chrome/Edge (doble clic). Funciona el BC3, la medición, el PDF y la voz nativa.
-- Recomendado (necesario para Whisper offline e instalar como app): servir la carpeta por http y abrir `http://localhost:8000`:
-
-      python3 -m http.server 8000
-
-  Para usarlo en el móvil, publícalo en cualquier hosting estático con https (GitHub Pages, Netlify…) y "Añadir a pantalla de inicio".
-
-## Flujo
-1. Ajustes → Cargar archivo .bc3 (se parsea en un Web Worker y se guarda en IndexedDB).
-2. Catálogo → buscar/explorar y elegir partida (o por voz: «buscar enfoscado maestreado», «opción 2»).
-3. Pulsar el micrófono y dictar: «Dormitorio principal 4 con 50 por 3 con 20».
-4. Visita → PDF de mediciones, BC3 con mediciones (~M, importable en Presto/Arquímedes) o copia JSON.
-
-## Archivos
-- `js/bc3-parser.js` – parser FIEBDC-3 (ANSI/850/437, jerarquía ~C/~D, textos ~T; descarta descompuestos).
-- `js/voice-parser.js` – gramática de dictado en castellano (números en letra o cifra, «con/coma», «dos sesenta», «y medio», campos con nombre, deducciones, órdenes).
-- `js/speech.js` – motores: Web Speech API y Whisper (Transformers.js, WebGPU/WASM) con detección de voz por energía; confirmación por SpeechSynthesis.
-- `js/export.js` – PDF (jsPDF + autotable, cabecera repetida, «Suma y sigue», Página X de Y) y BC3 con ~M.
-- `js/db.js`, `js/app.js`, `sw.js` (offline), `lib/` (jsPDF local, sin CDN).
+- **App publicada:** raíz de este repositorio (GitHub Pages → mediciona.es).
+- **Código fuente:** [`codigo/`](codigo/) (`node build.js ruta/base.bc3` genera `dist/pwa/`, que se copia a la raíz).
+- **Textos legales:** [`legal/`](legal/).
+- **Prototipo anterior:** [`prototipo-v1/`](prototipo-v1/).

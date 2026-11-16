@@ -192,3 +192,4 @@ button.resumen.linklike { background: none; border: 0; padding: 0; text-align: l
 .ios-guide .arrow { align-self: center; color: var(--accent); animation: bob 1.2s ease-in-out infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
 .brandtitle { font-family: var(--brand); font-weight: 800; letter-spacing: -.01em; }
+.legal-links a { color: var(--muted); }
