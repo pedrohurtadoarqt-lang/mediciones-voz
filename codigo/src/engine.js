@@ -118,8 +118,12 @@
         if (b && b.k === 'W' && /^(con|coma|punto)$/.test(b.n) && c && c.k === 'N' && !c.dec) {
           t2.push({ k: 'N', v: a.v + c.v / Math.pow(10, c.str.length), dec: true, orig: a.orig + ' ' + b.w + ' ' + c.orig }); i += 2; continue;
         }
+        const d3 = t1[i + 3];
+        if (b && b.k === 'W' && /^(metros?|m)$/.test(b.n) && c && c.k === 'N' && !c.dec && c.v < 100 && d3 && d3.k === 'W' && /^(centimetros?|cm|cms)$/.test(d3.n)) {
+          t2.push({ k: 'N', v: a.v + c.v / 100, dec: true, unit: 'm', orig: a.orig + ' m ' + c.orig + ' cm' }); i += 3; continue;
+        }
         if (b && b.k === 'W' && /^(metros?|m)$/.test(b.n) && c && c.k === 'N' && !c.dec && c.v < 100 && !(t1[i + 3] && t1[i + 3].k === 'W' && /^(metros?|m|centimetros?|cm)$/.test(t1[i + 3].n)) && !(t1[i + 3] && t1[i + 3].k === 'W' && t1[i + 3].n === 'de')) {
-          t2.push({ k: 'N', v: a.v + c.v / Math.pow(10, c.str.length), dec: true, orig: a.orig + ' m ' + c.orig }); i += 2; continue;
+          t2.push({ k: 'N', v: a.v + c.v / Math.pow(10, c.str.length), dec: true, unit: 'm', orig: a.orig + ' m ' + c.orig }); i += 2; continue;
         }
       }
       if (a.k === 'N' && !a.dec && t1[i + 1] && t1[i + 1].k === 'W' && t1[i + 1].n === 'y' && t1[i + 2] && t1[i + 2].k === 'W' && /^medi[oa]$/.test(t1[i + 2].n)) {
@@ -127,10 +131,17 @@
       }
       if (a.k === 'N') {
         const b = t1[i + 1];
-        if (b && b.k === 'W' && /^(centimetros?|cm|cms)$/.test(b.n)) { t2.push({ k: 'N', v: a.v / 100, dec: true, orig: a.orig + ' cm' }); i++; continue; }
-        if (b && b.k === 'W' && /^(milimetros?|mm)$/.test(b.n)) { t2.push({ k: 'N', v: a.v / 1000, dec: true, orig: a.orig + ' mm' }); i++; continue; }
+        if (b && b.k === 'W' && /^(centimetros?|cm|cms)$/.test(b.n)) { t2.push({ k: 'N', v: a.v / 100, dec: true, unit: 'cm', orig: a.orig + ' cm' }); i++; continue; }
+        if (b && b.k === 'W' && /^(milimetros?|mm)$/.test(b.n)) { t2.push({ k: 'N', v: a.v / 1000, dec: true, unit: 'mm', orig: a.orig + ' mm' }); i++; continue; }
+        if (b && b.k === 'W' && /^(metros?|m|mts)$/.test(b.n)) { t2.push(Object.assign({}, a, { unit: 'm' })); i++; continue; }
       }
       t2.push(a);
+    }
+    // Si la unidad se dice una sola vez ("340 por 250 centímetros"), vale para todos los números sin unidad
+    const units = new Set(t2.filter((x) => x.k === 'N' && x.unit).map((x) => x.unit));
+    if (units.size === 1 && (units.has('cm') || units.has('mm'))) {
+      const f = units.has('cm') ? 100 : 1000;
+      t2.forEach((x) => { if (x.k === 'N' && !x.unit && !x.art && !x.dec && x.v >= (f === 100 ? 10 : 100)) { x.v = x.v / f; x.unit = units.has('cm') ? 'cm' : 'mm'; x.dec = true; x.conv = true; } });
     }
     return t2;
   }
@@ -161,7 +172,7 @@
    */
   function parseMeasure(text) {
     const tk = tokenize(text);
-    const res = { n: null, dims: [], labeled: {}, ded: false, comment: '', count: 0, orientHint: null };
+    const res = { n: null, dims: [], labeled: {}, ded: false, comment: '', count: 0, orientHint: null, cm: tk.some((x) => x.k === 'N' && (x.unit === 'cm' || x.unit === 'mm')), metros: tk.some((x) => x.k === 'N' && x.unit === 'm') };
     let pendingLabel = null;
     const commentW = [];
     let nIdx = -1;
@@ -1389,7 +1400,10 @@
       const pm = parseMeasure(text);
       if (!(pm.count >= 1 && contentWords(text).length <= 3 && (pm.count >= 2 || pm.ded || /^[\d\s,.]+$|^(tres|dos|cuatro|cinco|seis|uno|un|siete|ocho|nueve|diez)\b/.test(n.trim())))) return false;
       const walls = !/\bpor\b/.test(n);
-      const best = (walls && cands.find((c) => c.doc.attrs.orient === 'vertical')) || cands[0];
+      // La forma de la medida indica la unidad: 2 medidas → m², 3 → m³, 1 → m (o paredes), solo un entero → ud
+      const nd = pm.dims.length + Object.keys(pm.labeled).length;
+      const want = nd >= 3 ? 'm3' : nd === 2 ? 'm2' : null;
+      const best = (want && cands.find((c) => c.doc.u === want)) || (walls && cands.find((c) => c.doc.attrs.orient === 'vertical')) || (nd === 1 && cands.find((c) => c.doc.u === 'm')) || cands[0];
       const d = best.doc;
       let p = this.obra.partidas.find((x) => x.ref === d.c);
       if (!p) {
@@ -1653,6 +1667,16 @@
     nextId(p) { return p.lineas.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1; }
     addMeasure(pm, text) {
       const p = this.active();
+      // Números muy grandes sin unidad: probablemente centímetros → preguntar
+      if (!pm.cm && !pm.metros && !this.cmOk && ['m', 'm2', 'm3'].includes(p.u)) {
+        const vals = pm.dims.concat(Object.values(pm.labeled));
+        const lim = p.u === 'm' ? 100 : 30;
+        if (vals.length && vals.some((v) => v >= lim) && vals.every((v) => Number.isInteger(v) || v >= lim)) {
+          const conv = vals.map((v) => fmt(v >= 10 ? v / 100 : v));
+          this.state = { mode: 'cmconfirm', pm, text };
+          return this.ask('¿Son centímetros? Lo anotaría como ' + conv.join(' por ') + ' metros.', [{ label: 'Sí, centímetros', value: 'sí', act: { cm: true } }, { label: 'No, son metros', value: 'no', act: { cm: false } }]);
+        }
+      }
       const pend0 = this.state.pending && this.state.pending.uid === p.uid ? this.state.pending : null;
       if (!pend0 && this.isWall(p) && !pm.ded && pm.labeled.h === undefined && pm.labeled.a === undefined && pm.dims.length >= 1 && !/\bpor\b|\d\s*x\s*\d/.test(norm(text))) return this.addWalls(pm);
       const pend = pend0;
@@ -1677,7 +1701,8 @@
       this.touch();
       const parts = [];
       if (r.warn && r.warn.length) parts.push(r.warn.join(' '));
-      parts.push((ded ? 'Descontados ' : 'Anotado ') + fmt(Math.abs(parcial(nl))) + '.');
+      const dimsTxt = ['l', 'a', 'h'].filter((k) => nl[k] != null).map((k) => fmt(nl[k])).join(' por ');
+      parts.push((ded ? 'Descontados ' : 'Anotado ') + (pm.cm && dimsTxt ? dimsTxt + ' metros (convertido de centímetros), ' : '') + fmt(Math.abs(parcial(nl))) + '.');
       parts.push('Total ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '.');
       const nEst = p.lineas.filter((l) => (l.est || '') === this.estPrefix()).length;
       parts.push(nEst === 1 ? 'Dime la siguiente medida, un hueco a descontar, o di "siguiente partida".' : '¿Otra medida?');
@@ -1702,6 +1727,20 @@
       if (h) return this.ask((added.length === 1 ? 'Pared de ' + fmt(added[0].l) + ' por ' + fmt(h) + ', ' + fmt(parcial(added[0])) + '.' : 'Anotadas ' + added.length + ' paredes con altura ' + fmt(h) + '.') + ' Total ' + fmt(totalOf(p)) + ' ' + unitSpoken(p.u) + '. ¿Siguiente pared?', this.idleChips(), { short: true });
       const pw = this.pendingWalls(est).length;
       this.ask((added.length === 1 ? 'Pared de ' + fmt(added[0].l) + '.' : 'Anotadas ' + added.length + ' paredes, ' + fmt(sumL) + ' metros.') + ' ¿Siguiente pared, o dime la altura de la estancia en metros?', [{ label: 'Decir la altura', value: 'altura', act: { askH: true } }].concat(this.idleChips()), { short: true });
+    }
+    st_cmconfirm(text, n, input) {
+      const st = this.state; const a = input && input.act;
+      let yes = a && a.cm !== undefined ? a.cm : /^(si|centimetros|vale|ok|correcto|eso)\b/.test(n) ? true : /^(no|metros|son metros)\b/.test(n) ? false : null;
+      if (yes === null) { if (this.escape(text, n)) return; return this.ask('¿Son centímetros o metros?', this.lastPrompt.chips); }
+      const pm = st.pm;
+      if (yes) {
+        const c = (v) => (v >= 10 ? round2(v / 100) : v);
+        pm.dims = pm.dims.map(c); Object.keys(pm.labeled).forEach((k) => { pm.labeled[k] = c(pm.labeled[k]); });
+        pm.cm = true;
+      }
+      this.state = { mode: 'idle' };
+      this.cmOk = !yes; // si dijo "metros", no volver a preguntar en esta medida
+      try { return this.addMeasure(pm, st.text); } finally { this.cmOk = false; }
     }
     reviewLast() {
       const ps = this.obra.partidas.filter((p) => p.lineas.length).sort((a, b) => (b.mod || 0) - (a.mod || 0));

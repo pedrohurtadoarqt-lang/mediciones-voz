@@ -1,0 +1,16 @@
+#chip 4
+levantar el terrazo
+sí
+340 por 250
+sí, centímetros
+420 por 310 centímetros
+45 por 2
+no, son metros
+siguiente partida
+alicatado azulejo liso
+sí
+340
+sí
+280 centímetros
+la altura es 250 centímetros
+lee las líneas
