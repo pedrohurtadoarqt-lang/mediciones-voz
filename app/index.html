@@ -1,4 +1,16 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mediciona</title>
-<meta http-equiv="refresh" content="0; url=../"><link rel="canonical" href="../">
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){if(r.scope.indexOf('/app/')>-1)r.unregister();});});}location.replace('../');</script>
-</head><body style="background:#1A2231;color:#EEF1F7;font-family:system-ui;padding:24px">Mediciona se ha movido. <a style="color:#22D3EE" href="../">Abrir Mediciona</a> y vuelve a instalarla desde ahí.</body></html>
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Mediciona · Próximamente</title>
+<style>
+:root{--bg:#1A2231;--fg:#EEF1F7;--mut:#9AA8BF;--acc:#22D3EE}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px 16px;box-sizing:border-box}
+img{width:72px;height:72px;margin-bottom:18px}h1{font-size:28px;margin:0 0 6px}p{color:var(--mut);margin:4px 0;line-height:1.5;max-width:420px}
+.b{display:inline-block;margin-top:18px;padding:6px 14px;border:1px solid var(--acc);color:var(--acc);border-radius:999px;font-size:13px;letter-spacing:.04em}
+</style></head><body><main>
+<img src="../logo.svg" alt=""><h1>Mediciona</h1><p>Mediciones de obra con IA, hablando.</p>
+<span class="b">PRÓXIMAMENTE</span>
+<p style="margin-top:22px;font-size:13px">Estamos preparando el lanzamiento.</p>
+</main>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})});if(window.caches)caches.keys().then(function(k){k.forEach(function(n){caches.delete(n)})})}</script>
+</body></html>
