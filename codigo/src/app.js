@@ -95,7 +95,7 @@
     let cb = { onPartial() {}, onFinal() {}, onState() {}, onError() {}, onEnd() {}, onReady() {} };
     let voice = null, rate = 1.05, gotFinal = false, buf = '', bufTimer = null, lastPartial = '';
     let micState = 'unknown'; // unknown | granted | denied | unavailable
-    let needTap = false, autoRestarts = 0;
+    let needTap = false, autoRestarts = 0, retried = false, echoOn = true;
     function pickVoice(uri) {
       if (!synth) return;
       const vs = synth.getVoices().filter((v) => /^es/i.test(v.lang));
@@ -178,7 +178,7 @@
     let lastSaid = '', lastStop = 0;
     /** ¿Lo oído es la propia voz de la app (eco del altavoz)? */
     function isEcho(heard) {
-      if (!lastSaid || Date.now() - lastStop > 3500) return false;
+      if (!echoOn || !lastSaid || Date.now() - lastStop > 3500) return false;
       const w = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9ñ]+/).filter((x) => x.length > 2);
       const h = w(heard); if (h.length < 3) return false;
       const said = new Set(w(lastSaid));
@@ -202,7 +202,7 @@
       try {
         rec = new SR(); rec.lang = 'es-ES'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
         gotFinal = false; lastPartial = '';
-        rec.onstart = () => { micState = 'granted'; listening = true; needTap = false; state(); };
+        rec.onstart = () => { micState = 'granted'; listening = true; needTap = false; retried = false; state(); };
         rec.onresult = (e) => {
           if (speaking) return;
           let fin = '', inter = '';
@@ -213,7 +213,10 @@
         rec.onerror = (e) => {
           const code = e.error;
           if (code === 'not-allowed' || code === 'service-not-allowed') {
-            if (micState === 'granted' && !fromTap) { needTap = true; state(); return; } // iPhone: pide un toque para reabrir
+            if (micState === 'granted' && !fromTap) { // iPhone: se reintenta una vez; si vuelve a fallar, se pide un toque
+              if (!retried) { retried = true; setTimeout(() => { if (!speaking && !listening) listen(false); }, 700); return; }
+              needTap = true; state(); return;
+            }
             micState = 'denied';
           }
           if (code === 'aborted') return;
@@ -233,7 +236,7 @@
     }
     function stopListening() { needTap = false; if (mode === 'claude') { dict && dict.stop().catch(() => {}); return; } try { rec && rec.abort(); } catch (e) {} listening = false; state(); }
     return {
-      init, speak, stopSpeaking, listen, stopListening, unlock, isEcho,
+      init, speak, stopSpeaking, listen, stopListening, unlock, isEcho, setEcho(v) { echoOn = v; },
       on(c) { cb = Object.assign(cb, c); },
       get mode() { return mode; }, get listening() { return listening; }, get speaking() { return speaking; },
       get needTap() { return needTap; }, set needTap(v) { needTap = v; state(); },
@@ -326,8 +329,26 @@
     await VoiceAdapter.speak(text);
     if (opts.end) { endVoiceSession(); return; }
     if (tk !== sayToken) return;
-    if (vozVista() && S.settings.hands && opts.listen !== false && !S.typing) { noSpeech = 0; VoiceAdapter.listen(false); }
+    if (vozVista() && S.settings.hands && opts.listen !== false && !S.typing) { noSpeech = 0; reabrir(tk); }
   }
+  /** Reabre el micro tras hablar. Con auriculares Bluetooth se espera a que el móvil cambie el audio a modo llamada. */
+  function reabrir(tk) {
+    const ms = auriculares() ? 900 : 0;
+    const go = () => { if ((tk === undefined || tk === sayToken) && !VoiceAdapter.speaking && !VoiceAdapter.listening && vozVista() && S.session) VoiceAdapter.listen(false); };
+    if (ms) setTimeout(go, ms); else go();
+  }
+  const auriculares = () => S.settings.auriculares === true || (S.settings.auriculares !== false && S.btDetectado);
+  /** Detecta auriculares o manos libres conectados (los nombres solo se ven tras dar permiso al micro). */
+  async function detectarAuriculares() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      const ds = await navigator.mediaDevices.enumerateDevices();
+      const antes = S.btDetectado;
+      S.btDetectado = ds.some((d) => (d.kind === 'audioinput' || d.kind === 'audiooutput') && /bluetooth|airpods|buds|auricular|headset|headphone|hands-?free|manos libres|bt |jabra|bose|sony|beats|jbl|plantronics|poly/i.test(d.label || ''));
+      if (S.btDetectado !== antes) { VoiceAdapter.setEcho(!auriculares()); if (S.view === 'ajustes') render(); }
+    } catch (e) {}
+  }
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', detectarAuriculares);
   /* ---- Pantalla siempre encendida mientras se mide (Screen Wake Lock) ---- */
   let wakeLock = null;
   async function keepAwake() {
@@ -349,6 +370,7 @@
   /** Primer toque: desbloquea audio, pide permiso de micrófono y empieza la conversación guiada. */
   function startSession() {
     VoiceAdapter.unlock();
+    setTimeout(detectarAuriculares, 1500);
     keepAwake();
     const resume = S.ended; S.ended = false;
     S.session = true; S.greetPending = true;
@@ -378,7 +400,7 @@
     },
     onError(code) {
       if (code === 'no-speech') {
-        if (S.settings.hands && ++noSpeech < 3) return setTimeout(() => { if (!VoiceAdapter.speaking && vozVista()) VoiceAdapter.listen(false); }, 250);
+        if (S.settings.hands && S.session && ++noSpeech < 25) return setTimeout(() => { if (!VoiceAdapter.speaking && vozVista()) VoiceAdapter.listen(false); }, auriculares() ? 400 : 250);
         VoiceAdapter.needTap = true; return;
       }
       if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'not_granted') {
@@ -391,7 +413,7 @@
       else if (code === 'network') warnVoice('El reconocimiento de voz de este navegador necesita conexión a internet. Sin cobertura, usa el teclado.');
       else if (code === 'audio-capture') warnVoice('No se detecta micrófono en este dispositivo.');
     },
-    onEnd(got) { S.partial = ''; renderTalk(); if (!got && S.session && S.settings.hands && !VoiceAdapter.speaking && vozVista()) { if (++noSpeech < 3) VoiceAdapter.listen(false); else VoiceAdapter.needTap = true; } }
+    onEnd(got) { S.partial = ''; renderTalk(); if (!got && S.session && S.settings.hands && !VoiceAdapter.speaking && vozVista()) { if (++noSpeech < 25) setTimeout(() => { if (!VoiceAdapter.speaking && !VoiceAdapter.listening && vozVista()) VoiceAdapter.listen(false); }, auriculares() ? 400 : 150); else VoiceAdapter.needTap = true; } }
   });
   function hideWarn() { const w = $('#voicewarn'); if (w) w.hidden = true; }
   function warnVoice(t) { const w = $('#voicewarn'); w.textContent = t; w.hidden = false; }
@@ -648,6 +670,8 @@
         '<p><b>Ordenador:</b> en Microsoft Edge aparecen voces «Natural» (Elvira, Álvaro) muy humanas; en Chrome, «Google español».</p>' +
         '<p>Mediciona elige sola la mejor voz que tenga el dispositivo; también puedes escogerla arriba.</p></details>' : '') +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkia"' + (S.settings.ia !== false ? ' checked' : '') + '> Usar la IA cuando la app no entienda algo (necesita cuenta y conexión)</label>' +
+      '<label class="row" style="gap:10px"><input type="checkbox" id="chkauri"' + (auriculares() ? ' checked' : '') + '> Uso con auriculares o manos libres Bluetooth' + (S.btDetectado && S.settings.auriculares == null ? ' (detectados)' : '') + '</label>' +
+      '<p class="hint">Con auriculares la app espera un instante a que el móvil cambie el audio antes de escuchar, y no filtra el eco. Si tus auriculares no tienen micrófono, habla al del móvil.</p>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
       '<div class="field"><label for="rate">Velocidad de lectura: ' + S.settings.rate.toFixed(2) + '</label><input id="rate" type="range" min="0.7" max="1.6" step="0.05" value="' + S.settings.rate + '"></div></div>' +
       '<div class="card"><h3>Datos</h3><div class="meta">Las obras y bases importadas se guardan en este navegador (IndexedDB).</div><div class="row"><button class="btn" data-a="backup">Copia de seguridad (.json)</button><label class="btn" for="restorefile">Restaurar copia</label><input id="restorefile" type="file" accept=".json" hidden></div></div>';
@@ -1092,6 +1116,7 @@
   document.addEventListener('change', async (ev) => {
     if (ev.target.dataset && ev.target.dataset.a === 'trule') { const w = ((S.obra.guia && S.obra.guia.extra) || []).find((x) => x.id === ev.target.dataset.id); if (w) { w.regla = ev.target.value; saveObra(); } }
     if (ev.target.id === 'chkia') { S.settings.ia = ev.target.checked; saveSettings(); }
+    if (ev.target.id === 'chkauri') { S.settings.auriculares = ev.target.checked; VoiceAdapter.setEcho(!ev.target.checked); saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);
@@ -1426,6 +1451,7 @@
     }
     // iPhone: mostrar una vez la guía de instalación
     try { if (isIOS() && !isStandalone() && !localStorage.getItem('iosGuideSeen')) setTimeout(iosGuide, 1500); } catch (e) {}
+    VoiceAdapter.setEcho(S.settings.auriculares !== true);
     VoiceAdapter.init().then((m) => {
       if (m === 'none') {
         S.typing = true;

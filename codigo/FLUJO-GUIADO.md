@@ -74,7 +74,9 @@ flowchart TD
 4. Segundo fallo: consulta a la IA, que reescribe la respuesta en el formato de la pregunta.
 5. Tercer fallo: ofrece volver al paso anterior, saltar el dato o probar otra vez.
 6. Cuarto fallo: vuelve solo al paso anterior («Para no atascarnos, volvemos al paso anterior») y quita la estancia que se había empezado sin medidas.
-7. En cualquier momento: «atrás», «ayuda», «repite», «saltar», «cancela» (medición libre), «borra el pasillo», «añade armario empotrado en el dormitorio».
+7. Para corregir basta con decir «me he equivocado», «eso está mal», «atrás»… o pulsar «↩ Atrás», que está siempre visible. Primero deshace lo último anotado en la misma pregunta (la última puerta, pared, fachada o faldón); si no hay nada, vuelve a la pregunta anterior y dice qué ha quitado.
+8. Lo que interpreta la IA y los nombres de estancia poco habituales se confirman antes de aplicarse: el asistente nunca sigue por su cuenta con algo que no se ha dicho.
+9. En cualquier momento: «atrás», «ayuda», «repite», «saltar», «cancela» (medición libre), «borra el pasillo», «añade armario empotrado en el dormitorio».
 
 ## Reglas de medición
 | Regla | Cálculo |

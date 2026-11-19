@@ -532,7 +532,12 @@
     save() { this.obra.updated = Date.now(); this.io.save(); this.io.render(); }
 
     /* ---- salida ---- */
-    ask(text, chips, opts) { this.dlg.ask(text, chips || [], opts); }
+    ask(text, chips, opts) {
+      const c = (chips || []).slice();
+      const g = this.obra && this.obra.guia;
+      if (g && (g.hist || []).length && g.paso !== 'inicio' && !c.some((x) => /^(atras|volver atras)$/.test(norm(x.value || x.label || '')))) c.push({ label: '↩ Atrás', value: 'atrás' });
+      this.dlg.ask(text, c, opts);
+    }
     say(paso, d, pre) {
       const g = this.g;
       if (g.paso && g.paso !== paso) { g.hist = (g.hist || []).concat([{ paso: g.paso, d: g.d, toma: JSON.stringify(this.toma) }]).slice(-40); }
@@ -553,7 +558,7 @@
       this.aiTok = (this.aiTok || 0) + 1; // si había una consulta a la IA en curso, se abandona
       if (/^(para|parar|paro|stop|basta|basta ya|calla|callate|silencio|espera|pausa|para de escuchar|deja de escuchar|para ya)$/.test(n)) { this.io.pause && this.io.pause(); return; }
       if (/^(repite|repitelo|como dices|que has dicho|perdona|seguir midiendo|seguimos|continuar|continua|otra vez)$/.test(n)) return this.repetir();
-      if (/^(atras|vuelve atras|para atras|deshaz|deshacer|anterior|me he equivocado|corrige)\b/.test(n) && !(input && input.act)) return this.atras();
+      if (!(input && input.act) && (/^(atras|anterior|deshaz|deshacer|corrige|corregir|rectifica|error)\b/.test(n) || /(me he equivocado|me equivoque|me he confundido|esta mal|eso no es|no es eso|eso no\b|vuelve atras|volver atras|vamos atras|ir atras|para atras|paso anterior|un paso atras|retrocede|no queria decir|no era eso|borra eso|quita eso|deshaz eso)/.test(n))) return this.atras();
       if (/^(ayuda|que puedo decir|no se|como)\b/.test(n) && !(input && input.act)) return this.ayuda();
       if (/^(saltar|salta|siguiente pregunta|pasa|no lo se|no se sabe|luego)$/.test(n) && this.pasos[g.paso].saltar) return this.pasos[g.paso].saltar.call(this, g.d);
       if (/^(cancela|cancelar|dejalo|olvidalo|salir del asistente|medicion libre|modo libre)\b/.test(n)) {
@@ -575,7 +580,7 @@
       if (g.conf) {
         const c = g.conf; g.conf = null;
         const v = yesNo(n);
-        if (v === true) { const r0 = s.a.call(this, c.txt, norm(c.txt), {}, g.d); if (r0 !== false) return r0; }
+        if (v === true) { const r0 = s.a.call(this, c.txt, norm(c.txt), { conf: true }, g.d); if (r0 !== false) return r0; }
         if (v === false) { this.save(); return this.ask('Vale. ' + (s.ayuda ? s.ayuda.call(this, g.d) : s.q.call(this, g.d).t), s.q.call(this, g.d).c); }
       }
       // Frase cortada por una pausa («3 por…»): se espera al resto
@@ -587,15 +592,22 @@
       return r;
     }
     atras(msg) {
-      const g = this.g; const h = (g.hist || []).pop();
+      const g = this.g;
       g.conf = null; g.buf = null; this.lastFail = null;
+      // Primero se deshace lo último anotado dentro de esta misma pregunta (la puerta, la pared, la fachada…)
+      const sp = this.pasos[g.paso];
+      if (!msg && sp && sp.deshacer) { const m = sp.deshacer.call(this, g.d); if (m) { this.fails = 0; this.save(); return this.repetir(m); } }
+      const h = (g.hist || []).pop();
       if (!h) { this.fails = 0; return this.repetir((msg ? msg + ' ' : '') + 'Empezamos esta pregunta de nuevo.'); }
+      const antes = this.toma.zonas.map((z) => z.nombre);
       this.obra.toma = JSON.parse(h.toma); g.paso = h.paso; g.d = /^(inicio|est_nombre|est_mas|cub_nombre|mas_zona|ins_tipo)$/.test(h.paso) ? {} : h.d; this.fails = 0;
       // Las zonas empezadas y sin ninguna medida (salvo la de esta pregunta) se quitan
       const vacia = (z) => (z.ambito === 'interior' && z.area == null && !(z.tramos || []).length) || (z.ambito === 'cubierta' && z.area == null && !(z.faldones || []).length && !z.tipo);
       this.toma.zonas = this.toma.zonas.filter((z) => !(vacia(z) && z.id !== (g.d && g.d.zid)));
+      const quitadas = antes.filter((x) => !this.toma.zonas.some((z) => z.nombre === x));
+      quitadas.forEach((x) => { if (this.obra.estancias) this.obra.estancias = this.obra.estancias.filter((e) => e !== x || this.toma.zonas.some((z) => z.nombre === e)); });
       this.save();
-      this.repetir(msg || 'Vuelvo a la pregunta anterior.');
+      this.repetir((msg ? msg + ' ' : '') + (quitadas.length ? 'He quitado ' + quitadas.map((x) => art(x)).join(' y ') + '.' : 'He deshecho la última respuesta.'));
     }
     ayuda() { const s = this.pasos[this.g.paso]; this.ask((s.ayuda ? s.ayuda.call(this, this.g.d) : 'Respóndeme a la pregunta.') + ' También puedes decir «atrás» para corregir la anterior o «saltar».', this.pasos[this.g.paso].q.call(this, this.g.d).c); }
     /** No entendido: primero se vuelve a preguntar con otras palabras; después, la IA. */
@@ -645,10 +657,7 @@
         if (token !== this.aiTok || this.g.paso !== paso) return;
         const r = raw && raw.result ? raw.result : raw;
         const txt = respuestaIA(r);
-        if (txt) {
-          const res = s.a.call(this, txt, norm(txt), {}, this.g.d);
-          if (res !== false) return res;
-        }
+        if (txt) { this.g.conf = { txt, q: 'He entendido: «' + txt + '». ¿Es correcto?' }; this.save(); return this.ask(this.g.conf.q, CH([{ label: 'Sí', value: 'sí' }, { label: 'No', value: 'no' }])); }
         if (r && r.pregunta) return this.ask(r.pregunta, (r.opciones || []).slice(0, 5).map((o) => ({ label: cap(o), value: o })).concat(q.c || []).slice(0, 6));
         fallback();
       }).catch(() => { clearTimeout(timer); fallback(); });
@@ -799,18 +808,22 @@
 
   /* ---- Estancias ---- */
   // Respuestas que no son un nombre de estancia
+  const ESTANCIA_VOCAB = /\b(salon|comedor|cocina|bano|aseo|dormitorio|habitacion|cuarto|pasillo|recibidor|entrada|hall|terraza|balcon|galeria|lavadero|despensa|vestidor|estudio|despacho|garaje|trastero|sotano|buhardilla|atico|escalera|escaleras|distribuidor|porche|patio|jardin|local|oficina|almacen|nave|zona|sala|suite|lavanderia|bodega|vestibulo|office|tendedero|azotea|biblioteca|gimnasio|piscina|planta|tienda|consulta|aula|archivo|sala de|cuarto de)\b/;
   const NO_NOMBRE = /^(ni idea|no se|no lo se|nada|que|bueno|vale|pues|otra cosa|tal vez|quizas|a ver|espera|perdona|como|repite|no entiendo|ayuda|hola|gracias|venga|ok|eh|mm+|bla)\b/;
   const usados = (self) => self.toma.zonas.filter((z) => z.ambito === 'interior').map((z) => norm(z.nombre));
   P.est_nombre = {
     q() { const u = usados(this); return { t: u.length ? '¿Cuál es la siguiente estancia?' : '¿Por qué estancia empezamos?', c: CH(EST_DEF.filter((e) => !u.includes(norm(e))).slice(0, 6)) }; },
     ayuda: () => 'Dime el nombre de la estancia, por ejemplo «salón», «baño 1» o «dormitorio principal».',
     formato: () => 'el nombre de la estancia (Salón, Baño 1, Dormitorio 2…)',
-    a(text, n) {
+    a(text, n, input) {
       const limpio = text.replace(/^(?:empezamos|empezamos por|vamos|vamos al?|vamos a la|por|el|la|en|al|seguimos (?:con|por)|ahora|pasamos al?|pasamos a la)\s+/i, '').replace(/^(?:el|la)\s+/i, '');
       const mw = limpio.match(/^(.*?)[,.]?\s+(\d+(?:[.,]\d+)?\s*(?:por|x|metros|m\b|derecha|izquierda).*)$/i);
       const base = (mw ? mw[1] : limpio).split(/[,.]/)[0].replace(/\s+(?:que\s+)?(?:es|mide|tiene|son|de|con|rectangular|cuadrad[oa]|rectangulo|en forma de l|irregular|y)\b.*$/i, '').trim();
       const nombre = estanciaName(base || limpio);
-      if (!nombre || nombre.split(' ').length > 4 || !/[a-zñ]/i.test(norm(nombre)) || yesNo(norm(nombre)) !== null || NO_NOMBRE.test(norm(nombre))) return false;
+      if (!nombre || nombre.split(' ').length > 4 || !/[a-zñ]/i.test(norm(nombre)) || yesNo(norm(nombre)) !== null || NO_NOMBRE.test(norm(nombre)) || /^\d|\bpor\b/.test(norm(nombre))) return false;
+      if (!input || (!input.conf && !input.act)) {
+        if (!ESTANCIA_VOCAB.test(norm(nombre))) { this.g.conf = { txt: text, q: '¿La estancia se llama «' + nombre + '»?' }; this.save(); return this.ask(this.g.conf.q, CH([{ label: 'Sí', value: 'sí' }, { label: 'No', value: 'no' }])); }
+      }
       const u = usados(this);
       let fin = nombre;
       if (u.includes(norm(fin))) { let i = 2; while (u.includes(norm(nombre + ' ' + i))) i++; fin = nombre + ' ' + i; }
@@ -870,6 +883,7 @@
     return this.say('est_altura', { zid: z.id }, msg);
   };
   P.est_planta.aprox = aproxPlanta;
+  P.est_planta.deshacer = function (d) { const z = this.zona(d.zid); if (z && z.tramos && z.tramos.length && z.area == null) { const t = z.tramos.pop(); return 'He quitado la última pared, de ' + fmt(t.l) + '.'; } return null; };
   P.est_altura = {
     q(d) {
       const z = this.zona(d.zid);
@@ -957,11 +971,11 @@
     },
     ayuda: () => 'Dime el nombre de la siguiente estancia, o «elegir trabajos» si ya has medido todas.',
     formato: () => '«elegir trabajos» si ha terminado de medir estancias, o el nombre de la siguiente estancia',
-    a(text, n) {
+    a(text, n, input) {
       if (/(instalac|fontaner|electric)/.test(n)) { this.g.insPreguntado = true; return P.ins_tipo.a.call(this, text, n, {}, {}); }
-      if (/(trabajo|terminar|termin|ya esta|listo|ya estan|ninguna|no|elegir|seleccion|eso es todo|ya)/.test(n) && !/^(no,?\s+)?(el|la)?\s*(salon|cocina|bano|aseo|dormitorio|pasillo|terraza)/.test(n)) return this.finEstancias();
+      if (/(trabajo|terminar|termin|ya esta|ya estan|eso es todo|no hay mas|ninguna mas|nada mas|elegir|seleccion|he acabado|ya he medido)/.test(n) || /^(no|ninguna|listo|ya)$/.test(n)) return this.finEstancias();
       if (/^(si|otra|otra estancia|seguimos|vale)$/.test(n)) return this.say('est_nombre', {});
-      return P.est_nombre.a.call(this, text, n, {}, {});
+      return P.est_nombre.a.call(this, text, n, input, {});
     }
   };
 
@@ -1296,6 +1310,7 @@
     }
   };
   P.cub_planta.aprox = aproxPlanta;
+  P.cub_planta.deshacer = P.est_planta.deshacer;
   Guia.prototype.cerrarCub = function (z) {
     const res = calcPlanta(z.tramos);
     z.area = res.area; z.perimetro = res.perimetro;
@@ -1347,6 +1362,18 @@
     }
   };
   P.cub_faldones.aprox = function (text) { const v = numeros(text); return v.length === 2 ? { txt: (etiqueta(text) || 'faldón') + ' ' + String(v[0]).replace('.', ',') + ' por ' + String(v[1]).replace('.', ','), q: '¿Un faldón de ' + fmt(v[0]) + ' por ' + fmt(v[1]) + '?' } : null; };
+  P.est_huecos.deshacer = function (d) {
+    const z = this.zona(d.zid); if (d.pend) { this.g.d = { zid: d.zid }; return 'Vale, quito ese hueco.'; }
+    if (z && (z.huecos || []).length) { const x = z.huecos.pop(); return 'He quitado ' + (x.uds > 1 ? 'las ' + x.uds + ' ' + plural(x.uds, x.tipo) : (x.tipo === 'puerta' ? 'la puerta' : 'la ventana')) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al) + '.'; }
+    return null;
+  };
+  P.fac_lista.deshacer = function (d) {
+    if (d.pendAncho != null) { this.g.d = {}; return 'Vale, olvido esa fachada.'; }
+    const fs = fachadas(this); if (!fs.length) return null;
+    const z = fs[fs.length - 1]; this.toma.zonas = this.toma.zonas.filter((x) => x.id !== z.id); return 'He quitado ' + z.nombre.toLowerCase() + '.';
+  };
+  P.cub_faldones.deshacer = function (d) { const z = this.zona(d.zid); if (z && (z.faldones || []).length) { const f = z.faldones.pop(); return 'He quitado ' + f.nombre.toLowerCase() + '.'; } return null; };
+  P.fac_tipo.deshacer = function (d) { const z = fachadas(this)[d.fi]; if (z && d.ti > 0 && z.ventanas.length) { z.ventanas.pop(); this.g.d = Object.assign({}, d, { ti: d.ti - 1 }); return 'He quitado el tipo de ventana anterior. Dímelo otra vez.'; } return null; };
   P.est_huecos.aprox = function (text, d) { if (d.pend) return null; const v = numeros(text); if (v.length !== 2) return null; const t = /puerta/.test(norm(text)) || (v[1] >= 1.9 && v[0] < 1.2) ? 'puerta' : 'ventana'; return { txt: 'una ' + t + ' de ' + String(v[0]).replace('.', ',') + ' por ' + String(v[1]).replace('.', ','), q: '¿Una ' + t + ' de ' + fmt(v[0]) + ' por ' + fmt(v[1]) + '?' }; };
   P.cub_mas = {
     q: () => ({ t: '¿Medimos otra cubierta o elegimos los trabajos?', c: CH([{ label: 'Elegir trabajos', value: 'elegir trabajos' }, 'Otra cubierta']) }),
