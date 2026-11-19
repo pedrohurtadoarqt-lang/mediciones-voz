@@ -264,6 +264,7 @@
     exportXlsx: () => exportFile(S.obra, 'xlsx'),
     sendEmail: () => sendSheet(S.obra),
     exportBc3: () => exportFile(S.obra, 'bc3'),
+    shareFiles: () => shareSheet(S.obra),
     aiReady: () => S.settings.ia !== false && !!(window.Cloud && Cloud.user) && navigator.onLine !== false,
     ai: (ctx) => Cloud.ai(ctx),
     agent: (ctx) => Cloud.agent(ctx),
@@ -584,7 +585,7 @@
       const np = o.partidas.filter((p) => p.lineas.length).length, nl = o.partidas.reduce((a, p) => a + p.lineas.length, 0);
       h += '<div class="card"><div class="row" style="justify-content:space-between"><h3>' + esc(o.titulo) + '</h3>' + (o.ejemplo ? '<span class="badge ex">Ejemplo</span>' : o.unlocked ? '<span class="badge pro">Desbloqueada</span>' : '') + '</div>' +
         '<div class="meta">' + esc([o.cliente, o.ubicacion].filter(Boolean).join(' · ')) + (o.cliente || o.ubicacion ? ' · ' : '') + (o.ambito ? esc(E.AMBITOS[o.ambito].label) + ' · ' : '') + np + ' partidas · ' + nl + ' líneas · ' + new Date(o.updated || o.created).toLocaleDateString('es-ES') + '</div>' +
-        '<div class="row"><button class="btn primary" data-a="open" data-id="' + o.id + '">Abrir</button><button class="btn" data-a="pdf" data-id="' + o.id + '">PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">BC3</button><button class="btn" data-a="sendmail" data-id="' + o.id + '">Enviar al correo</button><button class="btn danger" data-a="delobra" data-id="' + o.id + '">Borrar</button></div></div>';
+        '<div class="row"><button class="btn primary" data-a="open" data-id="' + o.id + '">Abrir</button><button class="btn" data-a="pdf" data-id="' + o.id + '">PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">BC3</button><button class="btn" data-a="share" data-id="' + o.id + '">Compartir</button><button class="btn" data-a="sendmail" data-id="' + o.id + '">Enviar al correo</button><button class="btn danger" data-a="delobra" data-id="' + o.id + '">Borrar</button></div></div>';
     });
     h += '<p class="hint">Tus obras se guardan en este dispositivo. La búsqueda de partidas, el diálogo y el cálculo funcionan sin conexión.</p>';
     h += '<button class="btn" data-a="sugerencias">Buzón de sugerencias</button>';
@@ -608,7 +609,7 @@
       });
       h += '</div>';
     });
-    h += '<div class="row"><button class="btn primary" data-a="pdf" data-id="' + o.id + '">Exportar PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Exportar Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">Exportar BC3</button><button class="btn" data-a="sendmail" data-id="' + o.id + '">Enviar al correo</button><button class="btn" data-a="back2obra">Volver a medir</button></div>';
+    h += '<div class="row"><button class="btn primary" data-a="pdf" data-id="' + o.id + '">Exportar PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Exportar Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">Exportar BC3</button><button class="btn primary" data-a="share" data-id="' + o.id + '">Compartir</button><button class="btn" data-a="sendmail" data-id="' + o.id + '">Enviar al correo</button><button class="btn" data-a="back2obra">Volver a medir</button></div>';
     return h;
   }
   function viewCatalogos() {
@@ -733,14 +734,14 @@
   }
   function menuSheet() {
     const items = [['obras', ICON.obras, 'Mis obras']];
-    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['sendmail', ICON.pdf, 'Enviar archivos a mi correo'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
+    if (S.obra) items.push(['menu-obra', ICON.pin, 'Medir: ' + S.obra.titulo], ['resumen', ICON.list, 'Resumen de la obra'], ['pdf', ICON.pdf, 'Exportar PDF de mediciones'], ['xlsx', ICON.list, 'Exportar Excel (.xlsx)'], ['bc3', ICON.book, 'Exportar BC3 (Presto / Arquímedes)'], ['share', ICON.pdf, 'Compartir archivos (PDF, Excel, BC3)'], ['sendmail', ICON.pdf, 'Enviar archivos a mi correo'], ['undo', ICON.undo, 'Deshacer último cambio'], ['exportlog', ICON.list, 'Descargar registro de la conversación']);
     if (canOfferInstall()) items.push(['install', ICON.obras, 'Instalar en este móvil']);
     if (window.Cloud && Cloud.available()) items.push(['account', ICON.gear, Cloud.user ? 'Mi cuenta' : 'Entrar o crear cuenta']);
     if (window.Cloud && Cloud.user) items.push(['logout', ICON.undo, 'Cerrar sesión (' + Cloud.user.email + ')']);
     if (window.Cloud && Cloud.isAdmin) items.push(['admin', ICON.list, 'Administración' + (S.sgNew ? ' · ' + S.sgNew + (S.sgNew === 1 ? ' sugerencia nueva' : ' sugerencias nuevas') : '')]);
     items.push(['sugerencias', ICON.help, 'Buzón de sugerencias']);
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
-    sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' || a === 'sendmail' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
+    sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' || a === 'sendmail' || a === 'share' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
   function helpSheet() {
     sheet('<h2>Qué puedo decir</h2><div class="hint" style="display:flex;flex-direction:column;gap:6px">' +
@@ -1035,6 +1036,7 @@
       case 'sgstate': { try { await Cloud.setSuggestionState(+el.dataset.id, el.dataset.st); if (S.sgNew) S.sgNew = Math.max(0, S.sgNew - 1); const s = (S.adminData.sugerencias || []).find((x) => x.id === +el.dataset.id); if (s) s.estado = el.dataset.st; render(); } catch (e) { toast(e.message); } break; }
       case 'logout': closeSheet(); logout(); break;
       case 'undo': closeSheet(); $('#toast').hidden = true; if (S.obra) { dialog.handle('deshacer'); render(); } break;
+      case 'share': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; await loadCatalog((o && o.catalogo) || 'palma48'); shareSheet(o); break; }
       case 'sendmail': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; sendSheet(o); break; }
       case 'xlsx': case 'bc3': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) exportFile(o, a); break; }
       case 'pdf': { closeSheet(); const o = S.obras.find((x) => x.id === el.dataset.id) || S.obra; if (o) { await loadCatalog(o.catalogo || 'palma48'); exportPdf(o); } break; }
@@ -1179,6 +1181,36 @@
     return { nombre: base + '.bc3', blob: new Blob([window.Exporters.buildBC3(obra)], { type: 'application/octet-stream' }) };
   }
   const toB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(blob); });
+  /* ---- Compartir los archivos (WhatsApp, correo, Drive, Archivos…) con la hoja de compartir del sistema ---- */
+  function shareSheet(obra) {
+    obra = obra || S.obra;
+    if (!obra) return toast('Abre primero una obra.');
+    if (!obra.partidas.some((p) => p.lineas.length)) return toast('La obra no tiene mediciones todavía.');
+    const puede = !!(navigator.share && navigator.canShare);
+    sheet('<h2>Compartir archivos</h2><p class="hint">Elige los archivos de «' + esc(obra.titulo) + '» y envíalos por WhatsApp, correo, Drive o guárdalos en Archivos.</p>' +
+      '<div class="menu-list">' + [['pdf', 'PDF de mediciones', true], ['xlsx', 'Excel (.xlsx)', false], ['bc3', 'BC3 (Presto / Arquímedes)', false]].map(([k, l, on]) => '<label class="checkline"><input type="checkbox" class="sharek" value="' + k + '"' + (on ? ' checked' : '') + '><span style="color:var(--fg)">' + l + '</span></label>').join('') + '</div>' +
+      (puede ? '' : '<p class="hint">Este navegador no permite compartir archivos: se descargarán en el dispositivo.</p>') +
+      '<p class="hint" id="sharemsg"></p>' +
+      '<div class="row"><button class="btn primary" id="sharego" type="button">' + (puede ? 'Compartir' : 'Descargar') + '</button><button class="btn" data-a="closesheet" type="button">Cancelar</button></div>');
+    $('#sharego').addEventListener('click', async () => {
+      const kinds = [...document.querySelectorAll('.sharek:checked')].map((x) => x.value);
+      if (!kinds.length) { $('#sharemsg').textContent = 'Elige al menos un archivo.'; return; }
+      let fs;
+      try { fs = kinds.map((k) => makeFile(obra, k)); } catch (e) { $('#sharemsg').textContent = 'No se pudo generar: ' + e.message; return; }
+      // El navegador debe aceptar los tipos de archivo; si no, se prueban tipos equivalentes
+      const alt = { xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream'], bc3: ['application/octet-stream', 'text/plain'], pdf: ['application/pdf'] };
+      const opciones = (t) => fs.map((f, i) => new File([f.blob], f.nombre, { type: t === 0 ? f.blob.type : (alt[kinds[i]][t] || alt[kinds[i]][0]) }));
+      let files = null;
+      if (puede) for (let t = 0; t < 3 && !files; t++) { const cand = opciones(t); try { if (navigator.canShare({ files: cand })) files = cand; } catch (e) {} }
+      if (files) {
+        try { await navigator.share({ files, title: obra.titulo, text: 'Mediciones · ' + obra.titulo }); closeSheet(); toast('Archivos compartidos'); }
+        catch (e) { if (e && e.name !== 'AbortError') $('#sharemsg').textContent = 'No se pudo compartir: ' + e.message; }
+        return;
+      }
+      for (const f of fs) await saveFile(f.nombre, f.blob);
+      closeSheet(); toast(puede ? 'Este dispositivo no deja compartir estos archivos: los he descargado.' : 'Archivos descargados.');
+    });
+  }
   function sendSheet(obra) {
     obra = obra || S.obra;
     if (!obra) return toast('Abre primero una obra.');

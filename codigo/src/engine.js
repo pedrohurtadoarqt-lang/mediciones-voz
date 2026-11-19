@@ -967,6 +967,7 @@
       if ((m = n.match(/^(?:cambia|corrige|modifica)\s+la\s+(?:ultima\s+linea|linea\s+(\S+))\s+(?:a|por|en)\s+(.+)$/))) return this.replaceLine(m[1] ? parseIndex(m[1]) : -1, m[2]);
       if ((m = n.match(/^(?:que|cuanto)\s+(?:llevo|llevamos|tengo|tenemos|hay|he|hemos)\s+(?:medido\s+)?(?:en|del|de)\s+(?:el|la)?\s*(.+)$/)) || (m = n.match(/^resumen\s+(?:de|del)\s+(?:la\s+|el\s+)?(.+)$/))) return this.summaryEstancia(m[1]);
       if (/^(resumen|total)( de la obra| general)?$|^que llevo medido$/.test(n)) return this.summaryObra();
+      if (/\b(comparte|compartir|compartelo|compartelos|comparteme)\b/.test(n) && this.io.shareFiles) { this.io.shareFiles(); return this.ask('Elige qué archivos quieres y pulsa Compartir.', this.idleChips(), { listen: false }); }
       if (/\b(envia|enviame|enviar|manda|mandame|mandar)\b.*\b(correo|email|mail|e-mail)\b|\b(por|al|a mi) correo\b/.test(n) && this.io.sendEmail) { this.io.sendEmail(); return this.ask('Elige qué archivos quieres recibir y pulsa Enviar.', this.idleChips(), { listen: false }); }
       if (/^(exporta|exportar|genera|generar|saca|sacar|crea|crear|descarga|descargar|pasa|pasar)\b.*\b(excel|xls|xlsx|hoja de calculo|hoja)\b/.test(n)) { this.io.exportXlsx && this.io.exportXlsx(); return this.ask('Generando el Excel de mediciones.'); }
       if (/^(exporta|exportar|genera|generar|saca|sacar|crea|crear|descarga|descargar|pasa|pasar)\b.*\b(bc3|be ce tres|bece3|presto|arquimedes|fiebdc)\b/.test(n)) { this.io.exportBc3 && this.io.exportBc3(); return this.ask('Generando el BC3 de mediciones.'); }
@@ -1118,7 +1119,7 @@
       const nl = ps.reduce((a, p) => a + p.lineas.length, 0);
       const pend = this.obra.partidas.reduce((a, p) => a + p.lineas.filter((l) => l.hPend && l.h == null).length, 0);
       this.ask('Medición terminada. Llevas ' + ps.length + (ps.length === 1 ? ' partida' : ' partidas') + ' y ' + nl + (nl === 1 ? ' línea' : ' líneas') + ((this.obra.estancias || []).length ? ' en ' + (this.obra.estancias || []).length + ((this.obra.estancias || []).length === 1 ? ' estancia.' : ' estancias.') : '.') + (pend ? ' Quedan ' + pend + ' paredes sin altura.' : '') + ' Puedes generar el PDF, el Excel o el BC3, o seguir midiendo cuando quieras.',
-        [{ label: 'Enviar a mi correo', value: 'envíame los archivos por correo' }, { label: 'Generar PDF', value: 'genera el pdf' }, { label: 'Excel', value: 'exporta el excel' }, { label: 'BC3', value: 'exporta el bc3' }, { label: 'Seguir midiendo', value: 'seguir midiendo' }], { listen: false, end: true });
+        [{ label: 'Compartir archivos', value: 'compartir los archivos' }, { label: 'Enviar a mi correo', value: 'envíame los archivos por correo' }, { label: 'Generar PDF', value: 'genera el pdf' }, { label: 'Excel', value: 'exporta el excel' }, { label: 'BC3', value: 'exporta el bc3' }, { label: 'Seguir midiendo', value: 'seguir midiendo' }], { listen: false, end: true });
     }
     looksLikeMeasure(pm, text, act) {
       if (pm.ded) return true;
@@ -1369,7 +1370,7 @@
     /** Lo que el motor resuelve al instante sin IA: medidas sueltas y órdenes exactas. */
     isTrivial(text, n) {
       const act = this.active();
-      if (/^(siguiente partida|nueva partida|otra partida|siguiente estancia|otra estancia|cambiar estancia|terminar|termina|terminado|he terminado|fin|eso es todo|lee las lineas|leer lineas|lee la partida|para|parar|stop|basta|pausa|silencio|deshacer|deshaz|atras|ayuda|repite|cancela|cancelar|resumen|no|nada|nada mas|si|vale|ok|seguir midiendo|mismas medidas|las mismas|medidas nuevas|exporta el pdf|exporta el excel|exporta el bc3|genera el pdf|envíame los archivos por correo|enviame los archivos por correo)$/.test(n)) return true;
+      if (/^(siguiente partida|nueva partida|otra partida|siguiente estancia|otra estancia|cambiar estancia|terminar|termina|terminado|he terminado|fin|eso es todo|lee las lineas|leer lineas|lee la partida|para|parar|stop|basta|pausa|silencio|deshacer|deshaz|atras|ayuda|repite|cancela|cancelar|resumen|no|nada|nada mas|si|vale|ok|seguir midiendo|mismas medidas|las mismas|medidas nuevas|exporta el pdf|exporta el excel|exporta el bc3|genera el pdf|compartir los archivos|comparte los archivos|envíame los archivos por correo|enviame los archivos por correo)$/.test(n)) return true;
       if (/^(?:pasamos|vamos|estamos|entramos)\s+(?:a|al|a la|en|en el|en la)\s+\S+(\s+\d+)?$/.test(n) || /^estancia\s+\S+/.test(n)) return true;
       const cw = contentWords(text);
       const GEO = /(rectangul|parte|forma|irregular|perimetro|altura|alto|ancho|largo|superficie|total|igual|mismo|aprovech|antes|anterior)/;

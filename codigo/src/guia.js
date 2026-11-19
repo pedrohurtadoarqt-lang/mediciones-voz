@@ -701,7 +701,7 @@
       const ps = this.obra.partidas.filter((p) => p.lineas.length).length;
       const g = this.g; g.fin = true; g.paso = 'hecho'; this.save();
       this.ask('Listo: el estado de mediciones tiene ' + ps + ' ' + plural(ps, 'partida') + '. Puedes revisarlo en pantalla, corregir cualquier línea hablando, exportar el PDF o medir otra zona.',
-        [{ label: 'Medir otra zona', value: 'medir otra zona' }, { label: 'Exportar PDF', value: 'exporta el pdf' }, { label: 'Elegir más trabajos', value: 'elegir trabajos' }, { label: 'Enviar por correo', value: 'envíame los archivos por correo' }]);
+        [{ label: 'Medir otra zona', value: 'medir otra zona' }, { label: 'Exportar PDF', value: 'exporta el pdf' }, { label: 'Compartir archivos', value: 'compartir los archivos' }, { label: 'Elegir más trabajos', value: 'elegir trabajos' }]);
     }
   }
 
