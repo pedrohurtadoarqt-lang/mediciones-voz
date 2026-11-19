@@ -133,7 +133,7 @@
       const conv = (v) => (v == null ? v : (pm.cm || (v > 10 && Number.isInteger(v)) ? round2(v / 100) : v));
       an = conv(an); al = conv(al);
       if (!tipo && an == null) continue;
-      out.push({ tipo: tipo || 'ventana', uds: uds || 1, an: an ?? null, al: al ?? null, bal: /balconera/.test(n) });
+      out.push({ tipo: tipo || (al >= 1.9 && an <= 1.2 ? 'puerta' : 'ventana'), uds: uds || 1, an: an ?? null, al: al ?? null, bal: /balconera/.test(n) });
     }
     return out;
   }
@@ -537,7 +537,7 @@
       const g = this.g;
       if (g.paso && g.paso !== paso) { g.hist = (g.hist || []).concat([{ paso: g.paso, d: g.d, toma: JSON.stringify(this.toma) }]).slice(-40); }
       g.paso = paso; g.d = Object.assign({}, d || {}); g.fin = false;
-      this.fails = 0;
+      this.fails = 0; g.conf = null; g.buf = null; this.lastFail = null;
       this.save();
       const s = this.pasos[paso];
       const q = s.q.call(this, g.d);
@@ -571,28 +571,58 @@
       if (mp && !(input && input.act) && !/^(puerta|ventana|hueco|otra igual|otro igual|faldon|fachada)/.test(mp[1])) return this.nuevaPartida(text.replace(/^\s*\S+\s+(?:(?:una|un|la|el)\s+)?(?:partida\s+(?:de\s+|para\s+)?)?/i, ''));
       const s = this.pasos[g.paso];
       if (!s) { g.fin = true; return this.dlg.st_idle(text, n, input); }
+      // Confirmación de una interpretación aproximada («¿Es rectangular de 3 por 3?»)
+      if (g.conf) {
+        const c = g.conf; g.conf = null;
+        const v = yesNo(n);
+        if (v === true) { const r0 = s.a.call(this, c.txt, norm(c.txt), {}, g.d); if (r0 !== false) return r0; }
+        if (v === false) { this.save(); return this.ask('Vale. ' + (s.ayuda ? s.ayuda.call(this, g.d) : s.q.call(this, g.d).t), s.q.call(this, g.d).c); }
+      }
+      // Frase cortada por una pausa («3 por…»): se espera al resto
+      if (g.buf) { text = g.buf + ' ' + text; n = norm(text); g.buf = null; }
+      if (!(input && input.act) && /\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n) && /\b(por|x|de|con|coma|punto|y|mas)\s*$/.test(n)) { g.buf = text; this.save(); return this.ask('Sigue, te escucho.', []); }
       const r = s.a.call(this, text, n, input || {}, g.d);
       if (r === false) return this.noEntiendo(text);
+      this.lastFail = null;
       return r;
     }
-    atras() {
+    atras(msg) {
       const g = this.g; const h = (g.hist || []).pop();
-      if (!h) return this.repetir('Estamos al principio.');
-      this.obra.toma = JSON.parse(h.toma); g.paso = h.paso; g.d = h.d; this.fails = 0; this.save();
-      this.repetir('Vuelvo a la pregunta anterior.');
+      g.conf = null; g.buf = null; this.lastFail = null;
+      if (!h) { this.fails = 0; return this.repetir((msg ? msg + ' ' : '') + 'Empezamos esta pregunta de nuevo.'); }
+      this.obra.toma = JSON.parse(h.toma); g.paso = h.paso; g.d = /^(inicio|est_nombre|est_mas|cub_nombre|mas_zona|ins_tipo)$/.test(h.paso) ? {} : h.d; this.fails = 0;
+      // Las zonas empezadas y sin ninguna medida (salvo la de esta pregunta) se quitan
+      const vacia = (z) => (z.ambito === 'interior' && z.area == null && !(z.tramos || []).length) || (z.ambito === 'cubierta' && z.area == null && !(z.faldones || []).length && !z.tipo);
+      this.toma.zonas = this.toma.zonas.filter((z) => !(vacia(z) && z.id !== (g.d && g.d.zid)));
+      this.save();
+      this.repetir(msg || 'Vuelvo a la pregunta anterior.');
     }
     ayuda() { const s = this.pasos[this.g.paso]; this.ask((s.ayuda ? s.ayuda.call(this, this.g.d) : 'Respóndeme a la pregunta.') + ' También puedes decir «atrás» para corregir la anterior o «saltar».', this.pasos[this.g.paso].q.call(this, this.g.d).c); }
     /** No entendido: primero se vuelve a preguntar con otras palabras; después, la IA. */
     noEntiendo(text) {
-      this.fails++;
-      const s = this.pasos[this.g.paso];
-      const ayuda = s.ayuda ? s.ayuda.call(this, this.g.d) : s.q.call(this, this.g.d).t;
-      const chips = s.q.call(this, this.g.d).c;
-      if (this.fails === 1 || !this.aiOk()) {
-        const extra = this.fails >= 3 ? (s.saltar ? ' Si prefieres, di «saltar» y seguimos.' : ' Si te resulta más cómodo, escríbelo con el teclado.') : '';
-        return this.ask((this.fails === 1 ? 'Perdona, no te he entendido. ' : 'Sigo sin entenderlo. ') + ayuda + extra, chips);
+      const g = this.g;
+      const s = this.pasos[g.paso];
+      // ¿Era la continuación de la frase anterior (pausa al dictar)? Se prueban juntas antes de contar el fallo
+      if (this.lastFail && this.lastFail.paso === g.paso) {
+        const junto = this.lastFail.text + ' ' + text;
+        this.lastFail = null;
+        const r = s.a.call(this, junto, norm(junto), {}, g.d);
+        if (r !== false) return r;
       }
-      return this.consultarIA(text, s, ayuda);
+      this.lastFail = { paso: g.paso, text };
+      this.fails++;
+      const ayuda = s.ayuda ? s.ayuda.call(this, g.d) : s.q.call(this, g.d).t;
+      const chips = s.q.call(this, g.d).c;
+      const salidas = CH([{ label: 'Volver atrás', value: 'atrás' }].concat(s.saltar ? [{ label: 'Saltar', value: 'saltar' }] : []));
+      // Si se puede adivinar lo que quería decir, se confirma en vez de repetir la pregunta
+      const guess = s.aprox ? s.aprox.call(this, text, g.d) : null;
+      if (guess && this.fails <= 3) { g.conf = guess; this.save(); return this.ask(guess.q, CH([{ label: 'Sí', value: 'sí' }, { label: 'No', value: 'no' }]).concat(salidas)); }
+      if (this.fails === 1) return this.ask('Perdona, no te he entendido. ' + ayuda, chips.concat(salidas).slice(0, 6));
+      if (this.fails === 2 && this.aiOk()) return this.consultarIA(text, s, ayuda);
+      if (this.fails <= 3) return this.ask('No consigo entenderlo. Podemos volver al paso anterior' + (s.saltar ? ', saltar este dato' : '') + ' o probar otra vez: ' + ayuda, salidas.concat(chips).slice(0, 6));
+      // No se insiste más: se vuelve un paso atrás para no atascarse
+      this.lastFail = null;
+      return this.atras('Para no atascarnos, volvemos al paso anterior.');
     }
     aiOk() { return !!(this.io.agent && this.io.aiReady && this.io.aiReady()); }
     consultarIA(text, s, ayuda) {
@@ -727,6 +757,14 @@
   const P = {};
   Guia.prototype.pasos = P;
 
+  /** Números de una frase (sin artículos «un/una»), pasados a metros. */
+  const numeros = (text) => tokenize(text).filter((x) => x.k === 'N' && !x.art).map((x) => { let v = cmv(x.v, x); if (!x.unit && Number.isInteger(v) && v >= 100) v = round2(v / 100); return v; }).filter((v) => v > 0 && v < 200);
+  const aproxPlanta = function (text) {
+    const v = numeros(text);
+    if (v.length === 2) return { txt: String(v[0]).replace('.', ',') + ' por ' + String(v[1]).replace('.', ','), q: '¿Quieres decir una planta rectangular de ' + fmt(v[0]) + ' por ' + fmt(v[1]) + '?' };
+    if (v.length >= 3 && v.length <= 12) return { txt: v.map((x) => String(x).replace('.', ',') + ' metros derecha').join(', '), q: '¿Son ' + v.length + ' paredes de ' + v.map((x) => fmt(x)).join(', ') + ', girando siempre a la derecha?' };
+    return null;
+  };
   P.inicio = {
     q: () => ({ t: '¿Qué vamos a medir? Una vivienda o reforma integral, una estancia, instalaciones, una fachada, una cubierta u otra cosa.', c: CH([{ label: 'Vivienda / reforma integral', value: 'vivienda', act: { g: 'vivienda' } }, { label: 'Estancia o habitación', value: 'estancia', act: { g: 'estancia' } }, { label: 'Instalaciones', value: 'instalaciones', act: { g: 'instalaciones' } }, { label: 'Fachada', value: 'fachada', act: { g: 'fachada' } }, { label: 'Cubierta', value: 'cubierta', act: { g: 'cubierta' } }, { label: 'Otra cosa', value: 'otra cosa', act: { g: 'otra' } }]) }),
     ayuda: () => 'Dime solo el tipo de trabajo: vivienda, estancia, instalaciones, fachada, cubierta u otra cosa.',
@@ -760,6 +798,8 @@
   };
 
   /* ---- Estancias ---- */
+  // Respuestas que no son un nombre de estancia
+  const NO_NOMBRE = /^(ni idea|no se|no lo se|nada|que|bueno|vale|pues|otra cosa|tal vez|quizas|a ver|espera|perdona|como|repite|no entiendo|ayuda|hola|gracias|venga|ok|eh|mm+|bla)\b/;
   const usados = (self) => self.toma.zonas.filter((z) => z.ambito === 'interior').map((z) => norm(z.nombre));
   P.est_nombre = {
     q() { const u = usados(this); return { t: u.length ? '¿Cuál es la siguiente estancia?' : '¿Por qué estancia empezamos?', c: CH(EST_DEF.filter((e) => !u.includes(norm(e))).slice(0, 6)) }; },
@@ -768,8 +808,9 @@
     a(text, n) {
       const limpio = text.replace(/^(?:empezamos|empezamos por|vamos|vamos al?|vamos a la|por|el|la|en|al|seguimos (?:con|por)|ahora|pasamos al?|pasamos a la)\s+/i, '').replace(/^(?:el|la)\s+/i, '');
       const mw = limpio.match(/^(.*?)[,.]?\s+(\d+(?:[.,]\d+)?\s*(?:por|x|metros|m\b|derecha|izquierda).*)$/i);
-      const nombre = estanciaName((mw ? mw[1] : limpio).split(/[,.]/)[0]);
-      if (!nombre || nombre.split(' ').length > 4 || !/[a-zñ]/i.test(norm(nombre)) || yesNo(norm(nombre)) !== null) return false;
+      const base = (mw ? mw[1] : limpio).split(/[,.]/)[0].replace(/\s+(?:que\s+)?(?:es|mide|tiene|son|de|con|rectangular|cuadrad[oa]|rectangulo|en forma de l|irregular|y)\b.*$/i, '').trim();
+      const nombre = estanciaName(base || limpio);
+      if (!nombre || nombre.split(' ').length > 4 || !/[a-zñ]/i.test(norm(nombre)) || yesNo(norm(nombre)) !== null || NO_NOMBRE.test(norm(nombre))) return false;
       const u = usados(this);
       let fin = nombre;
       if (u.includes(norm(fin))) { let i = 2; while (u.includes(norm(nombre + ' ' + i))) i++; fin = nombre + ' ' + i; }
@@ -828,6 +869,7 @@
       (res.cierre === '1' ? ', cerrando con una pared de ' + fmt(res.supuestas[0]) : res.cierre === '2' ? ', cerrando con dos paredes de ' + fmt(res.supuestas[0]) + ' y ' + fmt(res.supuestas[1]) : '') + '.' + (res.aviso ? ' Ojo: ' + res.aviso + '; si quieres repetirla, di «atrás».' : '');
     return this.say('est_altura', { zid: z.id }, msg);
   };
+  P.est_planta.aprox = aproxPlanta;
   P.est_altura = {
     q(d) {
       const z = this.zona(d.zid);
@@ -837,6 +879,7 @@
     ayuda: () => 'Dime solo la altura en metros, por ejemplo «2,60» o «dos sesenta».',
     formato: () => 'la altura en metros con coma decimal, por ejemplo «2,60»',
     saltar(d) { return this.say('est_huecos', { zid: d.zid }, 'Sin altura por ahora: las paredes quedarán pendientes de altura.'); },
+    aprox(text) { const v = numeros(text).map((x) => (x > 20 ? round2(x / 100) : x)).filter((x) => x > 1.5 && x < 8); return v.length ? { txt: String(v[0]).replace('.', ','), q: '¿La altura es ' + fmt(v[0]) + ' metros?' } : null; },
     a(text, n, input, d) {
       const z = this.zona(d.zid);
       let v = null;
@@ -886,7 +929,11 @@
       }
       if (/^otra igual|^otro igual|^la misma|^igual/.test(n) && z.huecos.length) { const u = z.huecos[z.huecos.length - 1]; u.uds = (u.uds || 1) + 1; this.save(); return this.repetir('Anotada otra igual: ' + fmtUds(u.uds) + ' en total.'); }
       const hs = parseHuecos(text);
-      if (!hs.length) { if (FIN.test(n) || yesNo(n) === false) return this.siguienteEstancia(d); return false; }
+      if (!hs.length) {
+        if (FIN.test(n) || yesNo(n) === false) return this.siguienteEstancia(d);
+        if (yesNo(n) === true) return this.ask('Dímela con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «una ventana de 1,20 por 1,10».', CH(['Una puerta de 0,82 por 2,03', 'Una ventana de 1,20 por 1,10']));
+        return false;
+      }
       const sinMedida = hs.find((x) => !(x.an && x.al));
       hs.filter((x) => x.an && x.al).forEach((x) => z.huecos.push(x));
       this.save();
@@ -1138,6 +1185,7 @@
       return this.say('fac_lista', {}, 'Anotada ' + z.nombre.toLowerCase() + ': ' + fmt(z.ancho) + ' por ' + fmt(z.alto) + '.');
     }
   };
+  P.fac_lista.aprox = function (text) { const v = numeros(text); return v.length === 2 ? { txt: etiqueta(text) + ' ' + String(v[0]).replace('.', ',') + ' por ' + String(v[1]).replace('.', ','), q: '¿' + (etiqueta(text) || 'Una fachada') + ' de ' + fmt(v[0]) + ' de ancho por ' + fmt(v[1]) + ' de alto?' } : null; };
   // Si dijo solo el ancho, el siguiente número (o «misma») completa la fachada
   const facA = P.fac_lista.a;
   P.fac_lista.a = function (text, n, input, d) {
@@ -1247,6 +1295,7 @@
       this.save(); return this.repetir();
     }
   };
+  P.cub_planta.aprox = aproxPlanta;
   Guia.prototype.cerrarCub = function (z) {
     const res = calcPlanta(z.tramos);
     z.area = res.area; z.perimetro = res.perimetro;
@@ -1297,6 +1346,8 @@
       return this.repetir((pre ? pre + ' ' : '') + 'Anotado: ' + fmt(dm.ancho) + ' por ' + fmt(dm.alto) + ', ' + fmt(round2(dm.ancho * dm.alto * z.factor)) + ' metros cuadrados reales.');
     }
   };
+  P.cub_faldones.aprox = function (text) { const v = numeros(text); return v.length === 2 ? { txt: (etiqueta(text) || 'faldón') + ' ' + String(v[0]).replace('.', ',') + ' por ' + String(v[1]).replace('.', ','), q: '¿Un faldón de ' + fmt(v[0]) + ' por ' + fmt(v[1]) + '?' } : null; };
+  P.est_huecos.aprox = function (text, d) { if (d.pend) return null; const v = numeros(text); if (v.length !== 2) return null; const t = /puerta/.test(norm(text)) || (v[1] >= 1.9 && v[0] < 1.2) ? 'puerta' : 'ventana'; return { txt: 'una ' + t + ' de ' + String(v[0]).replace('.', ',') + ' por ' + String(v[1]).replace('.', ','), q: '¿Una ' + t + ' de ' + fmt(v[0]) + ' por ' + fmt(v[1]) + '?' }; };
   P.cub_mas = {
     q: () => ({ t: '¿Medimos otra cubierta o elegimos los trabajos?', c: CH([{ label: 'Elegir trabajos', value: 'elegir trabajos' }, 'Otra cubierta']) }),
     ayuda: () => 'Di «otra cubierta» o «elegir trabajos».',

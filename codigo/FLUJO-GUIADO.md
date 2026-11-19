@@ -67,11 +67,14 @@ flowchart TD
   FIN -->|medir otra zona| Q
 ```
 
-## Si no entiende una respuesta
-1. Vuelve a preguntar con otras palabras y un ejemplo.
-2. Al segundo intento consulta a la IA, que reescribe la respuesta en el formato de la pregunta. Si la IA tampoco lo deduce, hace una pregunta corta para aclararlo.
-3. Desde el tercer intento ofrece «saltar» o escribir con el teclado.
-4. En cualquier momento se puede decir «atrás» (vuelve a la pregunta anterior y deshace lo anotado en ella), «ayuda», «repite», «saltar» o «cancela» (pasa a la medición libre).
+## Si no entiende una respuesta (nunca se queda atascado)
+1. Si la frase se cortó por una pausa («rectangular de 3 por…»), espera al resto («Sigue, te escucho») y une los dos trozos. También prueba a juntar una respuesta fallida con la siguiente.
+2. Si puede adivinar lo que quería decir, lo confirma en vez de repetir la pregunta: «¿Quieres decir una planta rectangular de 3 por 3?» (planta, altura, huecos, fachadas, faldones).
+3. Primer fallo: vuelve a preguntar con otras palabras y un ejemplo, con el botón «Volver atrás».
+4. Segundo fallo: consulta a la IA, que reescribe la respuesta en el formato de la pregunta.
+5. Tercer fallo: ofrece volver al paso anterior, saltar el dato o probar otra vez.
+6. Cuarto fallo: vuelve solo al paso anterior («Para no atascarnos, volvemos al paso anterior») y quita la estancia que se había empezado sin medidas.
+7. En cualquier momento: «atrás», «ayuda», «repite», «saltar», «cancela» (medición libre), «borra el pasillo», «añade armario empotrado en el dormitorio».
 
 ## Reglas de medición
 | Regla | Cálculo |
