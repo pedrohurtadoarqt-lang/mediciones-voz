@@ -157,12 +157,13 @@
         if (!synth) return resolve();
         try { synth.cancel(); } catch (e) {}
         const parts = splitSentences(text);
-        speaking = true; state();
+        speaking = true; lastSaid = text; state();
         let i = 0, done = false;
-        const finish = () => { if (done) return; done = true; if (my === speakId) { speaking = false; state(); } resolve(); };
+        const finish = () => { if (done) return; done = true; lastStop = Date.now(); if (my === speakId) { speaking = false; state(); } resolve(); };
         const guard = setTimeout(finish, 4000 + text.length * 95);
         const next = () => {
           if (done) return;
+          if (my !== speakId) { clearTimeout(guard); return finish(); } // interrumpido: no se leen las frases que faltan
           if (i >= parts.length) { clearTimeout(guard); return setTimeout(finish, 250); }
           const u = new SpeechSynthesisUtterance(parts[i++]);
           u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = rate;
@@ -174,7 +175,16 @@
         next();
       });
     }
-    function stopSpeaking() { speakId++; if (synth) try { synth.cancel(); } catch (e) {} if (tts) try { tts.stop(); } catch (e) {} speaking = false; state(); }
+    let lastSaid = '', lastStop = 0;
+    /** ¿Lo oído es la propia voz de la app (eco del altavoz)? */
+    function isEcho(heard) {
+      if (!lastSaid || Date.now() - lastStop > 3500) return false;
+      const w = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9ñ]+/).filter((x) => x.length > 2);
+      const h = w(heard); if (h.length < 3) return false;
+      const said = new Set(w(lastSaid));
+      return h.filter((x) => said.has(x)).length / h.length >= 0.75;
+    }
+    function stopSpeaking() { if (speaking) lastStop = Date.now(); speakId++; if (synth) try { synth.cancel(); } catch (e) {} if (tts) try { tts.stop(); } catch (e) {} speaking = false; state(); }
     /** fromTap: true si viene de un toque del usuario. */
     function listen(fromTap) {
       if (fromTap) { needTap = false; autoRestarts = 0; unlock(); }
@@ -223,7 +233,7 @@
     }
     function stopListening() { needTap = false; if (mode === 'claude') { dict && dict.stop().catch(() => {}); return; } try { rec && rec.abort(); } catch (e) {} listening = false; state(); }
     return {
-      init, speak, stopSpeaking, listen, stopListening, unlock,
+      init, speak, stopSpeaking, listen, stopListening, unlock, isEcho,
       on(c) { cb = Object.assign(cb, c); },
       get mode() { return mode; }, get listening() { return listening; }, get speaking() { return speaking; },
       get needTap() { return needTap; }, set needTap(v) { needTap = v; state(); },
@@ -357,7 +367,10 @@
   let noSpeech = 0;
   VoiceAdapter.on({
     onPartial(t) { S.partial = t; renderTalk(); },
-    onFinal(t) { noSpeech = 0; S.partial = ''; if (S.greetPending) return; if (vozVista()) { sayToken++; VoiceAdapter.stopSpeaking(); dialog.handle(t); } },
+    onFinal(t) {
+      noSpeech = 0; S.partial = ''; if (S.greetPending) return;
+      if (VoiceAdapter.isEcho(t)) { renderTalk(); return setTimeout(() => { if (!VoiceAdapter.speaking && vozVista()) VoiceAdapter.listen(false); }, 200); }
+      if (vozVista()) { sayToken++; VoiceAdapter.stopSpeaking(); dialog.handle(t); } },
     onState(st) {
       renderMic();
       if (S.greetPending && st.listening && VoiceAdapter.micState === 'granted') greet();
@@ -459,7 +472,7 @@
     zs.forEach((z) => { (grupos[z.ambito] = grupos[z.ambito] || []).push(z); });
     Object.keys(grupos).forEach((k) => {
       h += '<div class="chap"><span></span><span>' + esc(AL[k] || k) + '</span></div><div class="plist">';
-      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '') + '</div>'; });
+      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '<span></span>') + '<button class="iconbtn zdel" data-a="zdel" data-z="' + z.id + '" aria-label="Eliminar ' + esc(z.nombre) + '">' + ICON.del + '</button></div>'; });
       h += '</div>';
     });
     const ps = o.partidas.filter((x) => x.lineas.length);
@@ -500,14 +513,19 @@
     const ambs = [...new Set(zs.map((z) => z.ambito))];
     h += '<div class="card"><h3>Añadir otra partida de la base de datos</h3><div class="field"><input id="tq" type="search" placeholder="Ej.: impermeabilización, zócalo, barandilla…" value="' + esc(S.tq || '') + '" aria-label="Buscar partida"></div>' +
       (ambs.length > 1 ? '<div class="chips">' + ambs.map((a) => '<button class="chip' + ((S.tamb || ambs[0]) === a ? ' primary' : ' ghost') + '" data-a="tamb" data-v="' + a + '">' + esc(G.AMBITO_LABEL[a]) + '</button>').join('') + '</div>' : '') +
-      '<div class="searchres" id="tres">' + tResults() + '</div></div>';
+      '<div class="searchres" id="tres">' + tResults() + '</div>' +
+      '<h3 style="margin-top:14px">Crear una partida nueva</h3><p class="hint">Para trabajos que no están en la base: «mover estatua de sitio», «armario empotrado»… Te preguntaré la medición al generar.</p>' +
+      '<div class="field"><input id="tnd" type="text" placeholder="Descripción del trabajo" aria-label="Descripción de la partida nueva"></div>' +
+      '<div class="row"><select id="tnu" aria-label="Unidad"><option value="ud">Unidades</option><option value="m">Metros</option><option value="m2">m²</option><option value="m3">m³</option></select>' +
+      (zs.length > 1 ? '<select id="tnz" aria-label="Dónde"><option value="">En todas las zonas</option>' + zs.filter((z) => z.ambito === (S.tamb || zs[0].ambito)).map((z) => '<option value="' + z.id + '">' + esc(z.nombre) + '</option>').join('') + '</select>' : '') +
+      '<button class="btn" data-a="tnew">Crear partida</button></div></div>';
     h += '<div class="tw-bar"><button class="btn primary big" data-a="tgen">Generar mediciones</button><button class="btn" data-a="tmedir">Medir algo más</button></div>';
     return h;
   }
   function tResults() {
     const q = S.tq || ''; if (q.trim().length < 3) return '';
     const r = catFor(S.obra).index.search(q).slice(0, 12);
-    if (!r.length) return '<p class="hint">Sin resultados.</p>';
+    if (!r.length) return '<p class="hint">Sin resultados: créala abajo como partida nueva.</p>';
     return r.map((x) => '<div class="pitem"><span class="c">' + esc(x.doc.c) + '</span><span class="r">' + esc(x.doc.r) + '<small>' + unitL(x.doc.u) + ' · ' + esc(x.doc.path) + '</small></span><button class="btn small" data-a="tadd" data-code="' + esc(x.doc.c) + '">Añadir</button></div>').join('');
   }
   function renderTalk() {
@@ -542,6 +560,8 @@
     }
     const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || !vozVista(); const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir medición guiada' : 'Empezar medición guiada'; }
     $('#btnHands').setAttribute('aria-pressed', S.settings.hands);
+    $('#dock').classList.toggle('min', !!S.settings.dockMin);
+    const bd = $('#btnDock'); if (bd) { bd.setAttribute('aria-pressed', !!S.settings.dockMin); bd.setAttribute('aria-label', S.settings.dockMin ? 'Mostrar conversación' : 'Ocultar conversación'); bd.querySelector('.t').textContent = S.settings.dockMin ? 'Mostrar' : 'Ocultar'; }
     $('#btnKeyboard').setAttribute('aria-pressed', S.typing);
     $('#typebar').hidden = !S.typing;
   }
@@ -671,6 +691,17 @@
   /* ---- Archivo generado: se descarga y, si el móvil lo permite, se ofrece compartir (correo, WhatsApp…) ---- */
   function canShareFile(file) { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: [file] })); } catch (e) { return false; } }
   async function fileReady(name, blob, label) {
+    const movil = isIOS() || isStandalone() || /Android/i.test(navigator.userAgent);
+    if (movil && !/\.pdf$/i.test(name) && !(window.claude && window.claude.use)) {
+      const tipos = [blob.type, /\.bc3$/i.test(name) ? 'text/plain' : null, 'application/octet-stream'].filter(Boolean);
+      for (const t of tipos) {
+        const f = new File([blob], name, { type: t });
+        if (canShareFile(f)) {
+          try { await navigator.share({ files: [f], title: name }); toast(label + ' listo: ' + name); return; }
+          catch (e) { if (e && e.name === 'AbortError') return; break; }
+        }
+      }
+    }
     const ok = await saveFile(name, blob);
     if (!ok) return;
     const file = new File([blob], name, { type: blob.type || 'application/octet-stream' });
@@ -1024,6 +1055,17 @@
       case 'tw': { const sel = Guia.seleccion(S.obra); const s = sel[el.dataset.id]; if (s) { s.on = !s.on; if (s.on && !s.zonas.length) { const w = Guia.trabajosPara(S.obra).find((x) => x.id === el.dataset.id); s.zonas = Guia.zonasDe(S.obra, w).map((z) => z.id); } } saveObra(); render(); break; }
       case 'tz': { const s = Guia.seleccion(S.obra)[el.dataset.id]; const z = el.dataset.z; if (s) { s.zonas = s.zonas.includes(z) ? s.zonas.filter((x) => x !== z) : s.zonas.concat([z]); if (!s.zonas.length) s.on = false; } saveObra(); render(); break; }
       case 'tamb': S.tamb = el.dataset.v; render(); break;
+      case 'tnew': {
+        const desc = ($('#tnd').value || '').trim(); if (desc.length < 3) { toast('Escribe la descripción del trabajo'); break; }
+        const zs = (S.obra.toma && S.obra.toma.zonas) || []; const a = S.tamb || (zs.some((z) => z.ambito === 'interior') ? 'interior' : zs[0] ? zs[0].ambito : 'interior');
+        const zsel = $('#tnz') && $('#tnz').value ? [$('#tnz').value] : null;
+        Guia.anadirPropia(S.obra, desc.charAt(0).toUpperCase() + desc.slice(1), $('#tnu').value, a, zsel); saveObra(); render(); toast('Partida creada: ' + desc); break;
+      }
+      case 'zdel': {
+        const z = ((S.obra.toma && S.obra.toma.zonas) || []).find((x) => x.id === el.dataset.z); if (!z) break;
+        confirmSheet('¿Eliminar «' + z.nombre + '» y todo lo medido en ella?', 'Eliminar', () => { dialog.snapshot(); Guia.borrarZona(S.obra, z.id); if (S.obra.partidas.some((p) => p.guia)) Guia.generar(S.obra, catFor(S.obra)); saveObra(); render(); toast('Eliminado: ' + z.nombre, true); });
+        break;
+      }
       case 'tadd': { const d = catFor(S.obra).byCode.get(el.dataset.code); const zs = (S.obra.toma && S.obra.toma.zonas) || []; const a = S.tamb || (zs[0] && zs[0].ambito) || 'interior'; if (d) { Guia.anadirExtra(S.obra, d, a); S.tq = ''; saveObra(); render(); toast('Añadida: ' + d.r); } break; }
       case 'tgen': { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } sayToken++; VoiceAdapter.stopSpeaking(); if (dialog.guia) { dialog.guia.g.paso = 'trabajos'; dialog.guia.g.fin = false; dialog.guia.generarMediciones(); } break; }
       case 'tmedir': S.view = 'obra'; render(); if (dialog.guia) dialog.handle('medir algo más'); break;
@@ -1056,6 +1098,7 @@
   $('#btnBack').addEventListener('click', () => { if (S.view === 'obra' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
   $('#btnMenu').addEventListener('click', menuSheet);
   $('#btnSol').addEventListener('click', () => { S.settings.mode = S.settings.mode === 'sol' ? 'obra' : 'sol'; saveSettings(); render(); });
+  $('#btnDock').addEventListener('click', () => { S.settings.dockMin = !S.settings.dockMin; saveSettings(); renderMic(); });
   $('#btnHands').addEventListener('click', () => { S.settings.hands = !S.settings.hands; saveSettings(); renderMic(); });
   $('#btnKeyboard').addEventListener('click', () => { S.typing = !S.typing; renderMic(); if (S.typing) { VoiceAdapter.stopListening(); $('#typein').focus(); } });
   $('#typebar').addEventListener('submit', (e) => { e.preventDefault(); const v = $('#typein').value.trim(); if (!v) return; $('#typein').value = ''; if (!S.session) { VoiceAdapter.unlock(); S.session = true; } VoiceAdapter.stopSpeaking(); dialog.handle(v); });
@@ -1064,8 +1107,11 @@
     if (!S.session) return startSession();
     if (VoiceAdapter.mode === 'none') { S.typing = true; renderMic(); warnVoice('Este navegador no permite reconocimiento de voz. Usa Chrome (Android) o Safari (iPhone), o escribe las órdenes.'); return; }
     if (VoiceAdapter.listening && !VoiceAdapter.speaking) { VoiceAdapter.stopListening(); return; }
+    const hablaba = VoiceAdapter.speaking;
     sayToken++; VoiceAdapter.stopSpeaking(); noSpeech = 0; S.micBlocked = false;
-    VoiceAdapter.listen(true);
+    // Tras cortar la voz, se deja apagar el altavoz un instante antes de abrir el micro (en iPhone el micro exige abrirse dentro del toque)
+    if (hablaba && !isIOS()) setTimeout(() => VoiceAdapter.listen(true), 300);
+    else VoiceAdapter.listen(true);
   });
   $('#btnStart').addEventListener('click', () => startSession());
   function goObras() { S.greetPending = false; S.session = false; S.ended = false; releaseAwake(); VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); sayToken++; S.view = 'obras'; render(); }

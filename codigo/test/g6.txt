@@ -1,0 +1,53 @@
+vivienda
+salón
+4 por 3
+2,60
+una puerta de 0,82 por 2,03 y una ventana de 1,20 por 1,10
+no
+dormitorio 1
+3 por 3
+la misma que el salón
+la puerta y la ventana iguales que el salón
+no
+cocina
+3 por 2,5
+2,60
+la ventana igual que el salón y una puerta de 0,72 por 2,03
+ninguna más
+pasillo
+4 por 1
+2,60
+borra el pasillo
+sí
+añade armario empotrado en el dormitorio 1
+metros
+elegir trabajos
+3
+sí, todas
+las dos
+baño
+1
+2
+sí
+plato
+no
+no
+cocina
+1
+1
+sí
+no
+ya está
+no
+cocina
+1
+3
+no
+ya está
+añadir mover estatua de sitio
+unidades
+en el salón
+#marca sol_gres,pin_par
+generar
+2,40
+1

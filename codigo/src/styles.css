@@ -220,7 +220,7 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .bub.sketch svg { display: block; }
 
 /* Asistente guiado: toma de datos y pantalla de trabajos */
-.toma-z { grid-template-columns: 1fr auto; align-items: center; }
+.toma-z { grid-template-columns: 1fr auto auto; align-items: center; }
 .toma-z .mini { flex: none; width: 92px; color: var(--accent); }
 .toma-z .mini svg text { display: none; }
 .tw-list { display: flex; flex-direction: column; gap: 8px; }
@@ -241,3 +241,14 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 #app[data-view="trabajos"] .talk .bub:not(:last-child) { display: none; }
 #app[data-view="trabajos"] .talk { max-height: 76px; }
 #app[data-view="trabajos"] #chips { display: none; }
+/* Panel de conversación plegable: deja la pantalla libre para revisar */
+#dock.min { gap: 0; padding-block: 6px calc(6px + env(safe-area-inset-bottom, 0px)); }
+#dock.min .talk, #dock.min #chips, #dock.min .vstate, #dock.min .voicewarn, #dock.min .typebar, #dock.min .startbar { display: none !important; }
+#dock.min .mic { width: 56px; height: 56px; }
+#btnDock svg { transition: transform .2s; }
+#btnDock[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+#btnDock[aria-pressed="true"] svg { transform: rotate(180deg); }
+@media (max-width: 420px) { #btnDock .t { display: none; } }
+.toma-z .zdel { width: 36px; height: 36px; color: var(--muted); }
+.toma-z .zdel svg { width: 18px; height: 18px; }
+#tnu, #tnz { min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-2); padding: 8px 10px; font-weight: 600; }

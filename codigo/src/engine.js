@@ -776,6 +776,9 @@
       if (this.guia && (text || (input && input.act))) {
         if (this.guia.activo) return this.guia.handle(text, n, input);
         if (/^(medir otra zona|nueva zona|otra zona|asistente guiado|medicion guiada|empezar asistente|medir algo mas)\b/.test(n)) return this.guia.start();
+        const mb = n.match(/^(?:borra|borrar|elimina|eliminar|quita|quitar)\s+(?:la |el )?(?:estancia|zona|fachada|cubierta|habitacion)\s+(.+)$/);
+        const G = root.Guia || (typeof require !== 'undefined' ? require('./guia.js') : null);
+        if (mb && G && this.obra.toma) { const z = G.buscarZona(this.obra, mb[1]); if (z) return this.guia.pedirBorrar(z); }
         if (/^(elegir trabajos|elige trabajos|elegir mas trabajos|seleccionar trabajos|pantalla de trabajos|elige los trabajos)\b/.test(n) && this.obra.toma && this.obra.toma.zonas.length) return this.guia.abrirTrabajos();
       }
       // Comandos globales que funcionan en cualquier estado

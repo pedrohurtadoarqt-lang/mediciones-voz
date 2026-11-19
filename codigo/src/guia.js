@@ -21,6 +21,8 @@
     if (/^(cocina|terraza|galeria|entrada|habitacion|escalera|azotea|cubierta|fachada|despensa|zona|planta|oficina|sala|suite|bodega|tienda|nave|piscina|lavanderia)/.test(n) || (/(a|ion)$/.test(w0) && !/^(dia|sofa|clima|sistema|tema|programa)$/.test(w0))) return 'la ' + est.toLowerCase();
     return 'el ' + est.toLowerCase();
   };
+  const contentLen = (n) => n.split(/\s+/).filter((w) => w.length > 3).length;
+  const deArt = (est) => { const a = art(est); return a.startsWith('el ') ? 'del ' + a.slice(3) : 'de ' + a; };
   const plural = (n, s, p) => (Math.abs(n) === 1 ? s : (p || s + 's'));
 
   /* ---------------- Lectura de respuestas ---------------- */
@@ -166,7 +168,7 @@
     T('interior', 'Demoliciones', 'dem_ins_ele', 'Levantado de instalación eléctrica', 'ud', 'DIE060', 'ud_obra'),
     T('interior', 'Demoliciones', 'dem_ins_fon', 'Levantado de instalación de fontanería', 'ud', 'DIF105', 'ud_zona', { zonas: /bano|aseo|cocina|lavadero|galeria/ }),
     T('interior', 'Demoliciones', 'dem_ins_san', 'Levantado de red de desagües', 'ud', 'DIS105', 'ud_zona', { zonas: /bano|aseo|cocina|lavadero|galeria/ }),
-    T('interior', 'Demoliciones', 'dem_puertas', 'Levantado de puertas de paso', 'ud', 'DLP220', 'ud_puertas'),
+    T('interior', 'Demoliciones', 'dem_puertas', 'Desmontaje de puertas de paso', 'ud', 'DLP220', 'puertas_paso'),
     T('interior', 'Demoliciones', 'dem_carp_ext', 'Levantado de carpinterías exteriores', 'ud', 'DLC010', 'ud_ventanas'),
     T('interior', 'Demoliciones', 'dem_enfosc', 'Demolición de enfoscado', 'm2', 'DRF010b', 'paredes'),
     T('interior', 'Demoliciones', 'dem_yeso', 'Demolición de guarnecido de yeso', 'm2', 'DRF020b', 'paredes'),
@@ -193,6 +195,7 @@
     T('interior', 'Albañilería', 'alb_ft_pyl', 'Falso techo de placa de yeso laminado', 'm2', 'RTA020d', 'techo'),
     T('interior', 'Albañilería', 'alb_ft_esc', 'Falso techo de escayola', 'm2', 'RTA010', 'techo'),
     T('interior', 'Albañilería', 'alb_ayudas', 'Ayudas de albañilería (según la superficie reformada)', 'm2', 'HYA030', 'sup_total'),
+    T('interior', 'Carpintería interior', 'car_puertas', 'Puertas de paso nuevas', 'ud', 'LPM010b', 'puertas_paso', { nuevas: true }),
     T('interior', 'Pintura', 'pin_par', 'Pintura plástica en paredes', 'm2', 'RIP030', 'paredes'),
     T('interior', 'Pintura', 'pin_tec', 'Pintura plástica en techos', 'm2', 'RIP030', 'techo'),
     // ---- Fachada ----
@@ -240,7 +243,7 @@
     T('electricidad', 'Electricidad', 'ele_t25', 'Toma de 25 A para cocina y horno', 'ud', 'IEM060b', 'ele_t25', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_c4', 'Tomas para lavadora, lavavajillas y termo', 'ud', 'IEM066', 'ele_c4', { auto: true })
   ];
-  const CAP_ORDEN = ['Demoliciones', 'Apeos', 'Revestimientos', 'Solados', 'Albañilería', 'Pintura', 'Fachada', 'Medios auxiliares', 'Impermeabilización', 'Aislamiento', 'Fontanería', 'Aparatos sanitarios', 'Saneamiento', 'Electricidad', 'Otras partidas'];
+  const CAP_ORDEN = ['Demoliciones', 'Apeos', 'Revestimientos', 'Solados', 'Albañilería', 'Carpintería interior', 'Pintura', 'Fachada', 'Medios auxiliares', 'Impermeabilización', 'Aislamiento', 'Fontanería', 'Aparatos sanitarios', 'Saneamiento', 'Electricidad', 'Otras partidas'];
   const AMBITO_LABEL = { interior: 'Estancias', fachada: 'Fachadas', cubierta: 'Cubiertas', fontaneria: 'Fontanería', electricidad: 'Electricidad' };
 
   /* ---------------- Reglas de medición ---------------- */
@@ -315,8 +318,25 @@
     ele_c4: (z) => (z.e && z.e.c4 && z.e.c4.length ? [L(z.nombre + ': ' + z.e.c4.join(', '), z.e.c4.length)] : [])
   };
   // Reglas que se calculan una vez para toda la obra
+  /** Puertas de paso de las estancias medidas, agrupadas por medida (sin balconeras).
+   *  Si el usuario corrigió el total (puertas vistas desde dos estancias) o dijo cuántas se cambian, se ajusta. */
+  function puertasPaso(zs, obra) {
+    const grupos = new Map();
+    zs.forEach((z) => (z.huecos || []).filter((x) => x.tipo === 'puerta' && !x.bal).forEach((x) => {
+      const k = fmt(x.an || 0.82) + ' × ' + fmt(x.al || 2.03);
+      const gg = grupos.get(k) || { an: x.an || 0.82, al: x.al || 2.03, n: 0, est: [] };
+      gg.n += x.uds || 1; if (!gg.est.includes(z.nombre)) gg.est.push(z.nombre); grupos.set(k, gg);
+    }));
+    const lista = [...grupos.values()].sort((a, b) => b.n - a.n);
+    const g = obra.guia || {};
+    const objetivo = Math.min(g.puertasCambio || Infinity, g.puertasTotal || Infinity);
+    let sum = lista.reduce((a, x) => a + x.n, 0);
+    while (isFinite(objetivo) && sum > objetivo && lista.length) { const mayor = lista.reduce((m, x) => (x.n > m.n ? x : m), lista[0]); mayor.n--; sum--; if (!mayor.n) lista.splice(lista.indexOf(mayor), 1); }
+    return lista;
+  }
   const REGLAS_OBRA = {
     ud_obra: () => [L('Vivienda', 1)],
+    puertas_paso: (zs, w, obra) => puertasPaso(zs, obra).map((x) => Object.assign(L('Puertas de ' + fmt(x.an) + ' × ' + fmt(x.al) + ' (' + x.est.join(', ') + ')', x.n), w.nuevas ? { _c: x.an <= 0.76 ? 'LPM010' : 'LPM010b' } : {})),
     sup_total: (zs) => zs.filter((z) => z.area).map((z) => Object.assign(L('Superficie reformada', 1, z.area), { est: z.nombre, dePlanta: 'superficie' }))
   };
   const CODIGO_INST = (z) => { const t = norm(z.nombre), f = (z.f && z.f.tipo) || ''; if (/aseo/.test(t)) return 'IFI010b'; if (f === 'cocina' || /cocina/.test(t)) return 'IFI010d'; if (f === 'lavadero' || /lavadero|galeria|lavanderia/.test(t)) return 'IFI010c'; return 'IFI010'; };
@@ -352,6 +372,46 @@
     g.sel[id] = { on: true, zonas: zonasDe(obra, w).map((z) => z.id) };
     return w;
   }
+  /** Partida dictada por el usuario que no está en la base (se pregunta su medición al generar). */
+  function anadirPropia(obra, desc, u, ambito, zonas) {
+    const g = obra.guia || (obra.guia = {});
+    g.extra = g.extra || [];
+    const id = 'p_' + norm(desc).replace(/[^a-z0-9]+/g, '_').slice(0, 40) + '_' + ambito;
+    let w = g.extra.find((x) => x.id === id);
+    if (!w) { w = { id, ambito, capitulo: 'Otras partidas', label: cap(desc), u, c: null, propia: true, regla: 'preguntar', pide: (u === 'ud' ? '¿Cuántas unidades de ' : u === 'm' ? '¿Cuántos metros de ' : u === 'm3' ? 'Dime largo, ancho y alto de ' : 'Dime largo por ancho de ') + desc.toLowerCase() + ' en {zona}?' }; g.extra.push(w); }
+    w.u = u;
+    g.sel = g.sel || {};
+    g.sel[id] = { on: true, zonas: zonas && zonas.length ? zonas : zonasDe(obra, w).map((z) => z.id) };
+    return w;
+  }
+  /** Elimina una zona medida (estancia, fachada…) y todo lo que salió de ella. */
+  function borrarZona(obra, id) {
+    const t = obra.toma; if (!t) return null;
+    const z = t.zonas.find((x) => x.id === id); if (!z) return null;
+    t.zonas = t.zonas.filter((x) => x.id !== id);
+    const g = obra.guia || {};
+    Object.values(g.sel || {}).forEach((s) => { s.zonas = (s.zonas || []).filter((x) => x !== id); if (!s.zonas.length) s.on = false; });
+    Object.keys(g.resp || {}).forEach((k) => { if (k.endsWith('|' + id)) delete g.resp[k]; });
+    (g.preguntas || []).splice(0, Infinity, ...(g.preguntas || []).filter((q) => q.zid !== id));
+    obra.partidas.forEach((p) => { p.lineas = p.lineas.filter((l) => !(l.guia && l.guia.split('|')[1] === id)); });
+    obra.partidas = obra.partidas.filter((p) => !(p.guia && !p.lineas.length));
+    const otra = t.zonas.some((x) => norm(x.nombre) === norm(z.nombre));
+    if (!otra) {
+      if (obra.plantas) delete obra.plantas[norm(z.nombre)];
+      if (z.ambito === 'interior' && obra.estancias) obra.estancias = obra.estancias.filter((e) => norm(e) !== norm(z.nombre));
+      if (obra.estActiva && norm(obra.estActiva) === norm(z.nombre)) obra.estActiva = '';
+    }
+    return z;
+  }
+  function buscarZona(obra, frase, ambito) {
+    const zs = ((obra.toma && obra.toma.zonas) || []).filter((z) => !ambito || z.ambito === ambito);
+    const n = norm(frase);
+    const exact = zs.filter((z) => n.includes(norm(z.nombre)));
+    if (exact.length) return exact.sort((a, b) => b.nombre.length - a.nombre.length)[0];
+    const w0 = (z) => norm(z.nombre).split(' ')[0];
+    const parc = zs.filter((z) => w0(z).length > 3 && n.includes(w0(z)));
+    return parc.length === 1 ? parc[0] : null;
+  }
   /** Trabajos que tiene sentido ofrecer para la toma de datos de la obra. */
   function trabajosPara(obra) {
     const zs = (obra.toma && obra.toma.zonas) || [];
@@ -378,6 +438,7 @@
 
   /** Busca la partida en la base; si no está, otra equivalente; si tampoco, una partida nueva. */
   function resolverDoc(cat, w, code) {
+    if (w.propia && !code) return null;
     const c = code || w.c;
     if (c && cat.byCode.get(c)) return cat.byCode.get(c);
     const res = cat.index.search(w.q || w.label).filter((r) => r.doc.u === w.u && r.s >= 0.55);
@@ -399,7 +460,9 @@
     const nextId = (p) => p.lineas.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1;
     const partidaPara = (w, code) => {
       const d = resolverDoc(cat, w, code);
-      const ref = d ? d.c : 'G.' + w.id.toUpperCase();
+      const refs = obra.guia.refs || (obra.guia.refs = {});
+      if (!d && !refs[w.id]) { obra.propiaSeq = (obra.propiaSeq || 0) + 1; refs[w.id] = 'PROPIA.' + String(obra.propiaSeq).padStart(3, '0'); }
+      const ref = d ? d.c : refs[w.id];
       let p = obra.partidas.find((x) => x.ref === ref);
       if (!p) {
         p = d ? { ref: d.c, u: d.u, r: d.r, t: d.t, chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder, subTitle: d.subTitle }
@@ -423,7 +486,13 @@
       if (!s || !s.on) continue;
       const zs = zsAll.filter((z) => s.zonas.includes(z.id) && z.ambito === w.ambito);
       if (!zs.length) continue;
-      if (REGLAS_OBRA[w.regla]) { const lines = REGLAS_OBRA[w.regla](zs); if (lines.length) add(partidaPara(w), w, null, lines); continue; }
+      if (REGLAS_OBRA[w.regla]) {
+        const lines = REGLAS_OBRA[w.regla](zs, w, obra);
+        const porCodigo = new Map();
+        lines.forEach((ln) => { const c = ln._c || ''; delete ln._c; porCodigo.set(c, (porCodigo.get(c) || []).concat([ln])); });
+        porCodigo.forEach((ls, c) => add(partidaPara(w, c || null), w, null, ls));
+        continue;
+      }
       for (const z of zs) {
         if (w.regla === 'preguntar') {
           const prev = (obra.guia.resp || {})[w.id + '|' + z.id];
@@ -491,6 +560,15 @@
         g.fin = true; this.save();
         return this.ask('Vale, dejo el asistente guiado. Puedes dictarme trabajos y medidas libremente, o decir «medir otra zona» para volver a empezar.', this.dlg.idleChips());
       }
+      // «Borra el baño», «elimina la estancia cocina»
+      const mb = n.match(/^(?:borra|borrar|elimina|eliminar|quita|quitar)\s+(?:la |el |esta |este )?(?:estancia|zona|fachada|cubierta|habitacion)?\s*(.*)$/);
+      if (mb && !(input && input.act) && !/^(la |el )?(ultima|ultimo|linea|hueco|puerta|ventana|faldon)/.test(mb[1] || '')) {
+        const z = buscarZona(this.obra, mb[1] || '') || (/^(esta|este)?\s*(estancia|zona|habitacion)?$/.test(mb[1] || '') ? this.zona() : null);
+        if (z) return this.pedirBorrar(z);
+      }
+      // «Añade armario empotrado en la habitación»: partida dictada en cualquier momento
+      const mp = n.match(/^(?:anade|anadir|añade|añadir|crea|crear|apunta|mete|quiero (?:anadir|poner)|nueva partida|otra partida|partida nueva)\s+(?:una |un |la |el |partida (?:de |para )?)?(.{4,})$/);
+      if (mp && !(input && input.act) && !/^(puerta|ventana|hueco|otra igual|otro igual|faldon|fachada)/.test(mp[1])) return this.nuevaPartida(text.replace(/^\s*\S+\s+(?:(?:una|un|la|el)\s+)?(?:partida\s+(?:de\s+|para\s+)?)?/i, ''));
       const s = this.pasos[g.paso];
       if (!s) { g.fin = true; return this.dlg.st_idle(text, n, input); }
       const r = s.a.call(this, text, n, input || {}, g.d);
@@ -546,6 +624,62 @@
       }).catch(() => { clearTimeout(timer); fallback(); });
     }
 
+    /* ---- borrar zonas ---- */
+    pedirBorrar(z) {
+      const g = this.g;
+      g.ret = g.ret || { paso: g.paso, d: g.d, fin: g.fin };
+      g.fin = false;
+      this.g.paso = 'borrar_zona'; this.g.d = { zid: z.id }; this.fails = 0; this.save();
+      return this.ask('¿Elimino ' + art(z.nombre) + ' y todo lo que he medido en ' + (art(z.nombre).startsWith('la') ? 'ella' : 'él') + '?', CH(['Sí, eliminar', 'No']));
+    }
+    volver(pre) {
+      const g = this.g; const r = g.ret; g.ret = null;
+      if (r && (r.fin || r.paso === 'hecho' || r.paso === 'libre')) {
+        g.paso = r.paso; g.fin = true; this.save();
+        if (this.toma.zonas.length && this.obra.partidas.some((p) => p.guia)) generar(this.obra, this.dlg.cat);
+        this.save();
+        return this.ask((pre ? pre + ' ' : '') + '¿Algo más?', this.dlg.idleChips());
+      }
+      if (!r || !this.pasos[r.paso] || (r.d && r.d.zid && !this.zona(r.d.zid))) return this.say(r && r.paso === 'trabajos' ? 'trabajos' : this.sigPasoTras(), {}, pre);
+      g.paso = r.paso; g.d = r.d; this.fails = 0; this.save();
+      return this.repetir(pre);
+    }
+    sigPasoTras() {
+      const t = this.g.tipo;
+      if (t === 'fachada') return this.toma.zonas.some((z) => z.ambito === 'fachada') ? 'fac_lista' : 'fac_lista';
+      if (t === 'cubierta') return 'cub_nombre';
+      if (t === 'instalaciones') return 'ins_tipo';
+      return this.toma.zonas.some((z) => z.ambito === 'interior') ? 'est_mas' : 'est_nombre';
+    }
+    /* ---- partida dictada que no está en la lista ---- */
+    nuevaPartida(frase) {
+      const g = this.g;
+      let desc = String(frase).trim().replace(/[.,;]+$/, '');
+      const zRef = buscarZona(this.obra, desc);
+      if (zRef) desc = desc.replace(new RegExp('\\s*(?:en|del|de la|de|para)\\s+(?:el|la|los|las)?\\s*' + zRef.nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '.*$', 'i'), '').replace(new RegExp('\\s*(?:en|del|de la|de)\\s+(?:el|la)?\\s*' + norm(zRef.nombre).split(' ')[0] + '\\S*.*$', 'i'), '').trim();
+      desc = cap(desc);
+      if (desc.length < 3) return this.ask('¿Qué partida añado? Dime el trabajo, por ejemplo «armario empotrado».', []);
+      if (!g.ret) g.ret = { paso: g.paso, d: g.d };
+      const cat = this.dlg.cat;
+      const res = cat.index.search(desc);
+      const top = res.length && res[0].s >= 0.7 && res[0].miss === 0 ? res[0].doc : null;
+      g.paso = 'nueva_partida'; g.d = { desc, zid: zRef ? zRef.id : null, code: top ? top.c : null }; this.fails = 0; this.save();
+      if (top) return this.ask('En la base de datos tengo «' + top.r + '», en ' + unitSpoken(top.u) + '. ¿Uso esa o creo una partida nueva «' + desc + '»?', CH([{ label: 'Usar la de la base', value: 'usar la de la base' }, { label: 'Crear nueva', value: 'crear nueva' }]));
+      g.paso = 'nueva_unidad'; this.save();
+      return this.repetir('Creo la partida «' + desc + '».');
+    }
+    zonasPara(ambito, zid) { if (zid) return [zid]; const zs = this.toma.zonas.filter((z) => z.ambito === ambito); return zs.map((z) => z.id); }
+    ambitoActual() {
+      const z = this.g.paso !== 'trabajos' && this.zona(); if (z) return z.ambito;
+      const zs = this.toma.zonas; if (zs.some((x) => x.ambito === 'interior')) return 'interior';
+      return zs.length ? zs[0].ambito : 'interior';
+    }
+    terminarNueva(w, pre) {
+      const zs = (this.g.sel[w.id] || {}).zonas || [];
+      const nombres = zs.map((id) => (this.zona(id) || {}).nombre).filter(Boolean);
+      this.save();
+      return this.volver((pre ? pre + ' ' : '') + 'Añadida «' + w.label + '»' + (nombres.length ? ' en ' + nombres.map((x) => art(x)).join(', ') : '') + (w.regla === 'preguntar' ? '; te preguntaré la medición al generar.' : '.'));
+    }
     /* ---- pantalla de trabajos ---- */
     abrirTrabajos(pre) {
       seleccion(this.obra);
@@ -633,7 +767,8 @@
     formato: () => 'el nombre de la estancia (Salón, Baño 1, Dormitorio 2…)',
     a(text, n) {
       const limpio = text.replace(/^(?:empezamos|empezamos por|vamos|vamos al?|vamos a la|por|el|la|en|al|seguimos (?:con|por)|ahora|pasamos al?|pasamos a la)\s+/i, '').replace(/^(?:el|la)\s+/i, '');
-      const nombre = estanciaName(limpio.split(/[,.]|\b\d/)[0]);
+      const mw = limpio.match(/^(.*?)[,.]?\s+(\d+(?:[.,]\d+)?\s*(?:por|x|metros|m\b|derecha|izquierda).*)$/i);
+      const nombre = estanciaName((mw ? mw[1] : limpio).split(/[,.]/)[0]);
       if (!nombre || nombre.split(' ').length > 4 || !/[a-zñ]/i.test(norm(nombre)) || yesNo(norm(nombre)) !== null) return false;
       const u = usados(this);
       let fin = nombre;
@@ -642,9 +777,10 @@
       this.obra.estancias = this.obra.estancias || []; if (!this.obra.estancias.includes(fin)) this.obra.estancias.push(fin);
       this.obra.estActiva = fin;
       // ¿Ha dictado ya las paredes en la misma frase?
-      const w = /\d/.test(text) ? parseWalk(text.slice(text.search(/\d/))) : null;
+      const resto = mw ? mw[2] : '';
+      const w = resto ? parseWalk(resto) : null;
       this.g.d = { zid: z.id };
-      if (w) { this.dlg.muteAsk = true; try { this.say('est_planta', { zid: z.id }); } finally { this.dlg.muteAsk = false; } const r = P.est_planta.a.call(this, text.slice(text.search(/\d/)), norm(text), {}, this.g.d); return r === false ? this.repetir('Vamos con ' + art(fin) + '.') : r; }
+      if (w) { this.dlg.muteAsk = true; try { this.say('est_planta', { zid: z.id }); } finally { this.dlg.muteAsk = false; } const r = P.est_planta.a.call(this, resto, norm(resto), {}, this.g.d); return r === false ? this.repetir('Vamos con ' + art(fin) + '.') : r; }
       return this.say('est_planta', { zid: z.id }, 'Vamos con ' + art(fin) + '.');
     }
   };
@@ -704,7 +840,7 @@
     a(text, n, input, d) {
       const z = this.zona(d.zid);
       let v = null;
-      if (/(misma|igual|lo mismo)/.test(n)) { const prev = this.toma.zonas.filter((x) => x.ambito === 'interior' && x.altura && x.id !== d.zid).pop(); if (prev) v = prev.altura; }
+      if (/(misma|igual|lo mismo)/.test(n)) { const cand = this.toma.zonas.filter((x) => x.ambito === 'interior' && x.altura && x.id !== d.zid); const prev = buscarZona({ toma: { zonas: cand } }, n) || cand.pop(); if (prev) v = prev.altura; }
       if (v == null) v = num(text);
       if (v != null && v > 20 && v < 2000) v = round2(v / 100);
       if (!(v > 0.5 && v < 20)) return false;
@@ -717,9 +853,11 @@
       const z = this.zona(d.zid); const h = z.huecos || [];
       if (d.pend) return { t: '¿Qué medidas tiene ' + (d.pend.tipo === 'puerta' ? 'la puerta' : 'la ventana') + '? Ancho por alto, por ejemplo «0,82 por 2,03».', c: CH(d.pend.tipo === 'puerta' ? ['0,72 por 2,03', '0,82 por 2,03'] : ['1,20 por 1,10']) };
       if (h.length) return { t: '¿Alguna puerta o ventana más?', c: CH(['No, ninguna más', 'Otra igual']) };
-      return { t: (z.huecosMencion ? 'Me has dicho que hay huecos. ' : '') + '¿Tiene puertas o ventanas? Dímelas con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «dos ventanas de 1,20 por 1,10». Se descontarán de las paredes.', c: CH(['Ninguna', 'Una puerta de 0,82 por 2,03']) };
+      // (también vale «la ventana igual que el salón»)
+      const prevH = this.toma.zonas.filter((x) => x.ambito === 'interior' && x.id !== d.zid && (x.huecos || []).length).pop();
+      return { t: (z.huecosMencion ? 'Me has dicho que hay huecos. ' : '') + '¿Tiene puertas o ventanas? Dímelas con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «dos ventanas de 1,20 por 1,10»' + (prevH ? ', o «iguales que ' + art(prevH.nombre) + '»' : '') + '. Se descontarán de las paredes.', c: CH(['Ninguna'].concat(prevH ? [{ label: 'Iguales que ' + prevH.nombre, value: 'iguales que ' + prevH.nombre }] : []).concat(['Una puerta de 0,82 por 2,03'])) };
     },
-    ayuda: () => 'Dime cada hueco así: «una puerta de 0,82 por 2,03» o «dos ventanas de 1,20 por 1,10». Si no hay ninguno, di «ninguna».',
+    ayuda: () => 'Dime cada hueco así: «una puerta de 0,82 por 2,03» o «dos ventanas de 1,20 por 1,10». Si son como los de otra estancia: «la puerta y la ventana iguales que el salón». Si no hay ninguno, di «ninguna».',
     formato: () => 'cada hueco como «N puertas de ANCHO por ALTO» o «N ventanas de ANCHO por ALTO» separados por « y »; o «ninguna» si no hay',
     saltar(d) { return this.siguienteEstancia(d); },
     a(text, n, input, d) {
@@ -729,6 +867,22 @@
         if (!(dm.ancho > 0 && dm.alto > 0)) return false;
         z.huecos.push(Object.assign({}, d.pend, { an: dm.ancho, al: dm.alto })); this.g.d = { zid: d.zid }; this.save();
         return this.repetir('Anotada.');
+      }
+      // «La puerta y la ventana iguales que en el salón», «las mismas que la anterior»
+      if (/(igual|iguales|misma|mismas|mismo|mismos|lo mismo)/.test(n) && !/^(otra|otro) igual/.test(n)) {
+        const otras = this.toma.zonas.filter((x) => x.ambito === 'interior' && x.id !== z.id && (x.huecos || []).length);
+        const src = buscarZona({ toma: { zonas: otras } }, n) || (otras.length && (/(anterior|de antes|ultima|otra estancia)/.test(n) || !/(que el|que la|que en)/.test(n)) ? otras[otras.length - 1] : null);
+        if (src) {
+          const cl = n.split(/\s*(?:,|;|\by una\b|\by un\b|\by dos\b|\by tres\b|\bmas\b)\s*/).find((x) => /(igual|misma|mismo|lo mismo)/.test(x)) || n;
+          const soloP = /puerta/.test(cl) && !/ventana/.test(cl), soloV = /ventana/.test(cl) && !/puerta/.test(cl);
+          const cop = src.huecos.filter((x) => (soloP ? x.tipo === 'puerta' : soloV ? x.tipo === 'ventana' : true)).map((x) => Object.assign({}, x));
+          if (cop.length) {
+            cop.forEach((x) => z.huecos.push(x));
+            parseHuecos(text).filter((x) => x.an && x.al).forEach((x) => z.huecos.push(x));
+            this.save();
+            return this.repetir('Copiado ' + deArt(src.nombre) + ': ' + cop.map((x) => fmtUds(x.uds) + ' ' + plural(x.uds, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(' y ') + '.');
+          }
+        } else if (/(que el|que la|que en|anterior)/.test(n)) return this.ask('¿Iguales que qué estancia? ' + (otras.length ? 'Tengo huecos en ' + otras.map((x) => x.nombre).join(', ') + '.' : 'Todavía no hay huecos en otras estancias.'), CH(otras.map((x) => ({ label: 'Igual que ' + x.nombre, value: 'iguales que ' + x.nombre }))));
       }
       if (/^otra igual|^otro igual|^la misma|^igual/.test(n) && z.huecos.length) { const u = z.huecos[z.huecos.length - 1]; u.uds = (u.uds || 1) + 1; this.save(); return this.repetir('Anotada otra igual: ' + fmtUds(u.uds) + ' en total.'); }
       const hs = parseHuecos(text);
@@ -752,14 +906,128 @@
     q() {
       const u = usados(this);
       const otras = EST_DEF.filter((e) => !u.includes(norm(e))).slice(0, 4);
-      return { t: this.g.tipo === 'estancia' ? '¿Medimos otra estancia o elegimos ya los trabajos?' : '¿Pasamos a otra estancia o elegimos ya los trabajos?', c: CH([{ label: 'Elegir trabajos', value: 'elegir trabajos' }].concat(otras)) };
+      return { t: (this.g.tipo === 'estancia' ? '¿Medimos otra estancia' : '¿Pasamos a otra estancia') + ', medimos las instalaciones o elegimos ya los trabajos?', c: CH([{ label: 'Elegir trabajos', value: 'elegir trabajos' }, { label: 'Instalaciones', value: 'instalaciones' }].concat(otras.slice(0, 3))) };
     },
     ayuda: () => 'Dime el nombre de la siguiente estancia, o «elegir trabajos» si ya has medido todas.',
     formato: () => '«elegir trabajos» si ha terminado de medir estancias, o el nombre de la siguiente estancia',
     a(text, n) {
-      if (/(trabajo|terminar|termin|ya esta|listo|ya estan|ninguna|no|elegir|seleccion|eso es todo|ya)/.test(n) && !/^(no,?\s+)?(el|la)?\s*(salon|cocina|bano|aseo|dormitorio|pasillo|terraza)/.test(n)) return this.abrirTrabajos('Muy bien.');
+      if (/(instalac|fontaner|electric)/.test(n)) { this.g.insPreguntado = true; return P.ins_tipo.a.call(this, text, n, {}, {}); }
+      if (/(trabajo|terminar|termin|ya esta|listo|ya estan|ninguna|no|elegir|seleccion|eso es todo|ya)/.test(n) && !/^(no,?\s+)?(el|la)?\s*(salon|cocina|bano|aseo|dormitorio|pasillo|terraza)/.test(n)) return this.finEstancias();
       if (/^(si|otra|otra estancia|seguimos|vale)$/.test(n)) return this.say('est_nombre', {});
       return P.est_nombre.a.call(this, text, n, {}, {});
+    }
+  };
+
+  /* ---- Fin de las estancias: puertas de paso e instalaciones ---- */
+  Guia.prototype.finEstancias = function (pre) {
+    const g = this.g;
+    const n = puertasPaso(this.toma.zonas.filter((z) => z.ambito === 'interior'), { guia: {} }).reduce((a, x) => a + x.n, 0);
+    if (n && !g.puertasHecho) return this.say('puertas_total', {}, pre);
+    if (!g.insPreguntado && !this.toma.zonas.some((z) => z.ambito === 'fontaneria' || z.ambito === 'electricidad')) return this.say('mas_ins', {}, pre);
+    return this.abrirTrabajos(pre || 'Muy bien.');
+  };
+  P.puertas_total = {
+    q() {
+      const ls = puertasPaso(this.toma.zonas.filter((z) => z.ambito === 'interior'), { guia: {} });
+      const n = ls.reduce((a, x) => a + x.n, 0);
+      return { t: 'He contado ' + n + ' ' + plural(n, 'puerta') + ' de paso: ' + ls.map((x) => x.n + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(', ') + '. Si alguna la has dicho en dos estancias, dime cuántas hay en total. ¿Es correcto?', c: CH([{ label: 'Correcto, ' + n, value: 'correcto' }].concat(n > 1 ? [{ label: 'Son ' + (n - 1), value: String(n - 1) }] : [])) };
+    },
+    ayuda: () => 'Di «correcto» o el número total de puertas de paso, por ejemplo «son 5».',
+    formato: () => '«correcto», o el número total de puertas de paso',
+    a(text, n) {
+      const ls = puertasPaso(this.toma.zonas.filter((z) => z.ambito === 'interior'), { guia: {} });
+      const tot = ls.reduce((a, x) => a + x.n, 0);
+      if (/^(si|correcto|vale|ok|bien|exacto|asi es|eso es)\b/.test(n)) this.g.puertasTotal = null;
+      else { const c = count(text); if (c == null || c > tot) return false; this.g.puertasTotal = c; }
+      this.save();
+      return this.say('puertas_cambio', {});
+    }
+  };
+  P.puertas_cambio = {
+    q() { const t = this.g.puertasTotal || puertasPaso(this.toma.zonas.filter((z) => z.ambito === 'interior'), { guia: {} }).reduce((a, x) => a + x.n, 0); return { t: '¿Cambiamos todas las puertas de paso? Son ' + t + '.', c: CH([{ label: 'Sí, todas', value: 'sí, todas' }, 'No', 'Solo algunas']) }; },
+    ayuda: () => 'Di «sí, todas», «no» o cuántas se cambian, por ejemplo «cambiamos 3».',
+    formato: () => '«sí» (todas), «no», o el número de puertas que se cambian',
+    a(text, n) {
+      const g = this.g;
+      const sel = seleccion(this.obra);
+      const marca = (on) => ['dem_puertas', 'car_puertas'].forEach((id) => { if (sel[id]) { sel[id].on = on; if (on) sel[id].zonas = zonasDe(this.obra, TRABAJOS.find((w) => w.id === id)).map((z) => z.id); } });
+      if (/^solo algunas/.test(n)) return this.ask('¿Cuántas cambiamos?', []);
+      const c = count(text);
+      if (yesNo(n) === true || /todas/.test(n)) { g.puertasCambio = null; marca(true); }
+      else if (c != null && c > 0) { g.puertasCambio = c; marca(true); }
+      else if (yesNo(n) === false || c === 0) { g.puertasCambio = null; marca(false); }
+      else return false;
+      g.puertasHecho = true; this.save();
+      const pre = g.puertasCambio ? 'Anoto el cambio de ' + g.puertasCambio + ' ' + plural(g.puertasCambio, 'puerta') + ': desmontaje y puerta nueva.' : yesNo(n) === false || c === 0 ? 'Sin cambio de puertas.' : 'Anoto el cambio de todas: desmontaje y puerta nueva.';
+      return this.finEstancias(pre);
+    }
+  };
+  P.mas_ins = {
+    q: () => ({ t: '¿Medimos también las instalaciones en esta misma medición? Fontanería, electricidad o las dos.', c: CH([{ label: 'Fontanería', value: 'fontanería' }, { label: 'Electricidad', value: 'electricidad' }, { label: 'Las dos', value: 'las dos' }, { label: 'No, elegir trabajos', value: 'no' }]) }),
+    ayuda: () => 'Di «fontanería», «electricidad», «las dos» o «no».',
+    formato: () => 'una de: fontanería, electricidad, las dos, no',
+    a(text, n) {
+      this.g.insPreguntado = true;
+      if (yesNo(n) === false || /(trabajo|elegir|ya esta)/.test(n)) return this.abrirTrabajos('Muy bien.');
+      return P.ins_tipo.a.call(this, text, n, {}, {});
+    }
+  };
+  P.borrar_zona = {
+    q(d) { const z = this.zona(d.zid); return { t: '¿Elimino ' + (z ? art(z.nombre) : 'esa zona') + '?', c: CH(['Sí, eliminar', 'No']) }; },
+    ayuda: () => 'Di «sí» para eliminarla o «no» para dejarla.',
+    formato: () => '«sí» o «no»',
+    a(text, n, input, d) {
+      const v = yesNo(n); if (v === null) return false;
+      if (!v) return this.volver('No la elimino.');
+      this.dlg.snapshot && this.dlg.snapshot();
+      const z = borrarZona(this.obra, d.zid);
+      if (this.g.ret && this.g.ret.d && this.g.ret.d.zid === d.zid) this.g.ret = null;
+      this.save();
+      return this.volver((z ? cap(art(z.nombre)) + (art(z.nombre).startsWith('la ') ? ' eliminada.' : ' eliminado.') : 'Eliminado.') + ' Si te has equivocado, di «deshacer».');
+    }
+  };
+  P.nueva_partida = {
+    q(d) { return { t: '¿Uso la partida de la base de datos o creo una nueva «' + d.desc + '»?', c: CH([{ label: 'Usar la de la base', value: 'usar la de la base' }, { label: 'Crear nueva', value: 'crear nueva' }]) }; },
+    ayuda: () => 'Di «usar la de la base» o «crear nueva».',
+    formato: () => '«usar» o «crear nueva»',
+    a(text, n, input, d) {
+      if (/(usa|usar|esa|la de la base|vale|si)\b/.test(n) && !/(nueva|crear|crea)/.test(n) && d.code) {
+        const doc = this.dlg.cat.byCode.get(d.code);
+        const amb = d.zid ? this.zona(d.zid).ambito : this.ambitoActual();
+        const ww = api.anadirExtra(this.obra, doc, amb);
+        if (d.zid) this.g.sel[ww.id].zonas = [d.zid];
+        return this.terminarNueva(ww);
+      }
+      if (/(nueva|crear|crea|otra|no)\b/.test(n)) { this.g.paso = 'nueva_unidad'; this.save(); return this.repetir(); }
+      return false;
+    }
+  };
+  P.nueva_unidad = {
+    q(d) { return { t: '¿En qué se mide «' + d.desc + '»? En unidades, metros, metros cuadrados o metros cúbicos.', c: CH([{ label: 'Unidades', value: 'unidades' }, { label: 'Metros', value: 'metros' }, { label: 'm²', value: 'metros cuadrados' }, { label: 'm³', value: 'metros cúbicos' }]) }; },
+    ayuda: () => 'Dime la unidad: unidades, metros, metros cuadrados o metros cúbicos.',
+    formato: () => 'una de: ud, m, m2, m3',
+    a(text, n, input, d) {
+      const u = /(cubic|m3|³)/.test(n) ? 'm3' : /(cuadrad|m2|²|superficie)/.test(n) ? 'm2' : /(unidad|ud|pieza|uno|una|partida|global)/.test(n) ? 'ud' : /(metro|lineal|ml|^m$)/.test(n) ? 'm' : null;
+      if (!u) return false;
+      const amb = d.zid ? this.zona(d.zid).ambito : this.ambitoActual();
+      const zs = this.toma.zonas.filter((z) => z.ambito === amb);
+      if (!d.zid && zs.length > 1) { this.g.paso = 'nueva_zonas'; this.g.d = Object.assign({}, d, { u, amb }); this.save(); return this.repetir(); }
+      const w = anadirPropia(this.obra, d.desc, u, amb, this.zonasPara(amb, d.zid));
+      return this.terminarNueva(w);
+    }
+  };
+  P.nueva_zonas = {
+    q(d) { const zs = this.toma.zonas.filter((z) => z.ambito === d.amb); return { t: '¿En qué ' + (d.amb === 'interior' ? 'estancias' : 'zonas') + '? Dímelas, o «en todas».', c: CH([{ label: 'En todas', value: 'en todas' }].concat(zs.slice(0, 5).map((z) => z.nombre))) }; },
+    ayuda: () => 'Dime los nombres separados por «y», por ejemplo «salón y dormitorio 1», o «en todas».',
+    formato: () => 'nombres de las estancias separados por « y », o «todas»',
+    a(text, n, input, d) {
+      const zs = this.toma.zonas.filter((z) => z.ambito === d.amb);
+      let ids;
+      if (/todas|todos|toda la/.test(n)) ids = zs.map((z) => z.id);
+      else ids = n.split(/\s*(?:,|\by\b|\be\b)\s*/).map((tz) => buscarZona({ toma: { zonas: zs } }, tz)).filter(Boolean).map((z) => z.id).filter((x, i, a) => a.indexOf(x) === i);
+      if (!ids.length) return false;
+      const w = anadirPropia(this.obra, d.desc, d.u, d.amb, ids);
+      return this.terminarNueva(w);
     }
   };
 
@@ -783,17 +1051,29 @@
         ws.forEach((w) => { const lw = norm(w.label); const s = pal.filter((p) => lw.includes(p.slice(0, Math.max(4, p.length - 2)))).length / pal.length; if (s > bs) { bs = s; best = w; } });
         if (best && bs >= 0.6) { sel[best.id].on = !quitar; marcados.push(best.label.toLowerCase()); }
       });
-      if (!marcados.length) return false;
+      if (!marcados.length) {
+        if (contentLen(n) >= 2 && !/^(no|si|vale|ok|bueno)\b/.test(n)) return this.nuevaPartida(text);
+        return false;
+      }
       this.save();
       return this.ask((quitar ? 'Quitado: ' : 'Marcado: ') + marcados.join(', ') + '. ¿Algo más, o generamos las mediciones?', this.pasos.trabajos.q.call(this).c);
     }
   };
-  Guia.prototype.volverAMedir = function () {
-    const t = this.g.tipo;
-    if (t === 'fachada') return this.say('fac_lista', { mas: true });
-    if (t === 'cubierta') return this.say('cub_nombre', {});
-    if (t === 'instalaciones') return this.say('ins_tipo', {});
-    return this.say('est_nombre', {});
+  Guia.prototype.volverAMedir = function () { return this.say('mas_zona', {}); };
+  P.mas_zona = {
+    q: () => ({ t: '¿Qué medimos ahora? Otra estancia, instalaciones, una fachada o una cubierta.', c: CH([{ label: 'Otra estancia', value: 'otra estancia' }, { label: 'Instalaciones', value: 'instalaciones' }, { label: 'Fachada', value: 'fachada' }, { label: 'Cubierta', value: 'cubierta' }, { label: 'Volver a los trabajos', value: 'elegir trabajos' }]) }),
+    ayuda: () => 'Di «otra estancia», «instalaciones», «fachada», «cubierta» o «volver a los trabajos».',
+    formato: () => 'una de: estancia, instalaciones, fachada, cubierta, trabajos',
+    a(text, n) {
+      if (/trabajo/.test(n)) return this.abrirTrabajos();
+      if (/(instalac|fontaner|electric)/.test(n)) { this.g.tipo = this.g.tipo || 'instalaciones'; return P.ins_tipo.a.call(this, text, n, {}, {}); }
+      if (/fachada/.test(n)) { this.g.tipo = 'fachada'; return this.say('fac_lista', { mas: true }); }
+      if (/(cubierta|tejado|azotea)/.test(n)) { this.g.tipo = 'cubierta'; return this.say('cub_nombre', {}); }
+      if (/(estancia|habitacion|otra|si)/.test(n)) { if (this.g.tipo !== 'estancia') this.g.tipo = 'vivienda'; return this.say('est_nombre', {}); }
+      const m = /(salon|cocina|bano|aseo|dormitorio|pasillo|terraza|comedor|recibidor|despacho|lavadero)/.test(n);
+      if (m) { this.g.tipo = this.g.tipo === 'estancia' ? 'estancia' : 'vivienda'; return P.est_nombre.a.call(this, text, n, {}, {}); }
+      return false;
+    }
   };
   P.preguntas = {
     q(d) {
@@ -1058,7 +1338,11 @@
   };
   const fonZonas = (self) => self.toma.zonas.filter((z) => z.ambito === 'fontaneria');
   P.fon_est = {
-    q() { const n = fonZonas(this).length; return { t: n ? '¿Otra estancia con agua? Baño, cocina, lavadero u otra; o di «ya está».' : '¿Por qué estancia empezamos? Baño, cocina, lavadero u otra.', c: CH((n ? ['Ya está'] : []).concat(FON_EST)) }; },
+    q() {
+      const n = fonZonas(this).length; const hechas = fonZonas(this).map((z) => norm(z.nombre));
+      const hum = this.toma.zonas.filter((z) => z.ambito === 'interior' && /(bano|aseo|cocina|lavadero|galeria|lavanderia)/.test(norm(z.nombre)) && !hechas.includes(norm(z.nombre))).map((z) => z.nombre);
+      return { t: n ? '¿Otra estancia con agua? ' + (hum.length ? hum.join(', ') + ', u otra' : 'Baño, cocina, lavadero u otra') + '; o di «ya está».' : '¿Por qué estancia empezamos la fontanería? ' + (hum.length ? hum.join(', ') + ', u otra.' : 'Baño, cocina, lavadero u otra.'), c: CH((n ? ['Ya está'] : []).concat(hum.length ? hum : FON_EST).concat(hum.length ? ['Otra'] : [])) };
+    },
     ayuda: () => 'Dime el tipo de estancia: baño, cocina, lavadero u otra.',
     formato: () => 'una de: baño, aseo, cocina, lavadero, otra (con su nombre si lo dice); o «ya está»',
     a(text, n) {
@@ -1184,7 +1468,7 @@
       else { const c = count(text); if (c == null) return false; z.e.tomas = c; }
       // Tomas especiales que salen de lo respondido en fontanería
       const fz = this.toma.zonas.find((x) => x.ambito === 'fontaneria' && norm(x.nombre) === norm(z.nombre));
-      if (fz) { z.e.c4 = [fz.f.lavadora && 'lavadora', fz.f.lavavajillas && 'lavavajillas'].filter(Boolean); if (z.e.c4.length) pre += ' Añado la toma de ' + z.e.c4.join(' y ') + '.'; }
+      if (fz) { z.e.c4 = [fz.f.lavadora && 'lavadora', fz.f.lavavajillas && 'lavavajillas'].filter(Boolean); if (z.e.c4.length) pre = (pre ? pre + ' ' : '') + 'Añado la toma de ' + z.e.c4.join(' y ') + '.'; }
       this.save();
       if (/cocina/.test(norm(z.nombre)) && z.e.c3 == null) return this.say('ele_cocina', { zid: z.id }, pre);
       if (/cocina|lavadero|galeria/.test(norm(z.nombre)) && !fz) return this.say('ele_c4', { zid: z.id }, pre);
@@ -1213,7 +1497,7 @@
     }
   };
 
-  const api = { Guia, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
+  const api = { Guia, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Guia = api;
 })(typeof self !== 'undefined' ? self : this);
