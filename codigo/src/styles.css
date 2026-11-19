@@ -218,3 +218,26 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .bub.sketch { padding: 8px 10px; color: var(--fg); }
 .bub.sketch .sketch-t { font-size: 12px; opacity: .75; margin-bottom: 4px; }
 .bub.sketch svg { display: block; }
+
+/* Asistente guiado: toma de datos y pantalla de trabajos */
+.toma-z { grid-template-columns: 1fr auto; align-items: center; }
+.toma-z .mini { flex: none; width: 92px; color: var(--accent); }
+.toma-z .mini svg text { display: none; }
+.tw-list { display: flex; flex-direction: column; gap: 8px; }
+.tw { border: 1px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden; }
+.tw.on { border-color: var(--accent); box-shadow: inset 4px 0 0 var(--accent); }
+.tw-main { width: 100%; display: flex; gap: 12px; align-items: flex-start; text-align: left; padding: 12px; background: none; border: 0; min-height: 56px; }
+.tw-box { flex: none; width: 28px; height: 28px; border-radius: 8px; border: 2px solid var(--chip-line); display: grid; place-items: center; font-weight: 800; color: var(--accent-fg); }
+.tw.on .tw-box { background: var(--accent); border-color: var(--accent); }
+.tw-t { flex: 1; min-width: 0; font-weight: 600; line-height: 1.3; }
+.tw-t .u { color: var(--accent); font-weight: 700; font-size: var(--fs-s); margin-left: 4px; }
+.tw-t small { display: block; color: var(--muted); font-weight: 500; font-size: var(--fs-xs); margin-top: 3px; }
+.tw-z { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 12px 52px; }
+.tw-z .chip { min-height: 36px; padding: 6px 12px; font-size: var(--fs-s); }
+.tw-z select { width: 100%; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); padding: 6px 10px; }
+.tw-bar { position: sticky; bottom: -12px; z-index: 3; display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 30%); }
+.tw-bar .btn.primary { flex: 1; }
+/* En la pantalla de trabajos, la conversación ocupa lo mínimo */
+#app[data-view="trabajos"] .talk .bub:not(:last-child) { display: none; }
+#app[data-view="trabajos"] .talk { max-height: 76px; }
+#app[data-view="trabajos"] #chips { display: none; }

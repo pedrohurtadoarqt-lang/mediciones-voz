@@ -1,0 +1,27 @@
+instalaciones
+las dos
+baño
+dos
+tres
+no
+normal
+plato de ducha
+sí
+no
+cocina
+1
+2
+sí
+también
+ya está
+sí
+cocina
+según normativa
+14
+según normativa
+sí
+baño
+1
+1
+ya está
+generar

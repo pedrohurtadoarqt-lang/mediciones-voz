@@ -2,7 +2,7 @@ const B=require('../src/bc3.js'), E=require('../src/engine.js'), fs=require('fs'
 const cat=E.prepareCatalog(B.parseBC3(fs.readFileSync(process.env.BC3),'Palma'));
 const out=[];
 const io={say:(t,ch)=>out.push('  APP: '+t+(ch&&ch.length?'\n       ['+ch.map(c=>c.label).join(' | ')+']':'')),user:t=>out.push('USER: '+t),save(){},render(){},getCatalog:()=>cat,exportPdf(){}};
-const d=new E.Dialog(io);
+const d=new E.Dialog(io); d.guia=null; // flujo libre (el guiado se prueba en guia-sim.js)
 const obra={id:'t',titulo:'Prueba',partidas:[],estancias:[]};
 d.setObra(obra);
 const script=fs.readFileSync(process.argv[2],'utf8').split('\n').filter(Boolean);

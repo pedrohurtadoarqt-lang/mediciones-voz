@@ -1,0 +1,121 @@
+[
+ {
+  "c": "DSM020",
+  "u": "ud",
+  "ch": "D0110",
+  "r": "Desmontaje de aparatos sanitarios y mobiliario de baño",
+  "t": "Desmontaje del conjunto de aparatos sanitarios de un cuarto de baño (inodoro, lavabo, bidé y plato de ducha o bañera), con sus accesorios, grifería y mueble de lavabo, con medios manuales, sin afectar a la estabilidad de los elementos constructivos a los que estén sujetos, taponado de las tomas de agua y desagües, y carga manual sobre camión o contenedor."
+ },
+ {
+  "c": "DIF105",
+  "u": "ud",
+  "ch": "D0110",
+  "r": "Desmontaje de red de instalación interior de agua",
+  "t": "Desmontaje de red de instalación interior de agua, colocada superficialmente, que da servicio a una superficie de 90 m², desde la toma de cada aparato sanitario hasta el montante, con medios manuales, y carga manual sobre camión o contenedor."
+ },
+ {
+  "c": "DIS105",
+  "u": "ud",
+  "ch": "D0108",
+  "r": "Desmontaje de red de desagües interiores",
+  "t": "Desmontaje de red de instalación interior de desagües, desde la toma de cada aparato sanitario hasta la bajante, dejando taponada dicha bajante, para una superficie de cuarto húmedo de 4 m², con medios manuales, y carga manual sobre camión o contenedor."
+ },
+ {
+  "c": "EAP010",
+  "u": "m",
+  "ch": "D3203",
+  "r": "Apeo con estructura metálica",
+  "t": "Apeo provisional de forjado o muro de carga mediante estructura metálica formada por perfiles laminados de acero S275JR (durmiente, puntales o pilares y carrera), con placas de reparto, cuñas y elementos de arriostramiento, incluso montaje, mantenimiento durante el tiempo necesario y desmontaje posterior. Medido por metro lineal de elemento apeado."
+ },
+ {
+  "c": "RYP020",
+  "u": "m2",
+  "ch": "D2402",
+  "r": "Preparación de paramento de fachada para pintar",
+  "t": "Preparación de paramento de fachada para su posterior pintado: rascado y eliminación de la pintura y partes mal adheridas con medios manuales, aplicación de decapante donde sea necesario, eliminándolo con espátula una vez reblandecida la pintura, y lavado posterior con chorro de agua a presión hasta eliminar todos los restos."
+ },
+ {
+  "c": "EHY091",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Reparación de canto de forjado por empuje, con recrecido de hormigón armado",
+  "t": "Reparación de frente de forjado de hormigón armado, de canto 30 cm, mediante picado del hormigón deteriorado con martillo eléctrico, eliminando el hormigón en mal estado hasta llegar a las armaduras; saneado de las armaduras que han quedado al descubierto con proyección en seco de chorro de partículas de material abrasivo (silicato de aluminio), eliminando la suciedad superficial, la herrumbre y toda sustancia que pueda disminuir la adherencia entre las armaduras y el material de reparación a aplicar, hasta alcanzar un grado de preparación Sa 2 ½ según UNE-EN ISO 8501-1; aplicación manual de mortero monocomponente a base de cemento, inhibidores de corrosión y polímeros en polvo, para la protección y pasivación de armaduras de acero, y como puente de unión entre mortero de reparación y hormigón existente, garantizando la adherencia entre ambos, con 1,5 kg/m² de consumo medio; recrecido del forjado con hormigón armado, realizado con hormigón HA-25/B/12/XC2 fabricado en central, y vertido con cubilote y acero UNE-EN 10080 B 500 S, con una cuantía de 5 kg/m, con anclaje químico estructural, mediante perforación de 10 mm de diámetro y 85 mm de profundidad, relleno del orificio con inyección de resina epoxi, libre de estireno, aplicada con boquilla de dosificación y mezcla automática, y posterior inserción de varilla roscada con tuerca y arandela de acero galvanizado calidad 5.8, según UNE-EN ISO 898-1, de 8 mm de diámetro y 110 mm de longitud."
+ },
+ {
+  "c": "EHY090",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Reparación de canto de forjado por corrosión de armaduras, con mortero",
+  "t": "Reparación de frente de forjado de hormigón armado, de canto 30 cm, mediante picado del hormigón deteriorado con martillo eléctrico, eliminando el hormigón en mal estado hasta llegar a las armaduras; saneado de las armaduras que han quedado al descubierto con proyección en seco de chorro de partículas de material abrasivo (silicato de aluminio), eliminando la suciedad superficial, la herrumbre y toda sustancia que pueda disminuir la adherencia entre las armaduras y el material de reparación a aplicar, hasta alcanzar un grado de preparación Sa 2 ½ según UNE-EN ISO 8501-1; aplicación manual de mortero monocomponente a base de cemento, inhibidores de corrosión y polímeros en polvo, para la protección y pasivación de armaduras de acero, y como puente de unión entre mortero de reparación y hormigón existente, garantizando la adherencia entre ambos, con 1,5 kg/m² de consumo medio; restitución de la parte afectada mediante aplicación manual de mortero fluido, de elevada resistencia mecánica y retracción compensada, con una resistencia a compresión a 28 días mayor o igual a 78,5 N/mm² y un módulo de elasticidad mayor o igual a 20000 N/mm², clase R4, tipo CC, según UNE-EN 1504-3, Euroclase A1 de reacción al fuego, según UNE-EN 13501-1, en capa de 40 mm de espesor medio, de consistencia fluida."
+ },
+ {
+  "c": "EHK011",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Saneado de elemento de hormigón armado",
+  "t": "Saneado de elemento de hormigón armado (frente o canto de forjado, viga, pilar o voladizo) mediante picado con martillo eléctrico del hormigón deteriorado hasta llegar a las armaduras, eliminando el hormigón en mal estado, cepillado y limpieza de las armaduras descubiertas hasta eliminar la herrumbre, y carga manual de los restos sobre camión o contenedor. Medido por metro lineal de elemento saneado."
+ },
+ {
+  "c": "EHY030",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Restauración de elemento de hormigón armado",
+  "t": "Restauración de elemento de hormigón armado previamente saneado (frente o canto de forjado, viga, pilar o voladizo): aplicación sobre las armaduras de mortero pasivante monocomponente a base de cemento e inhibidores de corrosión, como protección de las armaduras y puente de unión, y reconstrucción del volumen original con mortero de reparación tixotrópico de retracción compensada, clase R4 según UNE-EN 1504-3, con acabado fratasado. Medido por metro lineal de elemento restaurado."
+ },
+ {
+  "c": "QAX010",
+  "u": "m2",
+  "ch": "D0608",
+  "r": "Impermeabilización de cubierta plana con lámina asfáltica, incluso remonte en antepechos",
+  "t": "Impermeabilización de cubierta plana con membrana bicapa adherida formada por imprimación asfáltica y dos láminas de betún modificado con elastómero SBS, LBM(SBS)-40/FP y LBM(SBS)-40/FP, totalmente adheridas con soplete, con solapes de 10 cm, incluso refuerzos en encuentros, sumideros y juntas y remonte en antepechos y paramentos verticales de al menos 20 cm por encima del acabado, con su remate. Medida la superficie en proyección horizontal más el desarrollo de los remontes."
+ },
+ {
+  "c": "IFP010",
+  "u": "ud",
+  "ch": "D1702",
+  "r": "Punto de consumo de agua fría",
+  "t": "Punto de consumo de agua fría para aparato sanitario o electrodoméstico, realizado con tubería de polietileno reticulado (PE-X) de 16 mm de diámetro bajo tubo protector, desde el colector o la llave de corte de la estancia hasta la toma del aparato, empotrado en paramento, incluso llave de escuadra, accesorios, piezas especiales y prueba de estanqueidad."
+ },
+ {
+  "c": "IFP020",
+  "u": "ud",
+  "ch": "D1702",
+  "r": "Punto de consumo de agua fría y caliente",
+  "t": "Punto de consumo de agua fría y caliente sanitaria para aparato sanitario, realizado con tuberías de polietileno reticulado (PE-X) de 16 mm de diámetro, la de agua caliente con aislamiento térmico, desde el colector o las llaves de corte de la estancia hasta las tomas del aparato, empotradas en paramento, incluso llaves de escuadra, accesorios, piezas especiales y prueba de estanqueidad."
+ },
+ {
+  "c": "SMM020",
+  "u": "ud",
+  "ch": "D1703",
+  "r": "Mampara para ducha",
+  "t": "Mampara frontal para ducha, de 750 a 800 mm de anchura y 1950 mm de altura, formada por una puerta corredera y un panel fijo, de vidrio transparente con perfiles de aluminio acabado blanco y una mampara lateral fija de 700 a 750 mm de anchura. Incluso fijaciones y sellado de juntas."
+ },
+ {
+  "c": "ISD005",
+  "u": "ud",
+  "ch": "D0807",
+  "r": "Desagüe de aparato sanitario con tubo de PVC de 32 mm (lavabo, bidé)",
+  "t": "Desagüe de aparato sanitario (lavabo o bidé) con red de pequeña evacuación empotrada, de PVC, serie B, de 32 mm de diámetro, unión pegada con adhesivo, desde la válvula del aparato hasta el bote sifónico o la bajante, de hasta 2 m de longitud, incluso sifón, accesorios y piezas especiales. Diámetro mínimo según CTE DB HS 5, tabla 4.1."
+ },
+ {
+  "c": "ISD005b",
+  "u": "ud",
+  "ch": "D0807",
+  "r": "Desagüe de aparato con tubo de PVC de 40 mm (ducha, bañera, fregadero, lavadora, lavavajillas)",
+  "t": "Desagüe de aparato sanitario o electrodoméstico (ducha, bañera, fregadero, lavadero, lavadora o lavavajillas) con red de pequeña evacuación empotrada, de PVC, serie B, de 40 mm de diámetro, unión pegada con adhesivo, desde la válvula del aparato hasta el bote sifónico o la bajante, de hasta 2 m de longitud, incluso sifón o toma de desagüe para electrodoméstico, accesorios y piezas especiales. Diámetro mínimo según CTE DB HS 5, tabla 4.1."
+ },
+ {
+  "c": "ISD005c",
+  "u": "ud",
+  "ch": "D0807",
+  "r": "Desagüe de inodoro con tubo de PVC de 110 mm",
+  "t": "Desagüe de inodoro con manguetón y tubo de PVC, serie B, de 110 mm de diámetro, unión pegada con adhesivo, desde la salida del inodoro hasta la bajante, de hasta 1,5 m de longitud, incluso junta de conexión, accesorios y piezas especiales. Diámetro mínimo según CTE DB HS 5, tabla 4.1."
+ },
+ {
+  "c": "HYA030",
+  "u": "m2",
+  "ch": "D1405",
+  "r": "Ayudas de albañilería para instalaciones en reforma de vivienda",
+  "t": "Repercusión por m² de superficie reformada de las ayudas de albañilería necesarias para la ejecución de las instalaciones (fontanería, saneamiento, electricidad y telecomunicaciones) en reforma de vivienda: apertura y tapado de rozas, apertura de huecos y pasos en paramentos y forjados, recibido de cajas, tubos y elementos, sellado de pasos y limpieza. Incluso material auxiliar."
+ }
+]

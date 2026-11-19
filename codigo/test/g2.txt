@@ -1,0 +1,19 @@
+vamos a medir una fachada
+fachada norte 12 por 7,50
+la fachada este de 8, misma altura que la anterior
+fachada sur 12
+7
+ya está
+sí
+2
+3 de 1,20 por 1,40
+una de 2 por 1,10
+ninguna
+1
+4 de 0,90 por 1,20
+ninguna
+#marca fac_limp,fac_pint,fac_sellado,fac_fiola,fac_fis,fac_andamio
+generar mediciones
+12,5
+no hay
+saltar

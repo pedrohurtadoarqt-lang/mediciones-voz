@@ -1,0 +1,16 @@
+vivienda
+salón
+es rectangular de 4,20 por 3,50
+dos sesenta
+una puerta de 0,82 por 2,03 y una ventana de 1,20 por 1,10
+no, ninguna más
+cocina
+4 metros derecha, 3 metros derecha, 4 metros derecha
+cierra
+la misma
+una puerta de 72 por 203
+ninguna
+elegir trabajos
+#marca dem_alic,dem_gres,sol_gres,sol_rodapie,pin_par,pin_tec,dem_mob_coc,alb_ayudas
+#genera
+3,40

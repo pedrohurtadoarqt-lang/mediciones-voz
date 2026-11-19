@@ -264,6 +264,8 @@
     // Croquis de la planta: solo en la conversación (se guarda en la obra; no va en el PDF ni en los archivos)
     sketch: (svg, titulo) => { if (!svg) return; S.log.push({ who: 'app', text: titulo || 'Planta', svg }); renderTalk(); },
     confirmPick: () => S.settings.confirm !== false,
+    // Asistente guiado: abre o cierra la pantalla de selección de trabajos
+    trabajos: (on) => { S.view = on ? 'trabajos' : 'obra'; S.tq = ''; render(); },
     pause: () => { sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); VoiceAdapter.needTap = true; }
   });
 
@@ -298,6 +300,7 @@
     if (lg.length > 1500) lg.splice(0, lg.length - 1500);
   }
   let sayToken = 0;
+  const vozVista = () => S.view === 'obra' || S.view === 'trabajos';
   async function say(text, chips, opts) {
     opts = opts || {};
     if (!opts.repeat) logObra('app', text);
@@ -312,7 +315,7 @@
     await VoiceAdapter.speak(text);
     if (opts.end) { endVoiceSession(); return; }
     if (tk !== sayToken) return;
-    if (S.view === 'obra' && S.settings.hands && opts.listen !== false && !S.typing) { noSpeech = 0; VoiceAdapter.listen(false); }
+    if (vozVista() && S.settings.hands && opts.listen !== false && !S.typing) { noSpeech = 0; VoiceAdapter.listen(false); }
   }
   /* ---- Pantalla siempre encendida mientras se mide (Screen Wake Lock) ---- */
   let wakeLock = null;
@@ -321,7 +324,7 @@
   }
   function releaseAwake() { try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null; }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && S.session && S.view === 'obra') {
+    if (document.visibilityState === 'visible' && S.session && vozVista()) {
       keepAwake();
       if (S.settings.hands && !VoiceAdapter.listening && !VoiceAdapter.speaking) { noSpeech = 0; VoiceAdapter.listen(false); }
     }
@@ -354,14 +357,14 @@
   let noSpeech = 0;
   VoiceAdapter.on({
     onPartial(t) { S.partial = t; renderTalk(); },
-    onFinal(t) { noSpeech = 0; S.partial = ''; if (S.greetPending) return; if (S.view === 'obra') { sayToken++; VoiceAdapter.stopSpeaking(); dialog.handle(t); } },
+    onFinal(t) { noSpeech = 0; S.partial = ''; if (S.greetPending) return; if (vozVista()) { sayToken++; VoiceAdapter.stopSpeaking(); dialog.handle(t); } },
     onState(st) {
       renderMic();
       if (S.greetPending && st.listening && VoiceAdapter.micState === 'granted') greet();
     },
     onError(code) {
       if (code === 'no-speech') {
-        if (S.settings.hands && ++noSpeech < 3) return setTimeout(() => { if (!VoiceAdapter.speaking && S.view === 'obra') VoiceAdapter.listen(false); }, 250);
+        if (S.settings.hands && ++noSpeech < 3) return setTimeout(() => { if (!VoiceAdapter.speaking && vozVista()) VoiceAdapter.listen(false); }, 250);
         VoiceAdapter.needTap = true; return;
       }
       if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'not_granted') {
@@ -374,7 +377,7 @@
       else if (code === 'network') warnVoice('El reconocimiento de voz de este navegador necesita conexión a internet. Sin cobertura, usa el teclado.');
       else if (code === 'audio-capture') warnVoice('No se detecta micrófono en este dispositivo.');
     },
-    onEnd(got) { S.partial = ''; renderTalk(); if (!got && S.session && S.settings.hands && !VoiceAdapter.speaking && S.view === 'obra') { if (++noSpeech < 3) VoiceAdapter.listen(false); else VoiceAdapter.needTap = true; } }
+    onEnd(got) { S.partial = ''; renderTalk(); if (!got && S.session && S.settings.hands && !VoiceAdapter.speaking && vozVista()) { if (++noSpeech < 3) VoiceAdapter.listen(false); else VoiceAdapter.needTap = true; } }
   });
   function hideWarn() { const w = $('#voicewarn'); if (w) w.hidden = true; }
   function warnVoice(t) { const w = $('#voicewarn'); w.textContent = t; w.hidden = false; }
@@ -384,19 +387,21 @@
    * ============================================================ */
   function render() {
     document.documentElement.dataset.mode = S.settings.mode === 'sol' ? 'sol' : '';
+    document.getElementById('app').dataset.view = S.view;
     $('#btnSol').setAttribute('aria-pressed', S.settings.mode === 'sol');
     $('#btnBack').hidden = S.view === 'obras';
-    $('#dock').hidden = S.view !== 'obra';
+    $('#dock').hidden = !vozVista();
     const v = $('#view');
     const t = $('#title');
     if (S.view === 'obras') { t.innerHTML = '<span class="brandtitle">Mediciona</span><small>Mediciones de obra con IA</small>'; v.innerHTML = viewObras(); }
     else if (S.view === 'obra') { t.innerHTML = esc(S.obra.titulo) + '<small>' + esc([S.obra.cliente, S.obra.ubicacion].filter(Boolean).join(' · ') || 'Obra') + '</small>'; v.innerHTML = viewObra(); }
+    else if (S.view === 'trabajos') { t.innerHTML = 'Trabajos a realizar<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewTrabajos(); }
     else if (S.view === 'resumen') { t.innerHTML = 'Resumen<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewResumen(); }
     else if (S.view === 'catalogos') { t.innerHTML = 'Bases de datos BC3<small>Sin precios: código, unidad, resumen y texto</small>'; v.innerHTML = viewCatalogos(); }
     else if (S.view === 'ajustes') { t.innerHTML = 'Ajustes'; v.innerHTML = viewAjustes(); }
     else if (S.view === 'admin') { t.innerHTML = '<span class="brandtitle">Administración</span><small>Usuarios, sugerencias e IA</small>'; v.innerHTML = viewAdmin(); }
     renderMic();
-    if (S.view === 'obra') { renderTalk(); renderChips(); const nr = $('tr.new'); if (nr) nr.scrollIntoView({ block: 'nearest' }); }
+    if (vozVista()) { renderTalk(); renderChips(); const nr = $('tr.new'); if (nr) nr.scrollIntoView({ block: 'nearest' }); }
   }
   function unitL(u) { return E.unitLabel(u); }
   function viewObra() {
@@ -407,10 +412,13 @@
       : '<button class="est none" data-a="estancia">' + ICON.pin + (o.ambito === 'libre' ? 'Medición libre' : 'Sin estancia') + '</button>';
     const amb = o.ambito ? '<span class="tag">' + esc(E.AMBITOS[o.ambito].label) + '</span>' : '';
     let mon;
-    if (!p) {
+    const toma = (o.toma && o.toma.zonas) || [];
+    if (!p && (toma.length || (o.guia && o.guia.paso && !o.guia.fin))) {
+      mon = viewToma(o);
+    } else if (!p) {
       const n = o.partidas.filter((x) => x.lineas.length).length;
       mon = '<section class="monitor"><div class="code">SIN PARTIDA ACTIVA</div><p class="empty">Pulsa el micrófono y di el trabajo a medir, por ejemplo <strong>«picado de azulejos»</strong> o <strong>«pintura plástica en techo»</strong>. Después dicta las medidas: <strong>«pared ducha 1,80 por 2,50»</strong>.</p>' +
-        (n ? '<p class="empty">La obra lleva ' + n + ' partida' + (n === 1 ? '' : 's') + ' medida' + (n === 1 ? '' : 's') + '. <button class="btn small" data-a="resumen">Ver resumen</button></p>' : '') + '</section>';
+        (dialog.guia ? '<p class="empty"><button class="btn small primary" data-a="guiada">Medición guiada paso a paso</button></p>' : '') + (n ? '<p class="empty">La obra lleva ' + n + ' partida' + (n === 1 ? '' : 's') + ' medida' + (n === 1 ? '' : 's') + '. <button class="btn small" data-a="resumen">Ver resumen</button></p>' : '') + '</section>';
     } else {
       const spec = E.dimsSpec(p);
       const used = { l: p.u === 'm' || p.u === 'm2' || p.u === 'm3', a: p.u === 'm3' || (p.u === 'm2'), h: p.u === 'm3' || p.u === 'm2' };
@@ -428,6 +436,79 @@
         '<div class="row"><button class="btn small" data-a="chg">Cambiar partida</button><button class="btn small" data-a="addl">Añadir línea a mano</button><button class="btn small" data-a="close">Cerrar partida</button><button class="btn small" data-a="resumen">Resumen de obra</button></div></section>';
     }
     return '<div class="ctx">' + est + amb + '</div>' + mon;
+  }
+  /* ---- Asistente guiado: lo medido y la pantalla de trabajos ---- */
+  function zonaResumen(z) {
+    const f = (v) => E.fmt(v);
+    if (z.ambito === 'interior') {
+      const ded = (z.huecos || []).reduce((a, x) => a + (x.uds || 1) * (x.an || 0) * (x.al || 0), 0);
+      return [z.area != null ? 'Suelo ' + f(z.area) + ' m²' : 'Midiendo paredes…', z.perimetro != null ? 'perímetro ' + f(z.perimetro) + ' m' : '', z.altura ? 'altura ' + f(z.altura) + ' m' : '', z.perimetro && z.altura ? 'paredes ' + f(E.round2(z.perimetro * z.altura - ded)) + ' m²' : '', (z.huecos || []).length ? (z.huecos || []).map((x) => x.uds + ' ' + (x.tipo === 'puerta' ? 'puerta' : 'ventana') + (x.uds > 1 ? 's' : '') + ' ' + f(x.an) + '×' + f(x.al)).join(', ') : ''].filter(Boolean).join(' · ');
+    }
+    if (z.ambito === 'fachada') return f(z.ancho) + ' × ' + f(z.alto) + ' m' + ((z.ventanas || []).length ? ' · ventanas: ' + z.ventanas.map((v) => v.uds + ' de ' + f(v.an) + '×' + f(v.al)).join(', ') : '');
+    if (z.ambito === 'cubierta') return z.tipo === 'inclinada' ? 'Inclinada · ' + (z.faldones || []).map((x) => x.nombre + ' ' + f(x.l) + '×' + f(x.a)).join(', ') + (z.factor ? ' · factor ' + f(z.factor) : '') : 'Plana' + (z.area != null ? ' · ' + f(z.area) + ' m² · perímetro ' + f(z.perimetro) + ' m' : '') + (z.remonte ? ' · remonte ' + f(z.remonte) + ' m' : '');
+    if (z.ambito === 'fontaneria') { const x = z.f || {}; return ['AF ' + (x.af ?? '–'), 'AF+AC ' + (x.afc ?? '–'), x.inodoro ? 'inodoro ' + x.inodoro : '', x.ducha ? (x.ducha === 'banera' ? 'bañera' : 'plato de ducha') + (x.mampara ? ' con mampara' : '') : '', x.bide ? 'bidé' : '', x.lavadora ? 'lavadora' : '', x.lavavajillas ? 'lavavajillas' : ''].filter(Boolean).join(' · '); }
+    if (z.ambito === 'electricidad') { const x = z.e || {}; return ['luz ' + (x.luz ?? '–'), 'tomas ' + (x.tomas ?? '–'), x.c3 ? 'cocina/horno 25 A' : '', x.c4 && x.c4.length ? x.c4.join(', ') : '', x.norma ? 'según REBT' : ''].filter(Boolean).join(' · '); }
+    return '';
+  }
+  function viewToma(o) {
+    const zs = (o.toma && o.toma.zonas) || [];
+    const AL = window.Guia ? Guia.AMBITO_LABEL : {};
+    let h = '<section class="monitor"><div class="mon-head"><div class="left"><div class="code">TOMA DE DATOS</div><div class="resumen">' + (zs.length ? 'Lo medido hasta ahora' : 'Medición guiada') + '</div></div></div>';
+    if (!zs.length) h += '<p class="empty">Responde a las preguntas del asistente. Primero tomamos las medidas y después eliges en la pantalla los trabajos que se van a hacer.</p>';
+    const grupos = {};
+    zs.forEach((z) => { (grupos[z.ambito] = grupos[z.ambito] || []).push(z); });
+    Object.keys(grupos).forEach((k) => {
+      h += '<div class="chap"><span></span><span>' + esc(AL[k] || k) + '</span></div><div class="plist">';
+      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '') + '</div>'; });
+      h += '</div>';
+    });
+    const ps = o.partidas.filter((x) => x.lineas.length);
+    if (ps.length) {
+      h += '<div class="chap"><span></span><span>Estado de mediciones</span></div><div class="plist">';
+      ps.slice().sort((x, y) => (x.codigo || '').localeCompare(y.codigo || '')).forEach((p) => { h += '<button class="pitem" data-a="goto" data-uid="' + p.uid + '"><span class="c">' + esc(p.codigo || '') + '</span><span class="r">' + esc(p.r) + '<small>' + esc(p.ref) + ' · ' + p.lineas.length + ' líneas</small></span><span class="t num">' + E.fmt(E.totalOf(p)) + ' ' + unitL(p.u) + '</span></button>'; });
+      h += '</div>';
+    }
+    if (zs.length) h += '<div class="row"><button class="btn primary" data-a="trabajos">' + (ps.length ? 'Cambiar trabajos' : 'Elegir trabajos') + '</button>' + (ps.length ? '<button class="btn" data-a="resumen">Resumen y exportar</button>' : '') + '<button class="btn" data-a="guiada">Medir otra zona</button></div>';
+    return h + '</section>';
+  }
+  function viewTrabajos() {
+    const o = S.obra, G = window.Guia;
+    const cat = catFor(o);
+    const sel = G.seleccion(o);
+    const ws = G.trabajosPara(o);
+    const zs = (o.toma && o.toma.zonas) || [];
+    let h = '<p class="hint">Marca los trabajos que se van a hacer. Las cantidades salen de lo que has medido; en cada trabajo puedes elegir a qué zonas se aplica.</p>';
+    const amb = [...new Set(ws.map((w) => w.ambito))];
+    amb.forEach((a) => {
+      if (amb.length > 1) h += '<h3 class="sec-title">' + esc(G.AMBITO_LABEL[a] || a) + '</h3>';
+      const caps = [...new Set(ws.filter((w) => w.ambito === a).map((w) => w.capitulo))].sort((x, y) => G.CAP_ORDEN.indexOf(x) - G.CAP_ORDEN.indexOf(y));
+      caps.forEach((c) => {
+        h += '<div class="chap"><span></span><span>' + esc(c) + '</span></div><div class="tw-list">';
+        ws.filter((w) => w.ambito === a && w.capitulo === c).forEach((w) => {
+          const s = sel[w.id] || { on: false, zonas: [] };
+          const zw = G.zonasDe(o, w);
+          const d = G.resolverDoc(cat, w);
+          h += '<div class="tw' + (s.on ? ' on' : '') + '"><button class="tw-main" data-a="tw" data-id="' + esc(w.id) + '" aria-pressed="' + !!s.on + '"><span class="tw-box">' + (s.on ? '✓' : '') + '</span><span class="tw-t">' + esc(w.label) + ' <span class="u">' + unitL(w.u) + '</span><small>' + esc(w.regla.startsWith('fon') || w.regla.startsWith('san') || w.regla.startsWith('ele') ? 'Según lo respondido' : (G.REGLA_LABEL[w.regla] || '')) + (d ? ' · ' + esc(d.c) : '') + '</small></span></button>';
+          if (s.on && zw.length > 1) h += '<div class="tw-z">' + zw.map((z) => '<button class="chip' + (s.zonas.includes(z.id) ? ' primary' : ' ghost') + '" data-a="tz" data-id="' + esc(w.id) + '" data-z="' + z.id + '">' + esc(z.nombre) + '</button>').join('') + '</div>';
+          if (s.on && w.id.startsWith('x_')) h += '<div class="tw-z"><select data-a="trule" data-id="' + esc(w.id) + '" aria-label="Cómo se mide">' + (G.REGLAS_AMBITO[w.ambito] || []).map((r) => '<option value="' + r + '"' + (r === w.regla ? ' selected' : '') + '>' + esc(G.REGLA_LABEL[r] || r) + '</option>').join('') + '</select></div>';
+          h += '</div>';
+        });
+        h += '</div>';
+      });
+    });
+    // Añadir partidas de la base de datos
+    const ambs = [...new Set(zs.map((z) => z.ambito))];
+    h += '<div class="card"><h3>Añadir otra partida de la base de datos</h3><div class="field"><input id="tq" type="search" placeholder="Ej.: impermeabilización, zócalo, barandilla…" value="' + esc(S.tq || '') + '" aria-label="Buscar partida"></div>' +
+      (ambs.length > 1 ? '<div class="chips">' + ambs.map((a) => '<button class="chip' + ((S.tamb || ambs[0]) === a ? ' primary' : ' ghost') + '" data-a="tamb" data-v="' + a + '">' + esc(G.AMBITO_LABEL[a]) + '</button>').join('') + '</div>' : '') +
+      '<div class="searchres" id="tres">' + tResults() + '</div></div>';
+    h += '<div class="tw-bar"><button class="btn primary big" data-a="tgen">Generar mediciones</button><button class="btn" data-a="tmedir">Medir algo más</button></div>';
+    return h;
+  }
+  function tResults() {
+    const q = S.tq || ''; if (q.trim().length < 3) return '';
+    const r = catFor(S.obra).index.search(q).slice(0, 12);
+    if (!r.length) return '<p class="hint">Sin resultados.</p>';
+    return r.map((x) => '<div class="pitem"><span class="c">' + esc(x.doc.c) + '</span><span class="r">' + esc(x.doc.r) + '<small>' + unitL(x.doc.u) + ' · ' + esc(x.doc.path) + '</small></span><button class="btn small" data-a="tadd" data-code="' + esc(x.doc.c) + '">Añadir</button></div>').join('');
   }
   function renderTalk() {
     const el = $('#talk'); if (!el) return;
@@ -459,7 +540,7 @@
       else t = 'Toca el micro para hablar';
       st.textContent = t;
     }
-    const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || S.view !== 'obra'; const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir medición guiada' : 'Empezar medición guiada'; }
+    const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || !vozVista(); const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir medición guiada' : 'Empezar medición guiada'; }
     $('#btnHands').setAttribute('aria-pressed', S.settings.hands);
     $('#btnKeyboard').setAttribute('aria-pressed', S.typing);
     $('#typebar').hidden = !S.typing;
@@ -938,6 +1019,14 @@
       case 'dell': { const p = dialog.active(); const i = +el.dataset.i; dialog.snapshot(); p.lineas.splice(i, 1); saveObra(); render(); toast('Línea ' + (i + 1) + ' borrada', true); break; }
       case 'goto': S.obra.activa = el.dataset.uid; S.view = 'obra'; saveObra(); render(); { const p = dialog.active(); dialog.state = { mode: 'idle' }; say('Partida ' + p.r + '. Total ' + E.fmt(E.totalOf(p)) + ' ' + E.unitSpoken(p.u) + '. ' + E.dimsSpec(p).ask, dialog.idleChips()); } break;
       case 'fest': S.filterEst = el.dataset.e; render(); break;
+      case 'guiada': if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; dialog.guia.start(); render(); } break;
+      case 'trabajos': if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.guia.abrirTrabajos(); } break;
+      case 'tw': { const sel = Guia.seleccion(S.obra); const s = sel[el.dataset.id]; if (s) { s.on = !s.on; if (s.on && !s.zonas.length) { const w = Guia.trabajosPara(S.obra).find((x) => x.id === el.dataset.id); s.zonas = Guia.zonasDe(S.obra, w).map((z) => z.id); } } saveObra(); render(); break; }
+      case 'tz': { const s = Guia.seleccion(S.obra)[el.dataset.id]; const z = el.dataset.z; if (s) { s.zonas = s.zonas.includes(z) ? s.zonas.filter((x) => x !== z) : s.zonas.concat([z]); if (!s.zonas.length) s.on = false; } saveObra(); render(); break; }
+      case 'tamb': S.tamb = el.dataset.v; render(); break;
+      case 'tadd': { const d = catFor(S.obra).byCode.get(el.dataset.code); const zs = (S.obra.toma && S.obra.toma.zonas) || []; const a = S.tamb || (zs[0] && zs[0].ambito) || 'interior'; if (d) { Guia.anadirExtra(S.obra, d, a); S.tq = ''; saveObra(); render(); toast('Añadida: ' + d.r); } break; }
+      case 'tgen': { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } sayToken++; VoiceAdapter.stopSpeaking(); if (dialog.guia) { dialog.guia.g.paso = 'trabajos'; dialog.guia.g.fin = false; dialog.guia.generarMediciones(); } break; }
+      case 'tmedir': S.view = 'obra'; render(); if (dialog.guia) dialog.handle('medir algo más'); break;
       case 'usecat': {
         const id = el.dataset.id; await loadCatalog(id);
         if (S.obra) { S.obra.catalogo = id; saveObra(); } else { S.settings.catalogo = id; saveSettings(); }
@@ -952,17 +1041,19 @@
     }
   });
   document.addEventListener('input', (ev) => {
+    if (ev.target.id === 'tq') { S.tq = ev.target.value; $('#tres').innerHTML = tResults(); }
     if (ev.target.id === 'catq') { S.catQ = ev.target.value; $('#catres').innerHTML = catResults(); }
     if (ev.target.id === 'rate') { S.settings.rate = +ev.target.value; VoiceAdapter.setRate(S.settings.rate); ev.target.previousElementSibling.textContent = 'Velocidad de lectura: ' + S.settings.rate.toFixed(2); saveSettings(); }
   });
   document.addEventListener('change', async (ev) => {
+    if (ev.target.dataset && ev.target.dataset.a === 'trule') { const w = ((S.obra.guia && S.obra.guia.extra) || []).find((x) => x.id === ev.target.dataset.id); if (w) { w.regla = ev.target.value; saveObra(); } }
     if (ev.target.id === 'chkia') { S.settings.ia = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);
     if (ev.target.id === 'restorefile' && ev.target.files[0]) restore(ev.target.files[0]);
   });
-  $('#btnBack').addEventListener('click', () => { if (S.view === 'obra' || !S.obra) goObras(); else { S.view = 'obra'; render(); } });
+  $('#btnBack').addEventListener('click', () => { if (S.view === 'obra' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
   $('#btnMenu').addEventListener('click', menuSheet);
   $('#btnSol').addEventListener('click', () => { S.settings.mode = S.settings.mode === 'sol' ? 'obra' : 'sol'; saveSettings(); render(); });
   $('#btnHands').addEventListener('click', () => { S.settings.hands = !S.settings.hands; saveSettings(); renderMic(); });

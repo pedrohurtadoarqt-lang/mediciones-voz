@@ -1,0 +1,14 @@
+cubierta
+azotea principal
+10 metros derecha 8 metros derecha 10 metros derecha cierra
+15 centímetros
+otra cubierta
+tejado
+inclinada
+faldón sur 8 por 4
+pendiente 30 por ciento
+faldón norte 8 por 4
+ya está
+elegir trabajos
+#marca cub_imp,cub_sol,cub_teja,cub_prueba
+generar

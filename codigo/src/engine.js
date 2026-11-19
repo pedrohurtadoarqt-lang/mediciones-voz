@@ -733,12 +733,17 @@
       this.obra = null;
       this.undo = [];
       this.lastPrompt = null;
+      // Asistente guiado (toma de datos → trabajos → mediciones)
+      let G = root.Guia || null;
+      if (!G && typeof require !== 'undefined') { try { G = require('./guia.js'); } catch (e) { G = null; } }
+      this.guia = G ? new G.Guia(this) : null;
     }
     get cat() { return this.io.getCatalog(); }
     setObra(obra) {
       this.obra = obra; this.undo = []; this.state = { mode: 'idle' };
       if (!obra) return;
-      if (!obra.ambito) return this.askAmbito(true);
+      if (this.guia && this.guia.activo) return this.guia.resume();
+      if (!obra.ambito) return this.guia ? this.guia.start('Obra creada.') : this.askAmbito(true);
       const act = this.active();
       const est = obra.estActiva ? ' Estancia: ' + obra.estActiva + '.' : '';
       this.ask('Obra ' + obra.titulo + ' abierta.' + est + (act ? ' Partida activa: ' + act.r + '.' : '') + ' Dime el trabajo a medir.', this.idleChips());
@@ -767,6 +772,12 @@
         if (!input.act) { text = String(input.value || input.label); input = text; }
       }
       const n = norm(text);
+      // Asistente guiado: mientras está en marcha atiende todas las respuestas
+      if (this.guia && (text || (input && input.act))) {
+        if (this.guia.activo) return this.guia.handle(text, n, input);
+        if (/^(medir otra zona|nueva zona|otra zona|asistente guiado|medicion guiada|empezar asistente|medir algo mas)\b/.test(n)) return this.guia.start();
+        if (/^(elegir trabajos|elige trabajos|elegir mas trabajos|seleccionar trabajos|pantalla de trabajos|elige los trabajos)\b/.test(n) && this.obra.toma && this.obra.toma.zonas.length) return this.guia.abrirTrabajos();
+      }
       // Comandos globales que funcionan en cualquier estado
       if (text) {
         if (/^(cancela|cancelar|olvidalo|dejalo)\b/.test(n) && !/^(cancela|cancelar|olvidalo|dejalo)$/.test(n) && !this.noAgent && this.agentReady() && this.state.mode !== 'thinking') { this.changing = null; this.state = { mode: 'idle' }; return this.runAgent(text); }
