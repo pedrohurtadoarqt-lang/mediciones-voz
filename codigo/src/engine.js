@@ -1497,6 +1497,8 @@
                 } else if (ln.medida_planta) continue; // se anotará sola al cerrar la planta
                 if (p.u === 'm2' && p.orient === 'V' && h == null && w != null) { h = w; w = null; }
                 if (p.u === 'm2' && p.orient !== 'V' && w == null && h != null) { w = h; h = null; }
+                if (p.u === 'm2' && l != null && w != null && h != null) { if (p.orient === 'V') w = null; else h = null; }
+                if (p.u === 'ud') { const ms = [l, w, h].filter((x) => x != null); if (ms.length && !/\d/.test(ln.comentario || '')) ln.comentario = (ln.comentario ? ln.comentario + ', ' : '') + ms.map((x) => fmt(x)).join(' × ') + ' m'; }
                 if (p.u === 'm' || p.u === 'ud') { w = null; if (p.u === 'ud') { h = null; l = null; } }
                 if (u == null) u = 1;
                 u = Math.abs(u);
@@ -1519,7 +1521,15 @@
               if (c.comentario != null) l.com = cap(c.comentario);
               if (num(c.uds) != null) l.uds = (l.uds < 0 ? -Math.abs(num(c.uds)) : num(c.uds));
               const nlg = calc(c.largo_calculo) ?? num(c.largo);
+              if (p.u === 'ud') {
+                // En una partida por unidades las longitudes no multiplican: van al comentario
+                const ms = [nlg, num(c.ancho), num(c.alto)].filter((x) => x != null);
+                if (ms.length) l.com = cap((c.comentario != null ? c.comentario : l.com || '').replace(/,?\s*[\d,.]+(\s*×\s*[\d,.]+)*\s*m$/, '') + (ms.length ? ', ' + ms.map((x) => fmt(x)).join(' × ') + ' m' : ''));
+                p.mod = Date.now(); changed = true; touched = p; hechas.push(l);
+                break;
+              }
               if (nlg != null) { l.l = nlg; delete l.dePlanta; }
+              if (p.u === 'm') { p.mod = Date.now(); changed = true; touched = p; hechas.push(l); break; }
               if (num(c.ancho) != null) { if (p.u === 'm2' && p.orient === 'V') l.h = num(c.ancho); else l.a = num(c.ancho); }
               if (num(c.alto) != null) { if (p.u === 'm2' && p.orient !== 'V') l.a = num(c.alto); else { l.h = num(c.alto); delete l.hPend; } }
               p.mod = Date.now(); changed = true; touched = p; hechas.push(l);

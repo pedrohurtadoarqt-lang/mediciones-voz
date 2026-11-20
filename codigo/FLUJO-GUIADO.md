@@ -93,6 +93,10 @@ flowchart TD
 | Vierteaguas | ancho de cada tipo de ventana × unidades |
 | Cubierta plana | superficie; impermeabilización + perímetro × remonte (≥ 0,20 m) |
 | Cubierta inclinada | Σ faldones ancho × largo × factor de pendiente |
+| Piscina: vaso (hormigón, impermeabilización, revestimiento) | fondo + paredes; si la profundidad varía, cada pared corta con la suya y las largas con la media |
+| Piscina: coronación | perímetro |
+| Piscina: anillo de toma de tierra | perímetro + 5 m de sobrante |
+| Piscina: excavación | (largo + 0,60) × (ancho + 0,60) × (profundidad media + 0,30) |
 | Desagües | Ø32 lavabo y bidé · Ø40 ducha, bañera, fregadero, lavadero, lavadora y lavavajillas · Ø110 inodoro (CTE DB HS 5, tabla 4.1) |
 | Electricidad «según normativa» | REBT ITC-BT-25, electrificación básica, con la superficie medida de la estancia |
 | Lavadora / lavavajillas | se registran en fontanería y pasan a electricidad como tomas de 16 A con toma de tierra |
@@ -124,3 +128,8 @@ Se pregunta la causa (capilaridad, condensación o filtración) salvo que se dig
 
 ## Cuando no entiende algo: la IA interpreta la intención
 Si una frase no encaja con lo que la app sabe reconocer (aunque esté mal dicha: «bueno, esto ya lo dejamos aquí que tengo prisa», «espera, la altura que te he dicho no era esa», «vámonos a la habitación de la niña», «hay que poner un rodapié de madera nuevo en todo esto»), al primer fallo la consulta a la IA con el contexto de la pregunta y de la estancia. La IA la traduce a una orden: responder a la pregunta, volver atrás, terminar, saltar, repetir, corregir un dato, anotar una incidencia, añadir una partida, cambiar a otra estancia o borrar una. Lo que crea algo nuevo (una estancia, la respuesta a qué medimos) se confirma antes de aplicarlo. Sin conexión o sin sesión iniciada, sigue como antes: reformula la pregunta y ofrece volver atrás.
+
+## Piscinas
+«Piscina» en la primera pregunta (también dentro de «otra cosa, una piscina») abre la medición guiada: medidas interiores (largo por ancho, o paredes con giros) y profundidad (una, o la menor y la mayor). Los trabajos se eligen en pantalla: excavación, vaso de hormigón de 15 o 20 cm, impermeabilización con mortero o lámina, gresite o gres, coronación, canaleta, toma de tierra con anillo perimetral, cuadro y equipamiento (depuradora, clorador, skimmers, sumideros, boquillas, focos, escalera). Las unidades se preguntan al generar.
+
+En la medición libre con IA, una partida por unidades ya no multiplica longitudes (la medida pasa al comentario) y una partida en m² no admite tres medidas.

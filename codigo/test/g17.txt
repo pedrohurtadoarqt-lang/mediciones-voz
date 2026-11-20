@@ -1,0 +1,8 @@
+otra cosa en realidad vamos a medir una piscina
+la piscina mide seis metros por tres
+la profundidad media es de un metro y medio, en una parte tiene 1,40 y en la otra 1,60
+elegir trabajos
+#marca pis_exc,pis_hor15,pis_imp,pis_gres,pis_coron,pis_tierra,pis_anillo,pis_skimmer
+generar mediciones
+2
+así está bien

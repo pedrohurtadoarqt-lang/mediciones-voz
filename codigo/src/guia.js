@@ -365,6 +365,26 @@
     T('fontaneria', 'Saneamiento', 'san_40', 'Desagües de Ø40 mm (ducha, bañera, fregadero, lavadora, lavavajillas)', 'ud', 'ISD005b', 'san_40', { auto: true }),
     T('fontaneria', 'Saneamiento', 'san_110', 'Desagües de Ø110 mm (inodoro)', 'ud', 'ISD005c', 'san_110', { auto: true }),
     // ---- Electricidad ----
+    // ---- Piscina ----
+    T('piscina', 'Movimiento de tierras', 'pis_exc', 'Excavación del vaso', 'm3', 'ADE015', 'pis_exc'),
+    T('piscina', 'Vaso de piscina', 'pis_hor15', 'Vaso de hormigón proyectado de 15 cm (fondo y paredes)', 'm2', 'UPG010A', 'pis_vaso'),
+    T('piscina', 'Vaso de piscina', 'pis_hor20', 'Vaso de hormigón proyectado de 20 cm (fondo y paredes)', 'm2', 'UPG010bA', 'pis_vaso'),
+    T('piscina', 'Impermeabilización', 'pis_imp', 'Impermeabilización del vaso con mortero (fondo y paredes)', 'm2', 'NIA021', 'pis_vaso'),
+    T('piscina', 'Impermeabilización', 'pis_imp_lam', 'Impermeabilización del vaso con lámina (fondo y paredes)', 'm2', 'NIA022', 'pis_vaso'),
+    T('piscina', 'Revestimiento de piscina', 'pis_gresite', 'Revestimiento de gresite (mosaico de vidrio), fondo y paredes', 'm2', 'UPT010', 'pis_vaso'),
+    T('piscina', 'Revestimiento de piscina', 'pis_gres', 'Revestimiento de baldosa de gres porcelánico, fondo y paredes', 'm2', 'RAG012c', 'pis_vaso'),
+    T('piscina', 'Coronación', 'pis_coron', 'Coronación con piezas de borde (albardilla)', 'm', 'UPR010', 'pis_perim'),
+    T('piscina', 'Coronación', 'pis_canaleta', 'Canaleta perimetral con rejilla (piscina desbordante)', 'm', 'UPR020', 'pis_perim'),
+    T('piscina', 'Electricidad', 'pis_tierra', 'Toma de tierra', 'ud', 'IEP010', 'ud_zona'),
+    T('piscina', 'Electricidad', 'pis_anillo', 'Anillo perimetral de cable de cobre de 35 mm²', 'm', 'IEP025', 'pis_anillo'),
+    T('piscina', 'Electricidad', 'pis_cuadro', 'Cuadro eléctrico de la piscina', 'ud', 'UPC020', 'ud_zona'),
+    T('piscina', 'Equipamiento de piscina', 'pis_depu', 'Equipo de depuración', 'ud', 'UPD010', 'ud_zona'),
+    T('piscina', 'Equipamiento de piscina', 'pis_clor', 'Equipo automático de clorado', 'ud', 'UPC010', 'ud_zona'),
+    T('piscina', 'Equipamiento de piscina', 'pis_skimmer', 'Skimmers', 'ud', 'UPM010', 'preguntar', { pide: '¿Cuántos skimmers lleva {zona}?' }),
+    T('piscina', 'Equipamiento de piscina', 'pis_sumidero', 'Sumideros de fondo', 'ud', 'UPM020', 'preguntar', { pide: '¿Cuántos sumideros de fondo lleva {zona}?' }),
+    T('piscina', 'Equipamiento de piscina', 'pis_impulsion', 'Boquillas de impulsión', 'ud', 'UPM040', 'preguntar', { pide: '¿Cuántas boquillas de impulsión lleva {zona}?' }),
+    T('piscina', 'Equipamiento de piscina', 'pis_luz', 'Proyectores de luz', 'ud', 'UPI020', 'preguntar', { pide: '¿Cuántos proyectores de luz lleva {zona}?' }),
+    T('piscina', 'Equipamiento de piscina', 'pis_escalera', 'Escalera de acero inoxidable', 'ud', 'UPE010', 'preguntar', { pide: '¿Cuántas escaleras lleva {zona}?' }),
     // ---- Generales de toda obra (se marcan solas) ----
     T('obra', 'Gestión de residuos', 'gen_residuos', 'Contenedores para residuos de obra (4,2 m³)', 'ud', 'GRA010', 'residuos', { auto: true }),
     T('obra', 'Seguridad y salud', 'gen_sys', 'Seguridad y salud (partida alzada, % del presupuesto)', 'ud', 'YSS010', 'sys', { auto: true }),
@@ -374,8 +394,8 @@
     T('electricidad', 'Electricidad', 'ele_t25', 'Toma de 25 A para cocina y horno', 'ud', 'IEM060b', 'ele_t25', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_c4', 'Tomas para lavadora, lavavajillas y termo', 'ud', 'IEM066', 'ele_c4', { auto: true })
   ];
-  const CAP_ORDEN = ['Demoliciones', 'Apeos', 'Revestimientos', 'Solados', 'Albañilería', 'Carpintería interior', 'Pintura', 'Fachada', 'Medios auxiliares', 'Impermeabilización', 'Aislamiento', 'Fontanería', 'Aparatos sanitarios', 'Saneamiento', 'Electricidad', 'Otras partidas', 'Gestión de residuos', 'Seguridad y salud'];
-  const AMBITO_LABEL = { obra: 'Toda la obra', interior: 'Estancias', fachada: 'Fachadas', cubierta: 'Cubiertas', fontaneria: 'Fontanería', electricidad: 'Electricidad' };
+  const CAP_ORDEN = ['Demoliciones', 'Apeos', 'Revestimientos', 'Solados', 'Albañilería', 'Carpintería interior', 'Pintura', 'Movimiento de tierras', 'Vaso de piscina', 'Revestimiento de piscina', 'Coronación', 'Equipamiento de piscina', 'Fachada', 'Medios auxiliares', 'Impermeabilización', 'Aislamiento', 'Fontanería', 'Aparatos sanitarios', 'Saneamiento', 'Electricidad', 'Otras partidas', 'Gestión de residuos', 'Seguridad y salud'];
+  const AMBITO_LABEL = { obra: 'Toda la obra', interior: 'Estancias', fachada: 'Fachadas', cubierta: 'Cubiertas', piscina: 'Piscinas', fontaneria: 'Fontanería', electricidad: 'Electricidad' };
 
   /* ---------------- Reglas de medición ---------------- */
   const L = (com, uds, l, a, h) => ({ com, uds, l: l ?? null, a: a ?? null, h: h ?? null });
@@ -427,6 +447,27 @@
       const out = REGLAS.cub_sup(z);
       if (z.tipo === 'plana' && z.perimetro) out.push(L('Remonte en antepechos', 1, z.perimetro, null, Math.max(0.2, z.remonte || 0.2)));
       return out;
+    },
+    // Piscina: fondo + paredes; si la profundidad varía y es rectangular, cada pared corta con la suya y las largas con la media
+    pis_vaso: (z) => {
+      if (!z.area || !z.prof) return [];
+      const a = z.pmin ?? z.prof, b = z.pmax ?? z.prof;
+      const out = [L('Fondo', 1, z.area)];
+      if (z.rect && a !== b) {
+        const [lg, an] = z.rect;
+        out.push(L('Pared corta, lado menos profundo', 1, an, null, a), L('Pared corta, lado más profundo', 1, an, null, b), L('Paredes largas (profundidad media)', 2, lg, null, z.prof));
+      } else if (z.rect) {
+        const [lg, an] = z.rect;
+        out.push(L('Paredes largas', 2, lg, null, z.prof), L('Paredes cortas', 2, an, null, z.prof));
+      } else out.push(L('Paredes: perímetro × profundidad' + (a !== b ? ' media' : ''), 1, z.perimetro, null, z.prof));
+      return out;
+    },
+    pis_perim: (z) => (z.perimetro ? [L('Perímetro de ' + z.nombre.toLowerCase(), 1, z.perimetro)] : []),
+    pis_anillo: (z) => (z.perimetro ? [L('Anillo perimetral', 1, z.perimetro), L('Sobrante para la conexión', 1, 5)] : []),
+    pis_exc: (z) => {
+      if (!z.area || !z.prof) return [];
+      if (z.rect) return [L('Vaso + 0,30 m de sobreexcavación por lado; profundidad media + 0,30 m de solera', 1, round2(z.rect[0] + 0.6), round2(z.rect[1] + 0.6), round2(z.prof + 0.3))];
+      return [L('Superficie × (profundidad media + 0,30 m de solera)', 1, z.area, null, round2(z.prof + 0.3))];
     },
     fon_inst: (z) => [L(z.nombre, 1)],
     fon_af: (z) => (z.f && z.f.af ? [L(z.nombre, z.f.af)] : []),
@@ -499,17 +540,19 @@
     suelo: 'Superficie del suelo', techo: 'Superficie del techo', paredes: 'Perímetro × altura − huecos', rodapie: 'Perímetro − puertas', perimetro: 'Perímetro',
     ud_zona: '1 por zona', ud_obra: '1 para toda la obra', ud_puertas: 'Nº de puertas', ud_ventanas: 'Nº de ventanas', sup_total: 'Superficie total medida',
     fachada: 'Ancho × alto − ventanas', fachada_bruta: 'Ancho × alto', perim_ventanas: 'Perímetro de las ventanas', vierteaguas: 'Ancho de las ventanas',
-    cub_sup: 'Superficie (inclinadas × factor de pendiente)', cub_imper: 'Superficie + remonte en antepechos', preguntar: 'Te pregunto la medida'
+    cub_sup: 'Superficie (inclinadas × factor de pendiente)', cub_imper: 'Superficie + remonte en antepechos', pis_vaso: 'Fondo + paredes del vaso', pis_perim: 'Perímetro de la piscina', pis_anillo: 'Perímetro + sobrante', pis_exc: 'Volumen de excavación', preguntar: 'Te pregunto la medida'
   };
   const REGLAS_AMBITO = {
     interior: ['suelo', 'techo', 'paredes', 'rodapie', 'perimetro', 'ud_zona', 'ud_puertas', 'ud_ventanas', 'preguntar'],
     fachada: ['fachada', 'fachada_bruta', 'perim_ventanas', 'vierteaguas', 'ud_zona', 'preguntar'],
     cubierta: ['cub_sup', 'cub_imper', 'perimetro', 'ud_zona', 'preguntar'],
+    piscina: ['pis_vaso', 'pis_perim', 'pis_exc', 'ud_zona', 'preguntar'],
     fontaneria: ['ud_zona', 'preguntar'], electricidad: ['ud_zona', 'preguntar']
   };
   /** Regla por defecto para una partida añadida a mano desde la base. */
   function reglaPara(ambito, d) {
     const o = orientOf(d);
+    if (ambito === 'piscina') return { m2: 'pis_vaso', m: 'pis_perim', m3: 'pis_exc', ud: 'ud_zona' }[d.u] || 'preguntar';
     if (d.u === 'm2') return ambito === 'interior' ? (o === 'V' ? 'paredes' : /techo/.test(norm(d.r)) ? 'techo' : 'suelo') : ambito === 'fachada' ? 'fachada' : ambito === 'cubierta' ? 'cub_sup' : 'preguntar';
     if (d.u === 'm') return ambito === 'interior' && /rodapi|zocalo/.test(norm(d.r)) ? 'rodapie' : ambito === 'cubierta' && /mimbel|remate|albardilla|canal/.test(norm(d.r)) ? 'perimetro' : 'preguntar';
     if (d.u === 'ud') return 'ud_zona';
@@ -623,7 +666,7 @@
         p = d ? { ref: d.c, u: d.u, r: d.r, t: d.t, chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder, subTitle: d.subTitle }
           : { ref, propia: true, u: w.u, r: w.label, t: w.label, chap: 'G-' + norm(w.capitulo).replace(/\W+/g, ''), chapTitle: w.capitulo.toUpperCase(), chapOrder: 900 + CAP_ORDEN.indexOf(w.capitulo), subTitle: '' };
         Object.assign(p, { uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), lineas: [], creada: Date.now() + obra.partidas.length, guia: true });
-        p.orient = /^(paredes|fachada|fachada_bruta)$/.test(w.regla) ? 'V' : /^(suelo|techo|cub_sup|cub_imper|sup_total)$/.test(w.regla) ? 'H' : orientOf(p);
+        p.orient = /^(paredes|fachada|fachada_bruta)$/.test(w.regla) ? 'V' : /^(suelo|techo|cub_sup|cub_imper|sup_total|pis_vaso)$/.test(w.regla) ? 'H' : orientOf(p);
         obra.partidas.push(p);
       }
       return p;
@@ -884,7 +927,7 @@
       const antes = this.toma.zonas.map((z) => z.nombre);
       this.obra.toma = JSON.parse(h.toma); g.paso = h.paso; g.d = /^(inicio|est_nombre|est_mas|cub_nombre|mas_zona|ins_tipo)$/.test(h.paso) ? {} : h.d; this.fails = 0;
       // Las zonas empezadas y sin ninguna medida (salvo la de esta pregunta) se quitan
-      const vacia = (z) => (z.ambito === 'interior' && z.area == null && !(z.tramos || []).length) || (z.ambito === 'cubierta' && z.area == null && !(z.faldones || []).length && !z.tipo);
+      const vacia = (z) => (z.ambito === 'interior' && z.area == null && !(z.tramos || []).length) || (z.ambito === 'cubierta' && z.area == null && !(z.faldones || []).length && !z.tipo) || (z.ambito === 'piscina' && z.area == null && !(z.tramos || []).length);
       this.toma.zonas = this.toma.zonas.filter((z) => !(vacia(z) && z.id !== (g.d && g.d.zid)));
       const quitadas = antes.filter((x) => !this.toma.zonas.some((z) => z.nombre === x));
       quitadas.forEach((x) => { if (this.obra.estancias) this.obra.estancias = this.obra.estancias.filter((e) => e !== x || this.toma.zonas.some((z) => z.nombre === e)); });
@@ -1366,7 +1409,8 @@
       let k = input.act && input.act.g;
       let est = null;
       if (!k) {
-        if (/(fachada|medianera|frente del edificio)/.test(n)) k = 'fachada';
+        if (/(piscina|alberca|vaso de obra)/.test(n)) k = 'piscina';
+        else if (/(fachada|medianera|frente del edificio)/.test(n)) k = 'fachada';
         else if (/(cubierta|tejado|azotea|terrado|faldon)/.test(n)) k = 'cubierta';
         else if (/(instalac|fontaner|electric|agua|enchufe|luz|desague|saneamiento)/.test(n)) k = 'instalaciones';
         else if (/(vivienda|piso|casa|integral|completa|chalet|apartamento|toda la|reforma)/.test(n)) k = 'vivienda';
@@ -1374,7 +1418,7 @@
         else { const m = n.match(/(estancia|habitacion|parcial|bano|aseo|cocina|dormitorio|salon|comedor|pasillo|terraza|local|despacho|oficina|lavadero|recibidor|sotano|garaje|trastero|buhardilla|atico|estudio|vestidor|despensa|galeria|porche|bodega|almacen|nave|sala)/); if (m) { k = 'estancia'; if (!/^(estancia|habitacion|parcial)$/.test(m[1])) est = estanciaName(text.replace(/^(?:una?|el|la)\s+/i, '')); } }
       }
       if (!k) return false;
-      this.obra.ambito = { vivienda: 'vivienda', estancia: 'estancia', instalaciones: 'instalaciones', fachada: 'libre', cubierta: 'libre', otra: 'libre' }[k];
+      this.obra.ambito = { vivienda: 'vivienda', estancia: 'estancia', instalaciones: 'instalaciones', fachada: 'libre', cubierta: 'libre', piscina: 'libre', otra: 'libre' }[k];
       this.g.tipo = k;
       if (k === 'vivienda' || k === 'estancia') {
         if (est) return this.say('est_planta', { zid: this.nuevaZona('interior', est).id }, 'Perfecto, medimos ' + art(est) + '.');
@@ -1382,6 +1426,7 @@
       }
       if (k === 'fachada') return this.say('fac_lista', {});
       if (k === 'cubierta') return this.say('cub_nombre', {});
+      if (k === 'piscina') return this.nuevaPiscina('Perfecto, una piscina.');
       if (k === 'instalaciones') return this.say('ins_tipo', {});
       // Otra cosa: medición libre con la IA
       this.g.fin = true; this.g.paso = 'libre'; this.save();
@@ -1771,6 +1816,7 @@
       if (/(instalac|fontaner|electric)/.test(n)) { this.g.tipo = this.g.tipo || 'instalaciones'; return P.ins_tipo.a.call(this, text, n, {}, {}); }
       if (/fachada/.test(n)) { this.g.tipo = 'fachada'; return this.say('fac_lista', { mas: true }); }
       if (/(cubierta|tejado|azotea)/.test(n)) { this.g.tipo = 'cubierta'; return this.say('cub_nombre', {}); }
+      if (/(piscina|alberca)/.test(n)) { this.g.tipo = 'piscina'; return this.nuevaPiscina(); }
       if (/(estancia|habitacion|otra|si)/.test(n)) { if (this.g.tipo !== 'estancia') this.g.tipo = 'vivienda'; return this.say('est_nombre', {}); }
       const m = /(salon|cocina|bano|aseo|dormitorio|pasillo|terraza|comedor|recibidor|despacho|lavadero)/.test(n);
       if (m) { this.g.tipo = this.g.tipo === 'estancia' ? 'estancia' : 'vivienda'; return P.est_nombre.a.call(this, text, n, {}, {}); }
@@ -2036,6 +2082,73 @@
   P.cub_faldones.deshacer = function (d) { const z = this.zona(d.zid); if (z && (z.faldones || []).length) { const f = z.faldones.pop(); return 'He quitado ' + f.nombre.toLowerCase() + '.'; } return null; };
   P.fac_tipo.deshacer = function (d) { const z = fachadas(this)[d.fi]; if (z && d.ti > 0 && z.ventanas.length) { z.ventanas.pop(); this.g.d = Object.assign({}, d, { ti: d.ti - 1 }); return 'He quitado el tipo de ventana anterior. Dímelo otra vez.'; } return null; };
   P.est_huecos.aprox = function (text, d) { if (d.pend) return null; const v = numeros(text); if (v.length !== 2) return null; const t = /puerta/.test(norm(text)) || (v[1] >= 1.9 && v[0] < 1.2) ? 'puerta' : 'ventana'; return { txt: 'una ' + t + ' de ' + String(v[0]).replace('.', ',') + ' por ' + String(v[1]).replace('.', ','), q: '¿Una ' + t + ' de ' + fmt(v[0]) + ' por ' + fmt(v[1]) + '?' }; };
+  /* ---- Piscina ---- */
+  Guia.prototype.nuevaPiscina = function (pre) {
+    const n = this.toma.zonas.filter((z) => z.ambito === 'piscina').length;
+    const z = this.nuevaZona('piscina', n ? 'Piscina ' + (n + 1) : 'Piscina');
+    return this.say('pis_planta', { zid: z.id }, pre);
+  };
+  P.pis_planta = {
+    qb: () => 'Largo por ancho de la piscina, o las paredes con sus giros.',
+    q(d) {
+      const z = this.zona(d.zid);
+      if (z && z.tramos && z.tramos.length) return { t: 'Llevo ' + z.tramos.length + ' ' + plural(z.tramos.length, 'pared') + ': ' + z.tramos.map((t) => fmt(t.l)).join(', ') + '. Sigue, o di «cierra».', c: CH(['Cierra', 'Empezar de nuevo']) };
+      return { t: 'Dime las medidas interiores de la piscina: si es rectangular, largo por ancho, por ejemplo «8 por 4». Si tiene otra forma, ve dándome las paredes con el giro.', c: [] };
+    },
+    ayuda: () => 'Dime el largo por el ancho de la piscina, por ejemplo «6 por 3». O las paredes con sus giros, o «superficie 18 y perímetro 18».',
+    formato: P.est_planta.formato,
+    a(text, n, input, d) {
+      const z = this.zona(d.zid);
+      if (/^(empezar de nuevo|borra|de nuevo)/.test(n)) { z.tramos = []; delete z.rect; this.save(); return this.repetir('Empezamos de nuevo.'); }
+      const cierra = /(cierr|cerrar|cerramos|cerrado|ya esta|termin|vuelvo al principio|eso es todo|poligono)/.test(n);
+      const w = parseWalk(text);
+      const fin = () => this.say('pis_prof', { zid: z.id }, 'Superficie ' + fmt(z.area) + ' metros cuadrados y ' + fmt(z.perimetro) + ' de perímetro.');
+      if (!w && cierra && z.tramos && z.tramos.length >= 2) { this.cerrarCub(z); return fin(); }
+      if (!w) return false;
+      if (w.directo) { if (w.directo.area) z.area = round2(w.directo.area); if (w.directo.perimetro) z.perimetro = round2(w.directo.perimetro); if (!z.area || !z.perimetro) return this.ask(!z.area ? '¿Y la superficie?' : '¿Y el perímetro?', []); this.save(); return fin(); }
+      if (w.rect) { const lg = Math.max(w.rect[0], w.rect[1]), an = Math.min(w.rect[0], w.rect[1]); z.rect = [lg, an]; z.tramos = rectTramos(lg, an); this.cerrarCub(z); return fin(); }
+      delete z.rect;
+      z.tramos = (z.tramos || []).concat(w.tramos);
+      const res = calcPlanta(z.tramos);
+      if ((res.cierre === 'exacto' && z.tramos.length >= 3) || cierra) {
+        this.cerrarCub(z);
+        // Cuatro paredes en ángulo recto, iguales dos a dos: es rectangular
+        const t = z.tramos;
+        if (t.length === 4 && Math.abs(t[0].l - t[2].l) < 0.01 && Math.abs(t[1].l - t[3].l) < 0.01 && t.every((x) => (x.ang || 90) === 90)) z.rect = [Math.max(t[0].l, t[1].l), Math.min(t[0].l, t[1].l)];
+        return fin();
+      }
+      this.save(); return this.repetir();
+    }
+  };
+  P.pis_planta.aprox = aproxPlanta;
+  P.pis_planta.deshacer = P.est_planta.deshacer;
+  P.pis_prof = {
+    qb: () => '¿Profundidad? Si varía, la menor y la mayor.',
+    q: () => ({ t: '¿Qué profundidad tiene? Si varía, dime la menor y la mayor, por ejemplo «1,40 y 1,60».', c: [] }),
+    ayuda: () => 'Dime la profundidad en metros, por ejemplo «1,50», o la menor y la mayor: «1,40 y 1,60».',
+    formato: () => 'la profundidad en metros con coma («1,50»), o la menor y la mayor («1,40 y 1,60»)',
+    a(text, n, input, d) {
+      const z = this.zona(d.zid);
+      let v = numeros(text).map((x) => (x >= 5 ? round2(x / 100) : x)).filter((x) => x > 0.2 && x < 5);
+      if (/media/.test(n) && v.length === 3) v = [v[1], v[2]]; // «media de 1,50: en una parte 1,40 y en la otra 1,60»
+      if (!v.length) return false;
+      const a = Math.min(...v), b = Math.max(...v);
+      z.pmin = a; z.pmax = b; z.prof = round2((a + b) / 2); this.save();
+      const pre = a === b ? 'Profundidad ' + fmt(a) + '.' : 'Profundidad de ' + fmt(a) + ' a ' + fmt(b) + ', media ' + fmt(z.prof) + '.';
+      const vaso = REGLAS.pis_vaso(z).reduce((s, l) => s + l.uds * (l.l || 1) * (l.a || 1) * (l.h || 1), 0);
+      return this.say('pis_mas', {}, pre + ' Fondo y paredes del vaso: ' + fmt(round2(vaso)) + ' metros cuadrados.');
+    }
+  };
+  P.pis_mas = {
+    q: () => ({ t: '¿Medimos otra piscina o elegimos los trabajos?', c: CH([{ label: 'Elegir trabajos', value: 'elegir trabajos' }, 'Otra piscina']) }),
+    ayuda: () => 'Di «otra piscina» o «elegir trabajos».',
+    formato: () => '«otra piscina» o «elegir trabajos»',
+    a(text, n) {
+      if (/(otra|si|seguimos)/.test(n) && !/trabajo/.test(n)) return this.nuevaPiscina();
+      if (/(trabajo|elegir|no|ya|listo|termin)/.test(n)) return this.abrirTrabajos();
+      return false;
+    }
+  };
   P.cub_mas = {
     q: () => ({ t: '¿Medimos otra cubierta o elegimos los trabajos?', c: CH([{ label: 'Elegir trabajos', value: 'elegir trabajos' }, 'Otra cubierta']) }),
     ayuda: () => 'Di «otra cubierta» o «elegir trabajos».',

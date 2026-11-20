@@ -494,6 +494,7 @@
     }
     if (z.ambito === 'fachada') return f(z.ancho) + ' × ' + f(z.alto) + ' m' + ((z.ventanas || []).length ? ' · ventanas: ' + z.ventanas.map((v) => v.uds + ' de ' + f(v.an) + '×' + f(v.al)).join(', ') : '');
     if (z.ambito === 'cubierta') return z.tipo === 'inclinada' ? 'Inclinada · ' + (z.faldones || []).map((x) => x.nombre + ' ' + f(x.l) + '×' + f(x.a)).join(', ') + (z.factor ? ' · factor ' + f(z.factor) : '') : 'Plana' + (z.area != null ? ' · ' + f(z.area) + ' m² · perímetro ' + f(z.perimetro) + ' m' : '') + (z.remonte ? ' · remonte ' + f(z.remonte) + ' m' : '');
+    if (z.ambito === 'piscina') return [z.area != null ? f(z.area) + ' m² · perímetro ' + f(z.perimetro) + ' m' : 'Midiendo…', z.prof ? (z.pmin !== z.pmax ? 'profundidad ' + f(z.pmin) + ' a ' + f(z.pmax) + ' m' : 'profundidad ' + f(z.prof) + ' m') : ''].filter(Boolean).join(' · ');
     if (z.ambito === 'fontaneria') { const x = z.f || {}; return ['AF ' + (x.af ?? '–'), 'AF+AC ' + (x.afc ?? '–'), x.inodoro ? 'inodoro ' + x.inodoro : '', x.ducha ? (x.ducha === 'banera' ? 'bañera' : 'plato de ducha') + (x.mampara ? ' con mampara' : '') : '', x.bide ? 'bidé' : '', x.lavadora ? 'lavadora' : '', x.lavavajillas ? 'lavavajillas' : ''].filter(Boolean).join(' · '); }
     if (z.ambito === 'electricidad') { const x = z.e || {}; return ['luz ' + (x.luz ?? '–'), 'tomas ' + (x.tomas ?? '–'), x.c3 ? 'cocina/horno 25 A' : '', x.c4 && x.c4.length ? x.c4.join(', ') : '', x.norma ? 'según REBT' : ''].filter(Boolean).join(' · '); }
     return '';
