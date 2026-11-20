@@ -40,6 +40,10 @@
     try {
       const { data } = await sb.from('perfiles').select('*').eq('id', user.id).maybeSingle();
       perfil = data || null;
+      // La dirección se guarda en el perfil (si el servidor ya tiene la columna) o en los datos de la cuenta
+      const md = (user && user.user_metadata) || {};
+      if (perfil && !perfil.direccion && md.direccion) perfil.direccion = md.direccion;
+      if (perfil && !perfil.telefono_contacto && md.telefono_contacto) perfil.telefono_contacto = md.telefono_contacto;
       const a = await sb.from('admins').select('user_id').eq('user_id', user.id);
       admin = !!(a.data && a.data.length);
     } catch (e) { /* sin conexión */ }
@@ -52,13 +56,14 @@
     if (/already registered|already been registered/i.test(m)) return 'Ya existe una cuenta con ese correo. Prueba a entrar o a recuperar la contraseña.';
     if (/Password should be at least/i.test(m)) return 'La contraseña debe tener al menos 8 caracteres.';
     if (/rate limit/i.test(m)) return 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.';
+    if (/Database error saving new user|NIF_DUPLICADO|unique/i.test(m)) return 'No se ha podido crear la cuenta: ya hay una cuenta registrada con ese NIF / CIF. Si es tu empresa, entra con su correo o recupera la contraseña.';
     if (/Failed to fetch|NetworkError|network/i.test(m)) return 'No hay conexión con el servidor. Comprueba tu cobertura.';
     return m;
   };
 
   /* ---------------- Cuentas ---------------- */
-  async function signUp({ email, password, nombre, empresa, nif }) {
-    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { nombre, empresa, nif }, emailRedirectTo: location.origin + location.pathname } });
+  async function signUp({ email, password, nombre, empresa, nif, direccion, telefono }) {
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { nombre, empresa, nif, direccion, telefono_contacto: telefono || '' }, emailRedirectTo: location.origin + location.pathname } });
     if (error) throw new Error(errMsg(error));
     return { needsConfirm: !data.session };
   }
@@ -80,8 +85,13 @@
     if (error) throw new Error(errMsg(error));
   }
   async function updateProfile(f) {
-    const { error } = await sb.from('perfiles').update({ nombre: f.nombre, empresa: f.empresa, nif: f.nif, actualizado: new Date().toISOString() }).eq('id', user.id);
+    const base = { nombre: f.nombre, empresa: f.empresa, nif: f.nif, actualizado: new Date().toISOString() };
+    let { error } = await sb.from('perfiles').update(Object.assign({ direccion: f.direccion || null }, base)).eq('id', user.id);
+    // Servidor sin la columna «direccion» todavía: se guarda el resto y la dirección va en los datos de la cuenta
+    if (error && /direccion|column|permission denied/i.test(error.message || '')) ({ error } = await sb.from('perfiles').update(base).eq('id', user.id));
     if (error) throw new Error(errMsg(error));
+    const r = await sb.auth.updateUser({ data: { direccion: f.direccion || '', telefono_contacto: f.telefono || '' } });
+    if (r.data && r.data.user) user = r.data.user;
     await loadProfile();
   }
 

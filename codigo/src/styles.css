@@ -252,3 +252,7 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .toma-z .zdel { width: 36px; height: 36px; color: var(--muted); }
 .toma-z .zdel svg { width: 18px; height: 18px; }
 #tnu, #tnz { min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-2); padding: 8px 10px; font-weight: 600; }
+.hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
+.logo-box { min-height: 64px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 12px; padding: 10px; background: #fff; }
+.logo-box img { max-height: 70px; max-width: 100%; object-fit: contain; }
+.logo-box .hint { color: #555; }

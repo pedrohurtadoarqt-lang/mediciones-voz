@@ -653,6 +653,14 @@
     if (!r.length) return '<p class="hint">Sin resultados.</p>';
     return r.map((x) => '<div class="pitem"><span class="c">' + esc(x.doc.c) + '</span><span class="r">' + esc(x.doc.r) + '<small>' + esc(x.doc.path) + '</small></span>' + (S.obra ? '<button class="btn small" data-a="addcat" data-code="' + esc(x.doc.c) + '">Añadir</button>' : '<span class="t">' + unitL(x.doc.u) + '</span>') + '</div>').join('');
   }
+  function viewEmpresa() {
+    const e = empresaDatos(); const cuenta = !!(window.Cloud && Cloud.user);
+    return '<div class="card"><h3>Empresa en los documentos</h3><div class="meta">El logo y los datos de la empresa aparecen en la cabecera del PDF de mediciones.</div>' +
+      '<div class="logo-box">' + (e.logo ? '<img src="' + e.logo + '" alt="Logo de la empresa">' : '<span class="hint">Sin logo</span>') + '</div>' +
+      '<div class="row"><label class="btn" for="logofile">' + (e.logo ? 'Cambiar logo' : 'Subir logo') + '</label><input id="logofile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>' + (e.logo ? '<button class="btn danger" data-a="logodel" type="button">Quitar logo</button>' : '') + '</div>' +
+      (cuenta ? '<p class="hint">' + esc([e.nombre, e.nif, e.direccion, e.telefono].filter(Boolean).join(' · ') || 'Completa los datos de tu empresa.') + '</p><div class="row"><button class="btn small" data-a="account" type="button">Editar datos de la empresa</button></div>'
+        : '<form id="femp" style="display:flex;flex-direction:column;gap:8px"><div class="field"><label for="enom">Empresa</label><input id="enom" value="' + esc(e.nombre) + '"></div><div class="field"><label for="enif">NIF / CIF</label><input id="enif" value="' + esc(e.nif) + '"></div><div class="field"><label for="edir">Dirección</label><input id="edir" value="' + esc(e.direccion) + '"></div><div class="field"><label for="etel">Teléfono</label><input id="etel" type="tel" value="' + esc(e.telefono) + '"></div><div class="row"><button class="btn small" type="submit">Guardar en este dispositivo</button></div></form>') + '</div>';
+  }
   function viewAjustes() {
     const vs = VoiceAdapter.voices();
     const planCard = (window.Cloud && Cloud.user)
@@ -674,6 +682,7 @@
       '<p class="hint">Con auriculares la app espera un instante a que el móvil cambie el audio antes de escuchar, y no filtra el eco. Si tus auriculares no tienen micrófono, habla al del móvil.</p>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
       '<div class="field"><label for="rate">Velocidad de lectura: ' + S.settings.rate.toFixed(2) + '</label><input id="rate" type="range" min="0.7" max="1.6" step="0.05" value="' + S.settings.rate + '"></div></div>' +
+      viewEmpresa() +
       '<div class="card"><h3>Datos</h3><div class="meta">Las obras y bases importadas se guardan en este navegador (IndexedDB).</div><div class="row"><button class="btn" data-a="backup">Copia de seguridad (.json)</button><label class="btn" for="restorefile">Restaurar copia</label><input id="restorefile" type="file" accept=".json" hidden></div></div>';
   }
 
@@ -854,6 +863,33 @@
     setTimeout(() => { const t = $('#sgtext'); t && t.focus(); }, 50);
   }
   /* ---- Cuenta ---- */
+  /** Valida NIF, NIE o CIF españoles (letra o dígito de control). */
+  function nifValido(v) {
+    const s = String(v || '').toUpperCase().replace(/[\s.-]/g, '');
+    const L = 'TRWAGMYFPDXBNJZSQVHLCKE';
+    if (/^\d{8}[A-Z]$/.test(s)) return L[+s.slice(0, 8) % 23] === s[8];
+    if (/^[XYZ]\d{7}[A-Z]$/.test(s)) return L[+(String('XYZ'.indexOf(s[0])) + s.slice(1, 8)) % 23] === s[8];
+    if (/^[ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J]$/.test(s)) {
+      let a = 0, b = 0; for (let i = 1; i <= 7; i++) { const d = +s[i]; if (i % 2 === 0) a += d; else { const x = d * 2; b += Math.floor(x / 10) + (x % 10); } }
+      const c = (10 - ((a + b) % 10)) % 10; const k = s[8];
+      return k === String(c) || k === 'JABCDEFGHI'[c];
+    }
+    return false;
+  }
+  /** Datos de la empresa para los documentos: los de la cuenta y, si no hay sesión, los guardados en el dispositivo. */
+  function empresaDatos() {
+    const p = (window.Cloud && Cloud.user && Cloud.perfil) || {};
+    const l = S.settings.empresa || {};
+    return { nombre: p.empresa || l.nombre || '', nif: p.nif || l.nif || '', direccion: p.direccion || l.direccion || '', telefono: p.telefono_contacto || l.telefono || '', logo: S.settings.logo || '' };
+  }
+  /** Reduce la imagen del logo (máx. 480 px) para guardarla y meterla en el PDF. */
+  function leerLogo(file) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => { const img = new Image(); img.onload = () => { const k = Math.min(1, 480 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/png')); }; img.onerror = () => rej(new Error('No se puede leer la imagen')); img.src = fr.result; };
+      fr.onerror = () => rej(new Error('No se puede leer el archivo')); fr.readAsDataURL(file);
+    });
+  }
   function accountSheet(mode) {
     const C = window.Cloud;
     if (mode === 'perfil' && C.user) {
@@ -863,9 +899,12 @@
         '<div class="field"><label for="anom">Nombre y apellidos</label><input id="anom" autocomplete="name" value="' + esc(p.nombre || '') + '"></div>' +
         '<div class="field"><label for="aemp">Empresa o razón social</label><input id="aemp" autocomplete="organization" value="' + esc(p.empresa || '') + '"></div>' +
         '<div class="field"><label for="anif">NIF / CIF</label><input id="anif" value="' + esc(p.nif || '') + '"></div>' +
+        '<div class="field"><label for="adir">Dirección de la empresa</label><input id="adir" autocomplete="street-address" value="' + esc(p.direccion || '') + '"></div>' +
+        '<div class="field"><label for="atel">Teléfono de contacto (aparece en los documentos)</label><input id="atel" type="tel" autocomplete="tel" value="' + esc(p.telefono_contacto || '') + '"></div>' +
+        '<p class="hint">El logo de la empresa se pone en <b>Ajustes › Empresa en los documentos</b>.</p>' +
         '<p class="hint">Teléfono: ' + (p.telefono_verificado ? esc(p.telefono) + ' (verificado)' : 'pendiente de verificar por SMS (lo activaremos pronto)') + '</p>' +
         '<div class="row"><button class="btn primary" type="submit">Guardar</button><button class="btn" type="button" data-a="closesheet">Cerrar</button><button class="btn danger" type="button" data-a="logout">Cerrar sesión</button></div></form>');
-      $('#facc').addEventListener('submit', async (e) => { e.preventDefault(); try { await C.updateProfile({ nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif: $('#anif').value.trim().toUpperCase() }); closeSheet(); toast('Datos guardados'); render(); } catch (er) { toast(er.message); } });
+      $('#facc').addEventListener('submit', async (e) => { e.preventDefault(); const nif = $('#anif').value.trim().toUpperCase(); if (nif && !nifValido(nif)) return toast('El NIF / CIF no es válido. Revísalo.'); try { await C.updateProfile({ nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif, direccion: $('#adir').value.trim(), telefono: $('#atel').value.trim() }); closeSheet(); toast('Datos guardados'); render(); } catch (er) { toast(er.message); } });
       return;
     }
     if (mode === 'newpass') {
@@ -879,13 +918,17 @@
       (signup ? '<div class="mailnote">Al crear la cuenta te enviaremos un correo de <b>Mediciona</b> (hola@mediciona.es) con el asunto <b>«Confirma tu cuenta de Mediciona»</b>. Si no lo ves en unos minutos, mira en Spam o Promociones.</div>' : '') +
       (signup ? '<div class="field"><label for="anom">Nombre y apellidos</label><input id="anom" autocomplete="name" required></div>' +
         '<div class="field"><label for="aemp">Empresa o razón social</label><input id="aemp" autocomplete="organization" required></div>' +
-        '<div class="field"><label for="anif">NIF / CIF</label><input id="anif" required></div>' : '') +
+        '<div class="field"><label for="anif">NIF / CIF de la empresa</label><input id="anif" required autocapitalize="characters"></div>' +
+        '<div class="field"><label for="adir">Dirección de la empresa</label><input id="adir" autocomplete="street-address" required></div>' +
+        '<div class="field"><label for="atel">Teléfono de contacto (opcional)</label><input id="atel" type="tel" autocomplete="tel"></div>' +
+        '<div class="field hp" aria-hidden="true"><label for="aweb">No rellenar</label><input id="aweb" tabindex="-1" autocomplete="off"></div>' : '') +
       '<div class="field"><label for="amail">Correo electrónico</label><input id="amail" type="email" autocomplete="email" required></div>' +
       (forgot ? '' : '<div class="field"><label for="apass">Contraseña' + (signup ? ' (mínimo 8 caracteres)' : '') + '</label><input id="apass" type="password" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" minlength="8" required></div>') +
       (signup ? '<label class="checkline"><input type="checkbox" id="alegal" required><span>Soy profesional o empresa y acepto el <a href="legal/aviso-legal.html" target="_blank">aviso legal</a> y la <a href="legal/privacidad.html" target="_blank">política de privacidad</a>.</span></label>' : '') +
       '<div class="row"><button class="btn primary" type="submit">' + (signup ? 'Crear cuenta' : forgot ? 'Enviar enlace' : 'Entrar') + '</button><button class="btn" type="button" data-a="closesheet">Cancelar</button></div>' +
       '<p class="hint" id="accmsg" role="status"></p>' +
       '<p class="hint">' + (signup ? '¿Ya tienes cuenta? <button class="linkbtn" type="button" data-a="login">Entrar</button>' : forgot ? '<button class="linkbtn" type="button" data-a="login">Volver a entrar</button>' : '¿No tienes cuenta? <button class="linkbtn" type="button" data-a="signup">Crear cuenta</button> · <button class="linkbtn" type="button" id="aforgot">He olvidado la contraseña</button>') + '</p></form>');
+    const abierto = Date.now();
     const fg = $('#aforgot'); if (fg) fg.addEventListener('click', () => accountSheet('forgot'));
     $('#facc').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -894,7 +937,12 @@
         const email = $('#amail').value.trim();
         if (forgot) { await C.resetPassword(email); msg.textContent = 'Si existe una cuenta con ese correo, te hemos enviado un enlace para crear una contraseña nueva.'; btn.disabled = false; return; }
         if (signup) {
-          const r = await C.signUp({ email, password: $('#apass').value, nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif: $('#anif').value.trim().toUpperCase() });
+          // Filtros contra registros automáticos: campo trampa, tiempo mínimo y NIF/CIF con control válido
+          if ($('#aweb').value || Date.now() - abierto < 4000) { msg.textContent = 'Revisa los datos y vuelve a intentarlo.'; btn.disabled = false; return; }
+          const nif = $('#anif').value.trim().toUpperCase().replace(/[\s.-]/g, '');
+          if (!nifValido(nif)) { msg.textContent = 'El NIF / CIF no es válido. Revísalo (letra o dígito de control).'; btn.disabled = false; return; }
+          if ($('#adir').value.trim().length < 6) { msg.textContent = 'Escribe la dirección completa de la empresa.'; btn.disabled = false; return; }
+          const r = await C.signUp({ email, password: $('#apass').value, nombre: $('#anom').value.trim(), empresa: $('#aemp').value.trim(), nif, direccion: $('#adir').value.trim(), telefono: $('#atel').value.trim() });
           if (r.needsConfirm) return checkEmailSheet(email);
         } else await C.signIn(email, $('#apass').value);
         closeSheet(); toast(signup ? 'Cuenta creada. ¡Bienvenido a Mediciona!' : 'Sesión iniciada');
@@ -1076,6 +1124,7 @@
       case 'dell': { const p = dialog.active(); const i = +el.dataset.i; dialog.snapshot(); p.lineas.splice(i, 1); saveObra(); render(); toast('Línea ' + (i + 1) + ' borrada', true); break; }
       case 'goto': S.obra.activa = el.dataset.uid; S.view = 'obra'; saveObra(); render(); { const p = dialog.active(); dialog.state = { mode: 'idle' }; say('Partida ' + p.r + '. Total ' + E.fmt(E.totalOf(p)) + ' ' + E.unitSpoken(p.u) + '. ' + E.dimsSpec(p).ask, dialog.idleChips()); } break;
       case 'fest': S.filterEst = el.dataset.e; render(); break;
+      case 'logodel': S.settings.logo = ''; await saveSettings(); render(); break;
       case 'guiada': if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; dialog.guia.start(); render(); } break;
       case 'trabajos': if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.guia.abrirTrabajos(); } break;
       case 'tw': { const sel = Guia.seleccion(S.obra); const s = sel[el.dataset.id]; if (s) { s.on = !s.on; if (s.on && !s.zonas.length) { const w = Guia.trabajosPara(S.obra).find((x) => x.id === el.dataset.id); s.zonas = Guia.zonasDe(S.obra, w).map((z) => z.id); } } saveObra(); render(); break; }
@@ -1108,6 +1157,14 @@
       case 'testvoice': VoiceAdapter.speak('Hola, soy el asistente de Mediciona. Dime la partida y vamos midiendo.'); break;
     }
   });
+  document.addEventListener('submit', async (ev) => {
+    if (ev.target.id !== 'femp') return;
+    ev.preventDefault();
+    const nif = $('#enif').value.trim().toUpperCase();
+    if (nif && !nifValido(nif)) return toast('El NIF / CIF no es válido. Revísalo.');
+    S.settings.empresa = { nombre: $('#enom').value.trim(), nif, direccion: $('#edir').value.trim(), telefono: $('#etel').value.trim() };
+    await saveSettings(); toast('Datos de la empresa guardados'); render();
+  });
   document.addEventListener('input', (ev) => {
     if (ev.target.id === 'tq') { S.tq = ev.target.value; $('#tres').innerHTML = tResults(); }
     if (ev.target.id === 'catq') { S.catQ = ev.target.value; $('#catres').innerHTML = catResults(); }
@@ -1121,6 +1178,7 @@
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);
     if (ev.target.id === 'restorefile' && ev.target.files[0]) restore(ev.target.files[0]);
+    if (ev.target.id === 'logofile' && ev.target.files[0]) { try { S.settings.logo = await leerLogo(ev.target.files[0]); await saveSettings(); render(); toast('Logo guardado: saldrá en el PDF'); } catch (e) { toast(e.message); } }
   });
   $('#btnBack').addEventListener('click', () => { if (S.view === 'obra' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
   $('#btnMenu').addEventListener('click', menuSheet);
@@ -1287,20 +1345,36 @@
     let y = 0;
     const txt = (s) => String(s ?? '').replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/…/g, '...').replace(/[^\x00-\xFF]/g, '');
     const right = (s, x, yy) => doc.text(txt(s), x, yy, { align: 'right' });
+    // Empresa: logo y datos arriba de cada página
+    const EMP = empresaDatos();
+    const conEmp = !!(EMP.logo || EMP.nombre);
+    let logoWH = null;
+    if (EMP.logo) { try { const pr = doc.getImageProperties(EMP.logo); const h = 12, w = Math.min(40, h * pr.width / pr.height); logoWH = [w, w * pr.height / pr.width]; } catch (e) { logoWH = null; } }
+    const OFF = conEmp ? 16 : 0;
     function header() {
       doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(txt(obra.titulo), M, 14, { maxWidth: 130 });
-      doc.setFontSize(10); right('ESTADO DE MEDICIONES', R, 14);
+      if (conEmp) {
+        let tx = M;
+        if (logoWH) { try { doc.addImage(EMP.logo, 'PNG', M, 6, logoWH[0], logoWH[1]); tx = M + logoWH[0] + 4; } catch (e) { /* imagen no válida */ } }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); if (EMP.nombre) doc.text(txt(EMP.nombre), tx, 9.5, { maxWidth: 110 });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+        const l2 = [EMP.nif ? 'NIF/CIF ' + EMP.nif : '', EMP.telefono ? 'Tel. ' + EMP.telefono : ''].filter(Boolean).join(' · ');
+        if (l2) doc.text(txt(l2), tx, 13.5, { maxWidth: 110 });
+        if (EMP.direccion) doc.text(txt(EMP.direccion), tx, 17, { maxWidth: 110 });
+        doc.setDrawColor(200, 205, 215); doc.setLineWidth(0.2); doc.line(M, 20, R, 20);
+      }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(txt(obra.titulo), M, 14 + OFF, { maxWidth: 130 });
+      doc.setFontSize(10); right('ESTADO DE MEDICIONES', R, 14 + OFF);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-      doc.text(txt([obra.cliente, obra.ubicacion].filter(Boolean).join(' · ')), M, 19);
-      right(fecha, R, 19);
-      doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4); doc.line(M, 21, R, 21);
-      doc.setFillColor(30, 41, 59); doc.rect(M, 23, R - M, 6, 'F');
+      doc.text(txt([obra.cliente, obra.ubicacion].filter(Boolean).join(' · ')), M, 19 + OFF);
+      right(fecha, R, 19 + OFF);
+      doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4); doc.line(M, 21 + OFF, R, 21 + OFF);
+      doc.setFillColor(30, 41, 59); doc.rect(M, 23 + OFF, R - M, 6, 'F');
       doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
-      doc.text('Código', X.cod + 1, 27); doc.text('Ud', X.ud, 27); doc.text('Resumen / Comentario', X.res, 27);
-      right('Uds.', X.uds, 27); right('Longitud', X.l, 27); right('Anchura', X.a, 27); right('Altura', X.h, 27); right('Parcial', X.par, 27); right('Total', X.tot - 1, 27);
+      doc.text('Código', X.cod + 1, 27 + OFF); doc.text('Ud', X.ud, 27 + OFF); doc.text('Resumen / Comentario', X.res, 27 + OFF);
+      right('Uds.', X.uds, 27 + OFF); right('Longitud', X.l, 27 + OFF); right('Anchura', X.a, 27 + OFF); right('Altura', X.h, 27 + OFF); right('Parcial', X.par, 27 + OFF); right('Total', X.tot - 1, 27 + OFF);
       doc.setTextColor(15, 23, 42);
-      y = 34;
+      y = 34 + OFF;
     }
     function newPage() { doc.addPage(); header(); }
     function carryRow(label, val) {

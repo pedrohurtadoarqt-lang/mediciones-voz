@@ -98,11 +98,16 @@ En cualquier momento (también con el asistente terminado) el usuario puede desc
 
 | Lo que dice (ejemplos) | Pregunta | Partidas (desglosado / una sola) |
 |---|---|---|
-| «este pilar tiene los hierros oxidados», «se cae el hormigón del pilar» | ¿Cuántos pilares así? · sección · altura a reparar | Picado de hormigón · cepillado de armaduras · pasivado · mortero de reparación / Reparación de pilar completa (m² desarrollados) |
-| «la viga tiene las armaduras al aire» | ¿Cuántas vigas? · sección ancho × canto · metros | Igual, sobre cara inferior y laterales / Reparación de viga completa |
+| «este pilar tiene los hierros oxidados», «se cae el hormigón del pilar» | ¿Cuántos pilares así? · metros a reparar en cada uno | Picado · cepillado de armaduras · pasivado · mortero de reparación / Reparación de pilar completa — **por metro lineal** |
+| «la viga tiene las armaduras al aire» | ¿Cuántas vigas? · metros de cada una | Igual / Reparación de viga completa — **por metro lineal** |
 | «cantos de forjado desconchados» | metros · canto del forjado | Igual, sobre el frente / Reparación de canto de forjado (m) |
 | «el techo/muro tiene hierros oxidados» | superficie | Igual / Reparación de superficie de hormigón armado |
 | «sube la humedad por el muro», «salitre» | metros de muro · altura a tratar | Picado del revestimiento · barrera química por inyección · mortero de saneamiento / Tratamiento de humedad por capilaridad (m) |
 | «hay grietas en el muro» | metros de fisura | Apertura · sellado / Limpieza y cosido de grietas |
 
 La primera vez pregunta si se quiere **desglosado por fases** o **en una sola partida** y lo recuerda para la obra. Las líneas llevan la estancia o zona donde se estaba midiendo y, al terminar, el asistente vuelve a la pregunta en curso.
+
+## Partidas generales de toda obra
+Se añaden solas a cualquier estado de mediciones (se pueden desmarcar en la pantalla de trabajos):
+- **Gestión de residuos:** contenedores de 4,2 m³. La app los estima con las demoliciones medidas (volumen esponjado ×1,3) y al generar pregunta «¿lo dejo así o cuántos pongo?».
+- **Seguridad y salud:** partida alzada al 2 % del PEM por defecto; se cambia diciendo «seguridad y salud al 3 por ciento».

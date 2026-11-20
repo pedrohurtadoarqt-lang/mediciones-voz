@@ -234,14 +234,17 @@
     T('fontaneria', 'Saneamiento', 'san_40', 'Desagües de Ø40 mm (ducha, bañera, fregadero, lavadora, lavavajillas)', 'ud', 'ISD005b', 'san_40', { auto: true }),
     T('fontaneria', 'Saneamiento', 'san_110', 'Desagües de Ø110 mm (inodoro)', 'ud', 'ISD005c', 'san_110', { auto: true }),
     // ---- Electricidad ----
+    // ---- Generales de toda obra (se marcan solas) ----
+    T('obra', 'Gestión de residuos', 'gen_residuos', 'Contenedores para residuos de obra (4,2 m³)', 'ud', 'GRA010', 'residuos', { auto: true }),
+    T('obra', 'Seguridad y salud', 'gen_sys', 'Seguridad y salud (partida alzada, % del presupuesto)', 'ud', 'YSS010', 'sys', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_cuadro', 'Cuadro eléctrico de vivienda', 'ud', 'IEI110', 'ele_cuadro', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_luz', 'Puntos de luz', 'ud', 'D1902.0080', 'ele_luz', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_t16', 'Tomas de corriente de 16 A', 'ud', 'IEM060', 'ele_t16', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_t25', 'Toma de 25 A para cocina y horno', 'ud', 'IEM060b', 'ele_t25', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_c4', 'Tomas para lavadora, lavavajillas y termo', 'ud', 'IEM066', 'ele_c4', { auto: true })
   ];
-  const CAP_ORDEN = ['Demoliciones', 'Apeos', 'Revestimientos', 'Solados', 'Albañilería', 'Carpintería interior', 'Pintura', 'Fachada', 'Medios auxiliares', 'Impermeabilización', 'Aislamiento', 'Fontanería', 'Aparatos sanitarios', 'Saneamiento', 'Electricidad', 'Otras partidas'];
-  const AMBITO_LABEL = { interior: 'Estancias', fachada: 'Fachadas', cubierta: 'Cubiertas', fontaneria: 'Fontanería', electricidad: 'Electricidad' };
+  const CAP_ORDEN = ['Demoliciones', 'Apeos', 'Revestimientos', 'Solados', 'Albañilería', 'Carpintería interior', 'Pintura', 'Fachada', 'Medios auxiliares', 'Impermeabilización', 'Aislamiento', 'Fontanería', 'Aparatos sanitarios', 'Saneamiento', 'Electricidad', 'Otras partidas', 'Gestión de residuos', 'Seguridad y salud'];
+  const AMBITO_LABEL = { obra: 'Toda la obra', interior: 'Estancias', fachada: 'Fachadas', cubierta: 'Cubiertas', fontaneria: 'Fontanería', electricidad: 'Electricidad' };
 
   /* ---------------- Reglas de medición ---------------- */
   const L = (com, uds, l, a, h) => ({ com, uds, l: l ?? null, a: a ?? null, h: h ?? null });
@@ -331,7 +334,30 @@
     while (isFinite(objetivo) && sum > objetivo && lista.length) { const mayor = lista.reduce((m, x) => (x.n > m.n ? x : m), lista[0]); mayor.n--; sum--; if (!mayor.n) lista.splice(lista.indexOf(mayor), 1); }
     return lista;
   }
+  /** Volumen de escombro estimado a partir de las demoliciones medidas (m³ esponjados) y contenedores de 4,2 m³. */
+  function estimarResiduos(obra) {
+    let vol = 0;
+    obra.partidas.forEach((p) => {
+      if (p.ref === 'GRA010' || p.ref === 'YSS010') return;
+      const dem = /DEMOLIC/i.test(p.chapTitle || '') || /^(demolic|levantad|desmontaj|picado|eliminaci)/i.test(p.r || '');
+      if (!dem) return;
+      const t = E.totalOf(p); const r = norm(p.r);
+      if (p.u === 'm3') vol += t;
+      else if (p.u === 'm2') vol += t * (/(tabique|fabrica|muro|forjado|losa|cubierta)/.test(r) ? 0.1 : /(solado|pavimento|terrazo|baldosa)/.test(r) ? 0.05 : 0.03);
+      else if (p.u === 'm') vol += t * 0.02;
+      else if (p.u === 'ud') vol += t * (/(sanitari|bano|banera|inodoro|mobiliario)/.test(r) ? 0.3 : 0.15);
+    });
+    const esp = round2(vol * 1.3);
+    return { vol: esp, n: Math.max(1, Math.ceil(esp / 4.2)) };
+  }
   const REGLAS_OBRA = {
+    residuos: (zs, w, obra) => {
+      const g = obra.guia || {};
+      if (g.contenedores) return [L('Contenedores indicados en obra', g.contenedores)];
+      const r = estimarResiduos(obra);
+      return [L('Estimación según las demoliciones: ' + fmt(r.vol) + ' m³ de escombro esponjado', r.n)];
+    },
+    sys: (zs, w, obra) => [L('Partida alzada: ' + fmt((obra.guia && obra.guia.sysPct) || 2, 1).replace(/,0$/, '') + ' % del presupuesto de ejecución material', 1)],
     ud_obra: () => [L('Vivienda', 1)],
     puertas_paso: (zs, w, obra) => puertasPaso(zs, obra).map((x) => Object.assign(L('Puertas de ' + fmt(x.an) + ' × ' + fmt(x.al) + ' (' + x.est.join(', ') + ')', x.n), w.nuevas ? { _c: x.an <= 0.76 ? 'LPM010' : 'LPM010b' } : {})),
     sup_total: (zs) => zs.filter((z) => z.area).map((z) => Object.assign(L('Superficie reformada', 1, z.area), { est: z.nombre, dePlanta: 'superficie' }))
@@ -414,15 +440,16 @@
     const zs = (obra.toma && obra.toma.zonas) || [];
     const amb = new Set(zs.map((z) => z.ambito));
     const extra = ((obra.guia && obra.guia.extra) || []).map((x) => Object.assign({ capitulo: 'Otras partidas' }, x));
-    return TRABAJOS.concat(extra).filter((w) => amb.has(w.ambito) && zonasDe(obra, w).length);
+    return TRABAJOS.concat(extra).filter((w) => (amb.has(w.ambito) || (w.ambito === 'obra' && amb.size)) && zonasDe(obra, w).length);
   }
   function zonasDe(obra, w) {
-    const zs = ((obra.toma && obra.toma.zonas) || []).filter((z) => z.ambito === w.ambito);
+    const zs = ((obra.toma && obra.toma.zonas) || []).filter((z) => w.ambito === 'obra' || z.ambito === w.ambito);
     return zs.filter((z) => !w.tipos || z.tipo === w.tipos);
   }
   /** Selección por defecto: los trabajos automáticos con cantidad, el resto sin marcar. */
   function selDefault(obra, w) {
     if (!w.auto) return { on: false, zonas: zonasDe(obra, w).filter((z) => !w.zonas || w.zonas.test(norm(z.nombre))).map((z) => z.id) };
+    if (w.ambito === 'obra') return { on: true, zonas: zonasDe(obra, w).map((z) => z.id) };
     const zs = zonasDe(obra, w).filter((z) => (w.regla === 'fon_inst' || w.regla === 'ele_cuadro') ? (w.regla === 'fon_inst' || z.cuadro) : REGLAS[w.regla](z).length);
     return { on: zs.length > 0, zonas: zs.map((z) => z.id) };
   }
@@ -478,10 +505,11 @@
       });
       if (lines.length) { p.mod = Date.now(); tocadas.add(p.uid); }
     };
-    for (const w of trabajosPara(obra)) {
+    const lista = trabajosPara(obra); lista.sort((a, b) => (a.ambito === 'obra') - (b.ambito === 'obra'));
+    for (const w of lista) {
       const s = sel[w.id];
       if (!s || !s.on) continue;
-      const zs = zsAll.filter((z) => s.zonas.includes(z.id) && z.ambito === w.ambito);
+      const zs = w.ambito === 'obra' ? zsAll.slice() : zsAll.filter((z) => s.zonas.includes(z.id) && z.ambito === w.ambito);
       if (!zs.length) continue;
       if (REGLAS_OBRA[w.regla]) {
         const lines = REGLAS_OBRA[w.regla](zs, w, obra);
@@ -501,6 +529,7 @@
         if (lines.length) add(partidaPara(w, w.regla === 'fon_inst' ? CODIGO_INST(z) : null), w, z, lines);
       }
     }
+    if (sel.gen_residuos && sel.gen_residuos.on && !(obra.guia || {}).contenedoresOk) preguntas.push({ wid: 'gen_residuos', zid: 'obra', residuos: true });
     E.obraChapters(obra);
     return { partidas: tocadas.size, lineas: nl, preguntas };
   }
@@ -712,7 +741,7 @@
       this.save();
       this.io.flash && this.io.flash('ok');
       const cant = inc.tipo === 'humedad' ? fmt(inc.largo) + ' metros de muro' : inc.tipo === 'fisura' ? fmt(inc.largo) + ' metros de fisuras'
-        : inc.el === 'canto' ? fmt(inc.largo) + ' metros de canto' : fmt(hechas[0] ? E.parcial(hechas[0].l) : 0) + ' metros cuadrados de reparación';
+        : inc.el === 'canto' ? fmt(inc.largo) + ' metros de canto' : inc.el === 'pilar' || inc.el === 'viga' ? fmt(hechas[0] ? E.parcial(hechas[0].l) : 0) + ' metros lineales de ' + inc.el + (inc.n > 1 ? (inc.el === 'pilar' ? 'es' : 's') : '') : fmt(hechas[0] ? E.parcial(hechas[0].l) : 0) + ' metros cuadrados de reparación';
       const msg = (pre ? pre + ' ' : '') + 'Anotado' + (inc.est ? ' en ' + art(inc.est) : '') + ': ' + cant + (hechas.length > 1 ? ', en ' + hechas.length + ' partidas' : ', en una partida') + '.';
       return this.volver(msg + ' Seguimos.');
     }
@@ -759,7 +788,7 @@
       this.g.preguntas = r.preguntas;
       this.save();
       this.io.flash && this.io.flash('ok');
-      if (r.preguntas.length) return this.say('preguntas', { i: 0 }, 'He generado ' + r.partidas + ' ' + plural(r.partidas, 'partida') + ' con lo medido. Me faltan ' + r.preguntas.length + ' ' + plural(r.preguntas.length, 'dato') + '.');
+      if (r.preguntas.length) return this.say('preguntas', { i: 0 }, 'He generado ' + r.partidas + ' ' + plural(r.partidas, 'partida') + ' con lo medido. ' + (r.preguntas.length === 1 ? 'Me falta 1 dato.' : 'Me faltan ' + r.preguntas.length + ' datos.'));
       return this.fin(r);
     }
     fin(r) {
@@ -812,8 +841,6 @@
   /** Preguntas de cada incidencia (en orden; se saltan las que no aplican). */
   const INC_Q = [
     { k: 'n', tipo: 'count', si: (i) => i.tipo === 'rep_ha' && (i.el === 'pilar' || i.el === 'viga'), q: (i) => (i.el === 'viga' ? '¿Cuántas vigas hay en esa situación, contando esta?' : '¿Cuántos pilares hay en esa situación, contando este?'), c: ['1', '2', '3', '4'] },
-    { k: 'sec', tipo: 'dims', si: (i) => i.tipo === 'rep_ha' && i.el === 'pilar', q: () => '¿Qué sección tienen? Por ejemplo «30 por 30».', c: ['25 por 25', '30 por 30', '40 por 40'] },
-    { k: 'sec', tipo: 'dims', si: (i) => i.tipo === 'rep_ha' && i.el === 'viga', q: () => '¿Qué sección tienen, ancho por canto? Por ejemplo «25 por 40».', c: ['25 por 40', '30 por 50'] },
     { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'rep_ha' && i.el === 'pilar', q: (i) => '¿Cuántos metros de altura hay que reparar en ' + (i.n > 1 ? 'cada pilar' : 'el pilar') + '? Si es entero, dime su altura.', c: ['1', '2', '2,60', '3'] },
     { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'rep_ha' && i.el === 'viga', q: (i) => '¿Cuántos metros de ' + (i.n > 1 ? 'cada viga' : 'viga') + ' hay que reparar?', c: ['1', '2', '3', '4'] },
     { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'rep_ha' && i.el === 'canto', q: () => '¿Cuántos metros de canto de forjado hay que reparar en total?', c: [] },
@@ -829,13 +856,18 @@
     const N = i.n || 1, f = (v) => fmt(v);
     if (i.tipo === 'rep_ha') {
       let line, com;
-      if (i.el === 'pilar') { const per = round2(2 * (i.sec[0] + i.sec[1])); com = (N > 1 ? N + ' pilares ' : 'Pilar ') + f(i.sec[0]) + '×' + f(i.sec[1]) + ', ' + f(i.largo) + ' m de altura'; line = L(com, N, per, null, i.largo); }
-      else if (i.el === 'viga') { const des = round2(i.sec[0] + 2 * i.sec[1]); com = (N > 1 ? N + ' vigas ' : 'Viga ') + f(i.sec[0]) + '×' + f(i.sec[1]) + ' (cara inferior y laterales), ' + f(i.largo) + ' m'; line = L(com, N, i.largo, null, des); }
+      // Pilares y vigas se valoran por metro lineal de elemento reparado
+      if (i.el === 'pilar' || i.el === 'viga') {
+        com = (N > 1 ? N + (i.el === 'pilar' ? ' pilares' : ' vigas') : (i.el === 'pilar' ? 'Pilar' : 'Viga')) + ', ' + f(i.largo) + ' m ' + (N > 1 ? 'cada ' + (i.el === 'pilar' ? 'uno' : 'una') : '');
+        line = L(com.trim(), N, i.largo);
+        if (modo === 'una') return [[i.el === 'pilar' ? 'EHY095' : 'EHY096', 'm', 'Reparación de ' + i.el + ' de hormigón armado con armaduras corroídas', line]];
+        return [['EHP010', 'm', 'Picado de hormigón deteriorado en pilar o viga', line], ['EHP020', 'm', 'Limpieza de armaduras con cepillo metálico', Object.assign({}, line)], ['EHP030', 'm', 'Pasivado de armaduras', Object.assign({}, line)], ['EHP040', 'm', 'Reconstrucción con mortero de reparación', Object.assign({}, line)]];
+      }
       else if (i.el === 'canto') { com = 'Canto de forjado de ' + f(i.canto) + ' m, ' + f(i.largo) + ' m'; line = L(com, 1, i.largo, null, i.canto); }
       else { com = 'Superficie de hormigón armado'; line = L(com, 1, i.sup[0], i.sup[1]); }
       if (modo === 'una') {
         if (i.el === 'canto') return [['EHY090', 'm', 'Reparación de canto de forjado por corrosión de armaduras', L(com, 1, i.largo)]];
-        return [[i.el === 'pilar' ? 'EHY095' : i.el === 'viga' ? 'EHY096' : 'EHY097', 'm2', 'Reparación de hormigón armado con armaduras corroídas', line]];
+        return [['EHY097', 'm2', 'Reparación de hormigón armado con armaduras corroídas', line]];
       }
       return [['D3001.0070', 'm2', 'Picado de hormigón deteriorado', line], ['EHK045', 'm2', 'Limpieza de armaduras con cepillo metálico', Object.assign({}, line)], ['D3002.0020', 'm2', 'Pasivado de armaduras', Object.assign({}, line)], ['D3002.0030', 'm2', 'Reconstrucción con mortero de reparación', Object.assign({}, line)]];
     }
@@ -1109,6 +1141,7 @@
     a(text, n) {
       const ls = puertasPaso(this.toma.zonas.filter((z) => z.ambito === 'interior'), { guia: {} });
       const tot = ls.reduce((a, x) => a + x.n, 0);
+      if (/^(no|incorrecto|no es correcto|mal)$/.test(n)) return this.ask('¿Cuántas puertas de paso hay en total?', CH(Array.from({ length: Math.min(tot, 5) }, (_, k) => String(k + 1))));
       if (/^(si|correcto|vale|ok|bien|exacto|asi es|eso es)\b/.test(n)) this.g.puertasTotal = null;
       else { const c = count(text); if (c == null || c > tot) return false; this.g.puertasTotal = c; }
       this.save();
@@ -1269,6 +1302,10 @@
     q(d) {
       const it = (this.g.preguntas || [])[d.i];
       if (!it) return { t: '', c: [] };
+      if (it.residuos) {
+        const r = estimarResiduos(this.obra); const pct = this.g.sysPct || 2;
+        return { t: 'Para los residuos calculo ' + r.n + ' ' + plural(r.n, 'contenedor', 'contenedores') + ' de 4,2 metros cúbicos según las demoliciones. ¿Lo dejo así o cuántos pongo? La seguridad y salud va como partida alzada del ' + fmt(pct, 0) + ' por ciento; si quieres otro porcentaje, dímelo.', c: CH([{ label: 'Así está bien', value: 'así está bien' }, String(r.n + 1), String(r.n + 2), { label: 'Seguridad al 3 %', value: 'seguridad y salud al 3 por ciento' }]) };
+      }
       const w = trabajosPara(this.obra).find((x) => x.id === it.wid) || {}; const z = this.zona(it.zid) || { nombre: '' };
       return { t: (w.pide || '¿Qué medición tiene ' + (w.label || '').toLowerCase() + ' en {zona}?').replace('{zona}', art(z.nombre)), c: CH(['No hay', 'Saltar']) };
     },
@@ -1278,6 +1315,19 @@
     a(text, n, input, d) {
       const it = (this.g.preguntas || [])[d.i];
       if (!it) return this.fin();
+      if (it.residuos) {
+        const g = this.g;
+        const mp = n.match(/(\d+(?:[.,]\d+)?)\s*(?:%|por ciento)/);
+        if (mp) { g.sysPct = parseFloat(mp[1].replace(',', '.')); generar(this.obra, this.dlg.cat); this.save(); if (!/contenedor/.test(n)) return this.repetir('Seguridad y salud al ' + fmt(g.sysPct, 0) + ' por ciento.'); }
+        const c = /contenedor/.test(n) || !mp ? count(n.replace(/(\d+(?:[.,]\d+)?)\s*(?:%|por ciento)/, '')) : null;
+        if (/^(asi|vale|si|ok|bien|correcto|perfecto|esta bien|dejalo)/.test(n)) { g.contenedoresOk = true; }
+        else if (c != null && c >= 0) { g.contenedores = c || null; g.contenedoresOk = true; generar(this.obra, this.dlg.cat); }
+        else if (!mp) return false;
+        this.save();
+        if (!g.contenedoresOk) return this.repetir();
+        if (d.i + 1 < g.preguntas.length) return this.say('preguntas', { i: d.i + 1 }, 'Anotado.');
+        return this.fin();
+      }
       if (/^(no hay|ninguno|ninguna|nada|cero|no)$/.test(n)) return this.siguientePregunta(d, []);
       const w = trabajosPara(this.obra).find((x) => x.id === it.wid);
       const pm = parseMeasure(text);

@@ -127,17 +127,17 @@
  },
  {
   "c": "EHY095",
-  "u": "m2",
+  "u": "m",
   "ch": "D3202",
   "r": "Reparación de pilar de hormigón armado con armaduras corroídas",
-  "t": "Reparación de pilar de hormigón armado con armaduras corroídas, incluyendo: picado del hormigón deteriorado y carbonatado con martillo eléctrico hasta descubrir las armaduras y dejarlas exentas en todo su perímetro; limpieza de las armaduras con cepillo metálico hasta eliminar la herrumbre; aplicación manual de mortero pasivador monocomponente a base de cemento e inhibidores de corrosión, como protección de las armaduras y puente de unión; y reconstrucción de la sección original del pilar con mortero de reparación tixotrópico de retracción compensada, clase R3/R4 según UNE-EN 1504-3, con acabado fratasado. Incluso medios auxiliares y retirada de escombros. Medida la superficie desarrollada reparada."
+  "t": "Reparación de pilar de hormigón armado con armaduras corroídas, incluyendo: picado del hormigón deteriorado y carbonatado con martillo eléctrico hasta descubrir las armaduras y dejarlas exentas en todo su perímetro; limpieza de las armaduras con cepillo metálico hasta eliminar la herrumbre; aplicación manual de mortero pasivador monocomponente a base de cemento e inhibidores de corrosión, como protección de las armaduras y puente de unión; y reconstrucción de la sección original del pilar con mortero de reparación tixotrópico de retracción compensada, clase R3/R4 según UNE-EN 1504-3, con acabado fratasado. Incluso medios auxiliares y retirada de escombros. Medido por metro lineal de pilar reparado."
  },
  {
   "c": "EHY096",
-  "u": "m2",
+  "u": "m",
   "ch": "D3202",
   "r": "Reparación de viga de hormigón armado con armaduras corroídas",
-  "t": "Reparación de viga o jácena de hormigón armado con armaduras corroídas, por su cara inferior y laterales, incluyendo: picado del hormigón deteriorado y carbonatado con martillo eléctrico hasta descubrir las armaduras; limpieza de las armaduras con cepillo metálico hasta eliminar la herrumbre; aplicación manual de mortero pasivador monocomponente a base de cemento e inhibidores de corrosión, como protección de las armaduras y puente de unión; y reconstrucción de la sección original con mortero de reparación tixotrópico de retracción compensada, clase R3/R4 según UNE-EN 1504-3, con acabado fratasado. Incluso apuntalamiento provisional si fuera necesario, medios auxiliares y retirada de escombros. Medida la superficie desarrollada reparada."
+  "t": "Reparación de viga o jácena de hormigón armado con armaduras corroídas, por su cara inferior y laterales, incluyendo: picado del hormigón deteriorado y carbonatado con martillo eléctrico hasta descubrir las armaduras; limpieza de las armaduras con cepillo metálico hasta eliminar la herrumbre; aplicación manual de mortero pasivador monocomponente a base de cemento e inhibidores de corrosión, como protección de las armaduras y puente de unión; y reconstrucción de la sección original con mortero de reparación tixotrópico de retracción compensada, clase R3/R4 según UNE-EN 1504-3, con acabado fratasado. Incluso apuntalamiento provisional si fuera necesario, medios auxiliares y retirada de escombros. Medido por metro lineal de viga reparada."
  },
  {
   "c": "EHY097",
@@ -152,5 +152,40 @@
   "ch": "D3206",
   "r": "Tratamiento de muro con humedad por capilaridad",
   "t": "Tratamiento de muro afectado por humedad de capilaridad, incluyendo: picado del revestimiento existente hasta 1 m por encima de la zona afectada; ejecución de barrera química horizontal mediante taladros cada 12 cm e inyección de resina de silicato potásico y siliconato metílico de potasio; y revestimiento del paramento con mortero macroporoso transpirable de saneamiento, con acabado fratasado. Incluso limpieza y retirada de escombros. Medido por metro lineal de muro tratado."
+ },
+ {
+  "c": "EHP010",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Picado de hormigón deteriorado en pilar o viga",
+  "t": "Picado del hormigón deteriorado y carbonatado de pilar o viga de hormigón armado con martillo eléctrico, en todo el contorno afectado, hasta descubrir las armaduras corroídas y dejarlas exentas, eliminando el hormigón en mal estado, incluso carga manual de los restos sobre camión o contenedor. Medido por metro lineal de elemento."
+ },
+ {
+  "c": "EHP020",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Limpieza de armaduras con cepillo metálico en pilar o viga",
+  "t": "Limpieza de las armaduras descubiertas de pilar o viga de hormigón armado mediante cepillado con cepillo de púas metálicas, manual o mecánico, hasta eliminar la herrumbre, la cascarilla y toda sustancia que pueda disminuir la adherencia, incluso soplado con aire a presión. Medido por metro lineal de elemento."
+ },
+ {
+  "c": "EHP030",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Pasivado de armaduras en pilar o viga",
+  "t": "Aplicación sobre las armaduras limpias de pilar o viga de mortero pasivador monocomponente a base de cemento, polímeros e inhibidores de corrosión, en dos manos, para detener la corrosión y como puente de unión con el mortero de reparación. Medido por metro lineal de elemento."
+ },
+ {
+  "c": "EHP040",
+  "u": "m",
+  "ch": "D3202",
+  "r": "Reconstrucción de pilar o viga con mortero de reparación",
+  "t": "Reconstrucción de la sección original de pilar o viga de hormigón armado con mortero de reparación tixotrópico, reforzado con fibras y de retracción compensada, clase R3/R4 según UNE-EN 1504-3, aplicado por capas, con acabado fratasado. Medido por metro lineal de elemento."
+ },
+ {
+  "c": "YSS010",
+  "u": "ud",
+  "ch": "D2803",
+  "r": "Partida alzada de seguridad y salud",
+  "t": "Partida alzada a justificar para la adopción de las medidas de seguridad y salud en la obra (protecciones colectivas e individuales, señalización, instalaciones de higiene y bienestar, formación y medicina preventiva), según el estudio o estudio básico de seguridad y salud, valorada en el porcentaje indicado del presupuesto de ejecución material."
  }
 ]

@@ -1,0 +1,18 @@
+estancia
+baño 2,5 por 2
+2,50
+una puerta de 0,72 por 2,03
+no
+este pilar tiene los hierros oxidados y habrá que repararlo
+2
+2,60
+desglosado
+elegir trabajos
+no
+1
+no
+no
+#marca dem_alic,dem_gres,sol_gres,rev_alic
+generar
+seguridad y salud al 3 por ciento
+2 contenedores

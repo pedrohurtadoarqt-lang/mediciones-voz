@@ -9,6 +9,7 @@ const { chromium } = require('playwright');
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   for (const t of ['vivienda', 'salón 4 por 3', '2,60', 'ninguna', 'elegir trabajos', 'no']) await say(t);
   await pg.click('.tw-main:has-text("Pintura plástica en paredes")'); await pg.click('text=Generar mediciones'); await pg.waitForTimeout(400);
+  await say('así está bien');
   await pg.click('.chip:has-text("Compartir archivos")'); await pg.waitForTimeout(300);
   await pg.screenshot({ path: 'test/g_share.png' });
   await pg.click('.sharek[value="xlsx"]'); await pg.click('.sharek[value="bc3"]'); await pg.click('#sharego'); await pg.waitForTimeout(500);
