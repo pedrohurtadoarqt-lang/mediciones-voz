@@ -819,6 +819,7 @@
       btn('[data-a="stop"]', '<b>Parar</b>: corta la voz de la app y deja de escuchar. Úsalo para hacer una pausa.', 'stop') +
       btn('#btnKeyboard', '<b>Teclado</b>: escribe en lugar de hablar (útil si hay mucho ruido). Escribe lo mismo que dirías.') +
       btn('#btnDock', '<b>Ocultar / mostrar conversación</b>: deja más espacio para ver las mediciones. Púlsalo otra vez para recuperarla.') +
+      btn('#btnHands', '<b>Manos libres</b> (el icono de ondas, a la derecha del micrófono): encendido, en color, el micrófono se vuelve a abrir solo cada vez que la app termina de hablar. Apagado, tienes que pulsar el micrófono para contestar. Viene encendido.', 'on') +
       '<div class="mrow"><span class="mi">' + chip('Sí') + '</span><div><b>Botones de respuesta</b>: aparecen debajo de cada pregunta. Si no quieres hablar, pulsa la respuesta.</div></div>' +
       '<div class="mrow"><span class="mi">' + chip('↩ Atrás') + '</span><div><b>Atrás</b>: deshace lo último que has dicho. Úsalo si te has equivocado.</div></div>' +
       '<h4>En la pantalla de la obra</h4>' +
@@ -851,7 +852,7 @@
       '<li>En el móvil, <b>Compartir archivos</b> te deja enviarlos por WhatsApp, correo, Drive…</li>' +
       '<li>El logo y los datos de tu empresa salen en el PDF: ponlos en <b>Ajustes</b>.</li></ul>');
     h += sec('manos', '6. Manos libres y auriculares', '<ul class="mlist">' +
-      '<li>Puedes medir con el móvil en el bolsillo: la app pregunta, tú contestas, y vuelve a escuchar sola.</li>' +
+      '<li>Puedes medir con el móvil en el bolsillo: la app pregunta, tú contestas, y vuelve a escuchar sola. Para eso, el botón ' + ic('#btnHands', 'on') + ' <b>Manos libres</b> tiene que estar encendido (en color).</li>' +
       '<li>Con auriculares bluetooth, comprueba que en Ajustes está marcado <b>Uso con auriculares o manos libres</b> (normalmente se detectan solos).</li>' +
       '<li>¿La app habla demasiado? Di ' + say('modo breve') + ': las preguntas serán cortas y sin ejemplos. ' + say('modo completo') + ' lo deja como estaba.</li>' +
       '<li>Para pausar, pulsa ' + ic('[data-a="stop"]', 'stop') + ' <b>Parar</b>. Para seguir, el ' + ic('#btnMic') + ' <b>micrófono</b>.</li></ul>');
