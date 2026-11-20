@@ -708,7 +708,8 @@
     estancia: { label: 'Estancia específica', kw: /demolic|solad|alicat|fontaner|sanitar|revoc|enluc|pintur|electric|carpinter|falso|revest|griferi|aparatos/ },
     carpinteria: { label: 'Carpintería', kw: /carpinter|cerrajer|acristal|vidri|alumin|madera|ventan|puert/ },
     instalaciones: { label: 'Instalaciones', kw: /fontaner|calefac|electric|aire acond|energia solar|saneamiento|ventilac|contraincend|telecom|instalac|climatiz/ },
-    libre: { label: 'Medición libre', kw: null }
+    libre: { label: 'Medición libre', kw: null },
+    conversa: { label: 'Conversación', kw: null }
   };
   function ambitoFromText(t) {
     const n = norm(t);
@@ -737,13 +738,21 @@
       let G = root.Guia || null;
       if (!G && typeof require !== 'undefined') { try { G = require('./guia.js'); } catch (e) { G = null; } }
       this.guia = G ? new G.Guia(this) : null;
+      // Modo conversación (el usuario cuenta la obra y la IA toma nota)
+      let C = root.Conversa || null;
+      if (!C && typeof require !== 'undefined') { try { C = require('./conversa.js'); } catch (e) { C = null; } }
+      this.conversa = C ? new C.Conversa(this) : null;
     }
     get cat() { return this.io.getCatalog(); }
     setObra(obra) {
       this.obra = obra; this.undo = []; this.state = { mode: 'idle' };
       if (!obra) return;
+      if (this.conversa && this.conversa.activo) return this.conversa.resume();
       if (this.guia && this.guia.activo) return this.guia.resume();
-      if (!obra.ambito) return this.guia ? this.guia.start('Obra creada.') : this.askAmbito(true);
+      if (!obra.ambito) {
+        if (this.conversa && this.conversa.aiOk() && obra.modo !== 'guiado') return this.conversa.start('Obra creada.');
+        return this.guia ? this.guia.start('Obra creada.') : this.askAmbito(true);
+      }
       const act = this.active();
       const est = obra.estActiva ? ' Estancia: ' + obra.estActiva + '.' : '';
       this.ask('Obra ' + obra.titulo + ' abierta.' + est + (act ? ' Partida activa: ' + act.r + '.' : '') + ' Dime el trabajo a medir.', this.idleChips());
@@ -772,6 +781,9 @@
         if (!input.act) { text = String(input.value || input.label); input = text; }
       }
       const n = norm(text);
+      // Modo conversación: lo atiende todo salvo exportar/compartir
+      if (this.conversa && this.conversa.activo && text) { const r = this.conversa.handle(text, n, input); if (r !== false) return; }
+      else if (this.conversa && !(this.guia && this.guia.activo) && /^(modo conversacion|conversacion libre|te lo cuento|te cuento yo)\b/.test(n)) return this.conversa.start();
       // Asistente guiado: mientras está en marcha atiende todas las respuestas
       if (this.guia && (text || (input && input.act))) {
         if (this.guia.activo) return this.guia.handle(text, n, input);

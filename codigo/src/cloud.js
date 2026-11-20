@@ -164,6 +164,12 @@
     if (error) throw new Error(errMsg(error));
     return data;
   }
+  async function conversa(ctx) {
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.functions.invoke('ai-interpret', { body: Object.assign({ modo: 'conversa' }, ctx) });
+    if (error) { let msg = errMsg(error); try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {} throw new Error(msg); }
+    return data;
+  }
   /* ---------------- Envío de archivos al correo ---------------- */
   const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
   async function sendFiles(body) {
@@ -215,6 +221,6 @@
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, resendConfirmation, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
     get pendingCount() { return pending.size; },
-    syncObras, queue, flush, deleteObra, ai, agent, sendFiles, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
+    syncObras, queue, flush, deleteObra, ai, agent, conversa, sendFiles, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
   };
 })(typeof self !== 'undefined' ? self : this);

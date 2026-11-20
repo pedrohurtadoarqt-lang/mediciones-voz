@@ -17,7 +17,7 @@ const catJs = 'window.CATALOGO_BASE=' + JSON.stringify(cat).replace(/<\//g, '<\\
 const woff = (w) => 'data:font/woff2;base64,' + fs.readFileSync(path.join(__dirname, 'src', 'fonts', 'montserrat-latin-' + w + '-normal.woff2')).toString('base64');
 const fontFace = [700, 800].map((w) => "@font-face{font-family:'Montserrat';font-style:normal;font-weight:" + w + ";font-display:swap;src:url(" + woff(w) + ") format('woff2');}").join('\n') + '\n';
 const head = '<title>Mediciona</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n<meta name="theme-color" content="#1A2231">\n<meta name="description" content="Mediciona: mediciones de obra con IA">\n<style>\n' + fontFace + src('styles.css') + '</style>\n';
-const scripts = ['<script>' + safe(src('vendor-jspdf.umd.min.js')) + '</script>', '<script>' + catJs + '</script>', '<script>' + fontJs + '</script>', '<script>' + safe(src('bc3.js')) + '</script>', '<script>' + safe(src('engine.js')) + '</script>', '<script>' + safe(src('guia.js')) + '</script>', '<script>' + safe(src('export.js')) + '</script>', '<script>' + safe(src('ai.js')) + '</script>', '<script>' + safe(src('vendor-supabase.umd.js')) + '</script>', '<script>' + safe(src('cloud-config.js')) + '</script>', '<script>' + safe(src('cloud.js')) + '</script>', '<script>' + safe(src('app.js')) + '</script>'].join('\n');
+const scripts = ['<script>' + safe(src('vendor-jspdf.umd.min.js')) + '</script>', '<script>' + catJs + '</script>', '<script>' + fontJs + '</script>', '<script>' + safe(src('bc3.js')) + '</script>', '<script>' + safe(src('engine.js')) + '</script>', '<script>' + safe(src('guia.js')) + '</script>', '<script>' + safe(src('conversa.js')) + '</script>', '<script>' + safe(src('export.js')) + '</script>', '<script>' + safe(src('ai.js')) + '</script>', '<script>' + safe(src('vendor-supabase.umd.js')) + '</script>', '<script>' + safe(src('cloud-config.js')) + '</script>', '<script>' + safe(src('cloud.js')) + '</script>', '<script>' + safe(src('app.js')) + '</script>'].join('\n');
 const iconData = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, 'src', 'brand', 'icon-192.png')).toString('base64');
 const body = src('body.html').replace('src="icon-192.png"', 'src="' + iconData + '"');
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
@@ -43,3 +43,14 @@ console.log('PWA en dist/pwa');
 
 // La función de IA del servidor usa el mismo núcleo que la app
 fs.copyFileSync(path.join(__dirname, 'src', 'ai.js'), path.join(__dirname, 'supabase', 'functions', 'ai-interpret', 'ai-core.js'));
+
+// Servidor (función ai-interpret): instrucciones del modo conversación y catálogo de trabajos de la app
+{
+  global.self = global; global.Engine = require('./src/engine.js');
+  const G = require('./src/guia.js');
+  const fdir = path.join(__dirname, 'supabase', 'functions', 'ai-interpret');
+  fs.copyFileSync(path.join(__dirname, 'src', 'conversa-ai.js'), path.join(fdir, 'conversa-core.js'));
+  const lista = G.TRABAJOS.filter((w) => w.ambito !== 'obra').map((w) => ({ id: w.id, ambito: w.ambito, label: w.label, u: w.u, regla: G.REGLA_LABEL[w.regla] || '' }));
+  fs.writeFileSync(path.join(fdir, 'trabajos.js'), '// Generado por build.js desde src/guia.js\nglobalThis.MEDICIONA_TRABAJOS = ' + JSON.stringify(lista) + ';\n');
+  console.log('Servidor: ' + lista.length + ' trabajos en el catálogo del modo conversación');
+}

@@ -306,6 +306,8 @@
     aiReady: () => S.settings.ia !== false && !!(window.Cloud && Cloud.user) && navigator.onLine !== false,
     ai: (ctx) => Cloud.ai(ctx),
     agent: (ctx) => Cloud.agent(ctx),
+    conversa: (ctx) => Cloud.conversa(ctx),
+    historial: () => S.log.filter((m) => !/^(Tomando nota|Pensando|Lo consulto)/.test(m.text || '')).slice(-10).map((m) => ({ who: m.who === 'user' ? 'user' : 'app', text: String(m.text || '').slice(0, 400) })),
     history: () => S.log.filter((m) => !m.svg).slice(-6),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },
@@ -623,7 +625,7 @@
       else t = 'Toca el micro para hablar';
       st.textContent = t;
     }
-    const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || !vozVista(); const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir medición guiada' : 'Empezar medición guiada'; }
+    const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || !vozVista(); const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir midiendo' : 'Empezar a medir'; }
     $('#btnHands').setAttribute('aria-pressed', S.settings.hands);
     $('#dock').classList.toggle('min', !!S.settings.dockMin);
     const bd = $('#btnDock'); if (bd) { bd.setAttribute('aria-pressed', !!S.settings.dockMin); bd.setAttribute('aria-label', S.settings.dockMin ? 'Mostrar conversación' : 'Ocultar conversación'); bd.querySelector('.t').textContent = S.settings.dockMin ? 'Mostrar' : 'Ocultar'; }
@@ -832,9 +834,10 @@
     let h = '<p class="mlead">Mediciona mide la obra <b>hablando</b>. Tú dices las medidas en voz alta y la app las apunta, calcula y prepara el estado de mediciones en PDF, Excel o BC3.</p>';
     h += sec('pasos', '1. Empezar en 4 pasos', '<ol class="msteps">' +
       '<li>En <b>Mis obras</b>, pulsa <b>Nueva obra</b> y ponle un nombre.</li>' +
-      '<li>Pulsa <b>Empezar medición guiada</b>. La primera vez el móvil te pedirá permiso para el micrófono: dale a <b>Permitir</b>.</li>' +
-      '<li>La app te hace preguntas en voz alta. <b>Contesta hablando</b>, con naturalidad: ' + say('vivienda') + ', ' + say('el salón') + ', ' + say('4 por 3') + ', ' + say('dos sesenta') + '.</li>' +
-      '<li>Al terminar, <b>marca en la pantalla los trabajos</b> que vas a hacer y pulsa <b>Generar mediciones</b>. Ya puedes exportar el PDF.</li></ol>' +
+      '<li>Pulsa <b>Empezar a medir</b>. La primera vez el móvil te pedirá permiso para el micrófono: dale a <b>Permitir</b>.</li>' +
+      '<li><b>Cuéntale la obra</b> como se la contarías a tu encargado, en el orden que quieras: ' + say('empezamos por el salón, que mide cuatro por tres y medio y dos sesenta de alto') + ' ' + say('aquí hay que quitar el gres, poner porcelánico y pintar') + '. La app toma nota, repite lo que ha anotado y solo te pregunta lo que le falte.</li>' +
+      '<li>Cuando acabes, di ' + say('genera las mediciones') + '. Te preguntará los datos que falten y tendrás el estado de mediciones listo para exportar.</li></ol>' +
+      '<p class="mtip">Si prefieres que la app te pregunte paso a paso, di ' + say('prefiero que me preguntes tú') + '. Para la conversación libre hace falta tener la cuenta iniciada y conexión; sin ella, la app te pregunta paso a paso.</p>' +
       '<p class="mtip">No hace falta pulsar nada mientras hablas: el micrófono se abre solo cuando la app termina de hablar.</p>', true);
     h += sec('botones', '2. Para qué sirve cada botón',
       '<h4>Arriba</h4>' +
@@ -858,7 +861,10 @@
       '<p>Cada trabajo tiene una casilla: <b>márcala</b> si lo vas a hacer. Debajo eliges en qué estancias. Con <b>Añadir</b> buscas cualquier partida de la base, y con <b>Crear partida</b> haces una nueva. Al acabar, <b>Generar mediciones</b>.</p>');
     h += sec('decir', '3. Qué puedo decir',
       '<table class="mtab"><tbody>' +
-      [['Qué medimos', 'vivienda · estancia · instalaciones · fachada · cubierta · piscina · otra cosa'],
+      [['Contar la obra (modo conversación)', 'en la cocina, que es de tres por dos cuarenta, hay que alicatar y cambiar el suelo · en el baño, plato de ducha con mampara e inodoro suspendido · toda la casa hay que pintarla · en el pasillo hay un pilar con los hierros oxidados, un metro veinte'],
+        ['Corregir', 'no, el salón era de cuatro veinte · deshaz eso · la pintura del baño no se hace'],
+        ['Acabar', 'genera las mediciones'],
+        ['Qué medimos', 'vivienda · estancia · instalaciones · fachada · cubierta · piscina · otra cosa'],
         ['Una habitación rectangular', '4 por 3 · cuatro con veinte por tres'],
         ['Una habitación con otra forma', '4 metros, giro a la derecha, 3 metros, derecha · cierra'],
         ['La altura', 'dos sesenta · 2,60'],
@@ -1254,10 +1260,10 @@
       case 'goto': S.obra.activa = el.dataset.uid; S.view = 'obra'; saveObra(); render(); { const p = dialog.active(); dialog.state = { mode: 'idle' }; say('Partida ' + p.r + '. Total ' + E.fmt(E.totalOf(p)) + ' ' + E.unitSpoken(p.u) + '. ' + E.dimsSpec(p).ask, dialog.idleChips()); } break;
       case 'fest': S.filterEst = el.dataset.e; render(); break;
       case 'logodel': S.settings.logo = ''; await saveSettings(); render(); break;
-      case 'guiada': if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; dialog.guia.start(); render(); } break;
+      case 'guiada': if (dialog.conversa && dialog.conversa.activo) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; render(); dialog.conversa.aGuiado(); } else if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; dialog.guia.start(); render(); } break;
       case 'trabajos': if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.guia.abrirTrabajos(); } break;
-      case 'tw': { const sel = Guia.seleccion(S.obra); const s = sel[el.dataset.id]; if (s) { s.on = !s.on; if (s.on && !s.zonas.length) { const w = Guia.trabajosPara(S.obra).find((x) => x.id === el.dataset.id); s.zonas = Guia.zonasDe(S.obra, w).map((z) => z.id); } } saveObra(); render(); break; }
-      case 'tz': { const s = Guia.seleccion(S.obra)[el.dataset.id]; const z = el.dataset.z; if (s) { s.zonas = s.zonas.includes(z) ? s.zonas.filter((x) => x !== z) : s.zonas.concat([z]); if (!s.zonas.length) s.on = false; } saveObra(); render(); break; }
+      case 'tw': { const sel = Guia.seleccion(S.obra); const s = sel[el.dataset.id]; if (s) { s.on = !s.on; s.todas = false; s.manual = true; if (s.on && !s.zonas.length) { const w = Guia.trabajosPara(S.obra).find((x) => x.id === el.dataset.id); s.zonas = Guia.zonasDe(S.obra, w).map((z) => z.id); } } saveObra(); render(); break; }
+      case 'tz': { const s = Guia.seleccion(S.obra)[el.dataset.id]; const z = el.dataset.z; if (s) { s.todas = false; s.manual = true; s.zonas = s.zonas.includes(z) ? s.zonas.filter((x) => x !== z) : s.zonas.concat([z]); if (!s.zonas.length) s.on = false; } saveObra(); render(); break; }
       case 'tamb': S.tamb = el.dataset.v; render(); break;
       case 'tnew': {
         const desc = ($('#tnd').value || '').trim(); if (desc.length < 3) { toast('Escribe la descripción del trabajo'); break; }
@@ -1271,7 +1277,7 @@
         break;
       }
       case 'tadd': { const d = catFor(S.obra).byCode.get(el.dataset.code); const zs = (S.obra.toma && S.obra.toma.zonas) || []; const a = S.tamb || (zs[0] && zs[0].ambito) || 'interior'; if (d) { Guia.anadirExtra(S.obra, d, a); S.tq = ''; saveObra(); render(); toast('Añadida: ' + d.r); } break; }
-      case 'tgen': { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } sayToken++; VoiceAdapter.stopSpeaking(); if (dialog.guia) { dialog.guia.g.paso = 'trabajos'; dialog.guia.g.fin = false; dialog.guia.generarMediciones(); } break; }
+      case 'tgen': { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } sayToken++; VoiceAdapter.stopSpeaking(); if (dialog.conversa && dialog.conversa.activo) { S.view = 'obra'; dialog.conversa.aplicar({ accion: 'generar', zonas: [], trabajos: [] }, ''); } else if (dialog.guia) { dialog.guia.g.paso = 'trabajos'; dialog.guia.g.fin = false; dialog.guia.generarMediciones(); } break; }
       case 'tmedir': S.view = 'obra'; render(); if (dialog.guia) dialog.handle('medir algo más'); break;
       case 'usecat': {
         const id = el.dataset.id; await loadCatalog(id);

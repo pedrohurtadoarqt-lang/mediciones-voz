@@ -9,6 +9,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import Anthropic from 'npm:@anthropic-ai/sdk@1.4.0';
 import '../_shared/engine-shim.js';
 import './ai-core.js';
+import './conversa-core.js';
+import './trabajos.js';
 import { cors } from '../_shared/cors.ts';
 
 const AI = (globalThis as any).AI;
@@ -67,6 +69,40 @@ function normalizaClaude(out: any) {
 }
 const ESQUEMA_AGENTE_CLAUDE = paraClaude(AI.AGENT_SCHEMA);
 let ultimoErrorClaude = '';
+// ---------- Modo conversación ----------
+const CONV = (globalThis as any).ConvAI;
+const CONV_SYSTEM = CONV.convSystem((globalThis as any).MEDICIONA_TRABAJOS || []);
+const ESQUEMA_CONV_CLAUDE = paraClaude(CONV.CONV_SCHEMA);
+function saneaConversa(b: any) {
+  return {
+    obra_id: s(b?.obra_id, 60), frase: s(b?.frase, 600), zona: s(b?.zona, 80), esperando: s(b?.esperando, 300),
+    zonas: (Array.isArray(b?.zonas) ? b.zonas.slice(0, 60) : []).map((z: any) => ({ ref: s(z?.ref, 20), ambito: s(z?.ambito, 20), nombre: s(z?.nombre, 60), datos: s(z?.datos, 400) })),
+    trabajos: (Array.isArray(b?.trabajos) ? b.trabajos.slice(0, 80) : []).map((w: any) => ({ id: s(w?.id, 60), codigo: s(w?.codigo, 40), label: s(w?.label, 200), zonas: (Array.isArray(w?.zonas) ? w.zonas.slice(0, 30) : []).map((x: unknown) => s(x, 60)) })),
+    faltan: (Array.isArray(b?.faltan) ? b.faltan.slice(0, 10) : []).map((x: unknown) => s(x, 200)),
+    historial: Array.isArray(b?.historial) ? b.historial.slice(-10).map((m: any) => ({ who: m?.who === 'user' ? 'user' : 'app', text: s(m?.text, 400) })) : [],
+    candidatas: (Array.isArray(b?.candidatas) ? b.candidatas.slice(0, 30) : []).map((d: any) => ({ c: s(d?.c, 40), u: s(d?.u, 8), r: s(d?.r, 300) })).filter((d: any) => d.c && d.r)
+  };
+}
+async function conversaClaude(ctx: any): Promise<{ out: any; tin: number; tout: number; modelo: string } | null> {
+  if (!anthropic) { ultimoErrorClaude = 'sin clave de Anthropic'; return null; }
+  try {
+    const r = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
+      thinking: { type: 'disabled' },
+      system: [{ type: 'text', text: CONV_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: CONV.buildConvUser(ctx) }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA_CONV_CLAUDE } }
+    } as any);
+    if (r.stop_reason === 'refusal' || r.stop_reason === 'max_tokens') { ultimoErrorClaude = 'stop_reason ' + r.stop_reason; return null; }
+    const txt = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    return { out: CONV.normaliza(JSON.parse(txt)), tin: r.usage?.input_tokens || 0, tout: r.usage?.output_tokens || 0, modelo: CLAUDE_MODEL };
+  } catch (e) {
+    ultimoErrorClaude = e instanceof Anthropic.APIError ? e.status + ' ' + e.message : String(e);
+    console.error('Claude (conversa) no disponible:', ultimoErrorClaude);
+    return null;
+  }
+}
 async function agenteClaude(actx: any): Promise<{ out: any; tin: number; tout: number; modelo: string } | null> {
   if (!anthropic) { ultimoErrorClaude = 'sin clave de Anthropic'; return null; }
   try {
@@ -129,6 +165,31 @@ Deno.serve(async (req) => {
 
   let raw: any;
   raw = await cuerpo; if (raw === undefined) { return new Response(JSON.stringify({ error: 'Petición no válida' }), { status: 400, headers: h }); }
+  if (raw?.modo === 'conversa') {
+    const cctx = saneaConversa(raw);
+    if (!cctx.frase) return new Response(JSON.stringify({ error: 'Falta la frase' }), { status: 400, headers: h });
+    const t0 = Date.now();
+    let res = await conversaClaude(cctx);
+    if (!res) {
+      // Reserva: Gemini con el mismo formato
+      for (const m of MODELOS_AGENTE) {
+        const r = await llamar({ model: m, temperature: 0, messages: [{ role: 'system', content: CONV_SYSTEM }, { role: 'user', content: CONV.buildConvUser(cctx) }], response_format: { type: 'json_schema', json_schema: { name: 'toma', strict: true, schema: CONV.CONV_SCHEMA } } });
+        if (!r.ok) continue;
+        const j = await r.json().catch(() => null);
+        try { const out = CONV.normaliza(JSON.parse(j?.choices?.[0]?.message?.content)); if (out) { res = { out, tin: j.usage?.prompt_tokens || 0, tout: j.usage?.completion_tokens || 0, modelo: m }; break; } } catch { /* siguiente */ }
+      }
+    }
+    if (!res) return new Response(JSON.stringify({ error: 'La IA no está disponible ahora mismo' }), { status: 502, headers: h });
+    const ms = Date.now() - t0, c = res;
+    const registro = (async () => {
+      const { data: precio } = await admin.from('ia_precios').select('entrada_usd_millon, salida_usd_millon').eq('modelo', c.modelo).maybeSingle();
+      const coste = precio ? (c.tin * Number(precio.entrada_usd_millon) + c.tout * Number(precio.salida_usd_millon)) / 1e6 : null;
+      await admin.from('ia_uso').insert({ user_id: user.id, obra_id: cctx.obra_id || null, modelo: c.modelo, tokens_entrada: c.tin, tokens_salida: c.tout, coste_usd: coste, ms, intent: 'conversa' });
+    })();
+    const ER = (globalThis as any).EdgeRuntime;
+    if (ER && ER.waitUntil) ER.waitUntil(registro); else await registro;
+    return new Response(JSON.stringify({ result: c.out, modelo: c.modelo, ms, ...(esAdmin ? { aviso_claude: ultimoErrorClaude } : {}) }), { headers: h });
+  }
   if (raw?.modo === 'agente') {
     const actx = saneaAgente(raw);
     if (!actx.frase) return new Response(JSON.stringify({ error: 'Falta la frase' }), { status: 400, headers: h });

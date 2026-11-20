@@ -1,0 +1,23 @@
+# Modo conversación (versión 2)
+
+La versión anterior (asistente guiado) está guardada en la rama `copia/v-guiada` y publicada, congelada, en `/guiada-04b34e20577bc410c103/`.
+
+## Idea
+El usuario cuenta la obra a su manera, como se la contaría a su encargado: por dónde empieza, medidas, huecos, trabajos y patologías, en desorden. La app toma nota, repite lo anotado y solo pregunta cuando le falta un dato imprescindible. Con «genera las mediciones» pregunta lo que falte y deja el estado de mediciones listo.
+
+## Cómo funciona
+1. Cada frase va a la IA (función `ai-interpret`, modo `conversa`; Claude y, de reserva, Gemini) con el estado actual: zonas anotadas y sus datos, trabajos anotados, lo que falta para medir, la conversación reciente y partidas candidatas de la base.
+2. La IA **no calcula**: devuelve cambios en la toma de datos (zonas: planta rectangular o pared a pared, altura, huecos, cubiertas, piscinas, fontanería, electricidad) y en los trabajos (ids del catálogo de trabajos de la app, o un código de la base, o una búsqueda/partida nueva), con medidas propias solo cuando el usuario las da («reparar 1,20 m de pilar»).
+3. La app aplica los cambios (`src/conversa.js`) con la misma estructura que el asistente guiado (`obra.toma`, `obra.guia.sel/resp/extra`) y recalcula el estado de mediciones con las mismas reglas (`generar` de `src/guia.js`): pintura = perímetro × altura − huecos, solado = superficie, piscinas, etc.
+4. Lo que la app dice en voz alta sale de los datos aplicados (no de la IA), para que el usuario pueda comprobar los números: «Salón: 4,00 por 3,50, altura 2,60. Apunto pintura plástica en paredes…».
+5. La lista «falta para medir» (alturas, plantas, huecos sin medidas, unidades que hay que preguntar) se calcula en la app; la IA la usa para preguntar solo cuando conviene. Al generar, si la IA no pregunta, la app pregunta lo primero que falte.
+
+## Órdenes locales (sin IA)
+«para», «repite», «deshaz eso / atrás» (deshace lo último anotado), «prefiero que me preguntes tú / modo guiado» (pasa al asistente guiado conservando lo anotado), «ver trabajos», y exportar/compartir/enviar como siempre.
+
+## Requisitos
+Cuenta iniciada y conexión. Sin IA, la obra nueva empieza con el asistente guiado.
+
+## Pruebas
+- `BC3=… node test/conversa-sim.js test/c1.js`: conversación desordenada con IA simulada (respuestas fijas) y estado de mediciones resultante.
+- `node test/ui-conversa.js`: lo mismo en el navegador.
