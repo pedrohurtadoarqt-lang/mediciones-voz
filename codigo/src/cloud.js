@@ -89,6 +89,7 @@
     let { error } = await sb.from('perfiles').update(Object.assign({ direccion: f.direccion || null, telefono_contacto: f.telefono || null }, base)).eq('id', user.id);
     // Servidor sin la columna «direccion» todavía: se guarda el resto y la dirección va en los datos de la cuenta
     if (error && /direccion|column|permission denied/i.test(error.message || '')) ({ error } = await sb.from('perfiles').update(base).eq('id', user.id));
+    if (error && (error.code === '23505' || /duplicate key|perfiles_nif_unico/i.test(error.message || ''))) throw new Error('Ese NIF / CIF ya está registrado en otra cuenta.');
     if (error) throw new Error(errMsg(error));
     const r = await sb.auth.updateUser({ data: { direccion: f.direccion || '', telefono_contacto: f.telefono || '' } });
     if (r.data && r.data.user) user = r.data.user;
