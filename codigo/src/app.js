@@ -93,6 +93,7 @@
     const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
     let mode = 'none', dict = null, tts = null, rec = null, listening = false, speaking = false, unlocked = false;
     let cb = { onPartial() {}, onFinal() {}, onState() {}, onError() {}, onEnd() {}, onReady() {} };
+    let pitchQ = true;
     let voice = null, rate = 1.05, gotFinal = false, buf = '', bufTimer = null, lastPartial = '';
     let micState = 'unknown'; // unknown | granted | denied | unavailable
     let needTap = false, autoRestarts = 0, retried = false, echoOn = true;
@@ -137,7 +138,29 @@
       return mode;
     }
     /** Debe llamarse dentro de un toque: desbloquea el audio en iPhone/Android. */
+    // Pitido corto y ascendente: «te toca hablar» (la voz del móvil apenas entona las preguntas)
+    let actx = null;
+    function audioCtx() {
+      try { if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); } if (actx && actx.state === 'suspended') actx.resume(); } catch (e) { actx = null; }
+      return actx;
+    }
+    function earcon() {
+      return new Promise((resolve) => {
+        const c = audioCtx(); if (!c) return resolve();
+        try {
+          const t = c.currentTime + 0.02;
+          [[660, 0], [990, 0.11]].forEach(([f, d]) => {
+            const o = c.createOscillator(), g = c.createGain();
+            o.type = 'sine'; o.frequency.value = f;
+            g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.22, t + d + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.1);
+            o.connect(g).connect(c.destination); o.start(t + d); o.stop(t + d + 0.11);
+          });
+        } catch (e) {}
+        setTimeout(resolve, 300);
+      });
+    }
     function unlock() {
+      audioCtx();
       if (unlocked || !synth) return;
       try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'es-ES'; synth.speak(u); unlocked = true; } catch (e) {}
     }
@@ -174,8 +197,10 @@
           if (done) return;
           if (my !== speakId) { clearTimeout(guard); return finish(); } // interrumpido: no se leen las frases que faltan
           if (i >= parts.length) { clearTimeout(guard); return setTimeout(finish, 60); }
-          const u = new SpeechSynthesisUtterance(parts[i++]);
+          const frase = parts[i++];
+          const u = new SpeechSynthesisUtterance(frase);
           u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = rate;
+          if (pitchQ && /\?\s*$/.test(frase)) { u.pitch = 1.18; u.rate = rate * 0.97; } // la pregunta, algo más aguda y pausada
           cur = u;
           u.onend = () => { if (cur === u) { cur = null; next(); } }; u.onerror = () => { if (cur === u) { clearTimeout(guard); finish(); } };
           synth.speak(u);
@@ -246,7 +271,7 @@
     }
     function stopListening() { needTap = false; if (mode === 'claude') { dict && dict.stop().catch(() => {}); return; } try { rec && rec.abort(); } catch (e) {} listening = false; state(); }
     return {
-      init, speak, stopSpeaking, listen, stopListening, unlock, isEcho, setEcho(v) { echoOn = v; },
+      init, speak, stopSpeaking, listen, stopListening, unlock, isEcho, setEcho(v) { echoOn = v; }, earcon, setPitchQ(v) { pitchQ = v; },
       on(c) { cb = Object.assign(cb, c); },
       get mode() { return mode; }, get listening() { return listening; }, get speaking() { return speaking; },
       get needTap() { return needTap; }, set needTap(v) { needTap = v; state(); },
@@ -341,6 +366,8 @@
     await VoiceAdapter.speak(text);
     if (opts.end) { endVoiceSession(); return; }
     if (tk !== sayToken) return;
+    // Al acabar una pregunta, pitido de «te toca»
+    if (S.settings.tono !== false && /\?/.test(text) && opts.listen !== false) { await VoiceAdapter.earcon(); if (tk !== sayToken) return; }
     if (vozVista() && S.settings.hands && opts.listen !== false && !S.typing) { noSpeech = 0; reabrir(tk); }
   }
   /** Reabre el micro tras hablar. Con auriculares Bluetooth se espera a que el móvil cambie el audio a modo llamada. */
@@ -696,6 +723,7 @@
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkia"' + (S.settings.ia !== false ? ' checked' : '') + '> Usar la IA cuando la app no entienda algo (necesita cuenta y conexión)</label>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkauri"' + (auriculares() ? ' checked' : '') + '> Uso con auriculares o manos libres Bluetooth' + (S.btDetectado && S.settings.auriculares == null ? ' (detectados)' : '') + '</label>' +
       '<p class="hint">Con auriculares la app espera un instante a que el móvil cambie el audio antes de escuchar, y no filtra el eco. Si tus auriculares no tienen micrófono, habla al del móvil.</p>' +
+      '<label class="row" style="gap:10px"><input type="checkbox" id="chktono"' + (S.settings.tono !== false ? ' checked' : '') + '> Preguntas con entonación y pitido al terminar (te toca hablar)</label>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkbreve"' + (S.settings.breve ? ' checked' : '') + '> Modo breve: preguntas cortas, sin ejemplos ni explicaciones</label>' +
       '<p class="hint">Recomendado cuando ya conoces la app: habla menos y el micro se abre antes. También por voz: «modo breve» o «modo completo».</p>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
@@ -854,6 +882,7 @@
     h += sec('manos', '6. Manos libres y auriculares', '<ul class="mlist">' +
       '<li>Puedes medir con el móvil en el bolsillo: la app pregunta, tú contestas, y vuelve a escuchar sola. Para eso, el botón ' + ic('#btnHands', 'on') + ' <b>Manos libres</b> tiene que estar encendido (en color).</li>' +
       '<li>Con auriculares bluetooth, comprueba que en Ajustes está marcado <b>Uso con auriculares o manos libres</b> (normalmente se detectan solos).</li>' +
+      '<li><b>Cuando la app te pregunta algo</b>, sube un poco el tono y al acabar suena un <b>pitido corto</b>: es tu turno de hablar. Se puede quitar en Ajustes.</li>' +
       '<li>¿La app habla demasiado? Di ' + say('modo breve') + ': las preguntas serán cortas y sin ejemplos. ' + say('modo completo') + ' lo deja como estaba.</li>' +
       '<li>Para pausar, pulsa ' + ic('[data-a="stop"]', 'stop') + ' <b>Parar</b>. Para seguir, el ' + ic('#btnMic') + ' <b>micrófono</b>.</li></ul>');
     h += sec('problemas', '7. Problemas frecuentes', '<ul class="mlist">' +
@@ -1274,6 +1303,7 @@
     if (ev.target.dataset && ev.target.dataset.a === 'trule') { const w = ((S.obra.guia && S.obra.guia.extra) || []).find((x) => x.id === ev.target.dataset.id); if (w) { w.regla = ev.target.value; saveObra(); } }
     if (ev.target.id === 'chkia') { S.settings.ia = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkauri') { S.settings.auriculares = ev.target.checked; VoiceAdapter.setEcho(!ev.target.checked); saveSettings(); }
+    if (ev.target.id === 'chktono') { S.settings.tono = ev.target.checked; VoiceAdapter.setPitchQ(ev.target.checked); saveSettings(); if (ev.target.checked) VoiceAdapter.speak('¿Se nota que te pregunto?').then(() => VoiceAdapter.earcon()); }
     if (ev.target.id === 'chkbreve') { S.settings.breve = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
@@ -1600,7 +1630,7 @@
   async function boot() {
     const st = await StorageAdapter.get('ajustes', 'settings');
     if (st) Object.assign(S.settings, st);
-    BillingGuard.plan = S.settings.plan; VoiceAdapter.setRate(S.settings.rate); if (S.settings.voice) VoiceAdapter.setVoice(S.settings.voice);
+    BillingGuard.plan = S.settings.plan; VoiceAdapter.setRate(S.settings.rate); VoiceAdapter.setPitchQ(S.settings.tono !== false); if (S.settings.voice) VoiceAdapter.setVoice(S.settings.voice);
     // Catálogo base embebido → IndexedDB en el primer arranque
     let cats = await StorageAdapter.all('catalogos');
     const stored = cats.find((c) => c.id === 'palma48');
