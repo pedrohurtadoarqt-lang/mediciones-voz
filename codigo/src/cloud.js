@@ -86,7 +86,7 @@
   }
   async function updateProfile(f) {
     const base = { nombre: f.nombre, empresa: f.empresa, nif: f.nif, actualizado: new Date().toISOString() };
-    let { error } = await sb.from('perfiles').update(Object.assign({ direccion: f.direccion || null }, base)).eq('id', user.id);
+    let { error } = await sb.from('perfiles').update(Object.assign({ direccion: f.direccion || null, telefono_contacto: f.telefono || null }, base)).eq('id', user.id);
     // Servidor sin la columna «direccion» todavía: se guarda el resto y la dirección va en los datos de la cuenta
     if (error && /direccion|column|permission denied/i.test(error.message || '')) ({ error } = await sb.from('perfiles').update(base).eq('id', user.id));
     if (error) throw new Error(errMsg(error));
