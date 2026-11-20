@@ -3347,7 +3347,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return estricto ? null : [L.join(' '), Rr.join(' ')];
   }
   /** Texto para leer y mostrar: los números con dos decimales. */
-  const verTxt = (text) => tokenize(String(text)).map((t) => (t.k === 'N' ? (t.art ? t.orig : fmt(t.v)) : t.w)).join(' ');
+  const verTxt = (text) => tokenize(String(text)).map((t) => (t.k === 'N' ? (t.art ? t.orig : Number.isInteger(t.v) ? String(t.v) : fmt(t.v)) : t.w)).join(' ');
+  const huecosTxt = (hs) => (hs && hs.length ? hs.map((x) => fmtUds(x.uds || 1) + ' ' + plural(x.uds || 1, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + (x.al ? fmt(x.al) : '¿?')).join(', ') : 'ninguno');
+  // Frases que corrigen algo dicho antes («las ventanas de antes son puertas», «en realidad eran dos»…)
+  const CORR_REF = /(de antes|anterior|anteriores|en realidad|me he equivocado|me equivoque|me he confundido|no son|no es|no eran|no era|eran|cambia|cambiar|corrige|corregir|rectifica|equivocad|lo de antes|las de antes|los de antes)/;
   const numsDe = (text) => tokenize(String(text)).filter((t) => t.k === 'N' && !t.art).map((t) => round2(t.v));
 
   /* ---------------- Recorrido de paredes ---------------- */
@@ -3394,21 +3397,26 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   /* ---------------- Huecos (puertas y ventanas) ---------------- */
   function parseHuecos(text) {
-    const parts = String(text).split(/\s*(?:,|;|\by\b|\bmas\b|\bmás\b|\botra\b|\botro\b)\s+(?=(?:una|un|dos|tres|cuatro|cinco|seis|\d+)?\s*(?:puertas?|ventanas?|balconeras?|ventanales?|huecos?|vent))/i);
+    // Trozos: «una puerta de 80», «una de 90», «y una ventana de 60 por 90», «otra igual»…
+    const limpio = String(text).replace(/^\s*(?:son|es|hay|tiene|tengo|pues|vale|si|sí)[\s,]+/i, '');
+    const parts = limpio.replace(/(\d)\s+(?=(?:una|un|otra|otro)\s)/gi, '$1, ').split(/\s*(?:,|;|\by\b|\bmas\b|\bmás\b)\s+(?=(?:otra|otro|una|un|dos|tres|cuatro|cinco|seis)\b|\d+\s+(?:puertas?|ventanas?|balconeras?|de)\b)|\s*,\s*(?=(?:puertas?|ventanas?|balconeras?))/i);
     const out = [];
+    let tipoPrev = null;
     for (const p of parts) {
       const n = norm(p);
-      const tipo = /(puerta|balconera)/.test(n) ? 'puerta' : /(ventana|ventanal|hueco|vent)/.test(n) ? 'ventana' : null;
+      let tipo = /(puerta|balconera)/.test(n) ? 'puerta' : /(ventana|ventanal|hueco|vent)/.test(n) ? 'ventana' : null;
       const pm = parseMeasure(p);
       let uds = pm.n;
-      if (uds == null) { const m = n.match(/^(?:hay\s+|tiene\s+)?(dos|tres|cuatro|cinco|seis|\d+)\s+(puertas?|ventanas?|balconeras?)/); if (m) uds = /^\d/.test(m[1]) ? +m[1] : { dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6 }[m[1]]; }
+      if (uds == null) { const m = n.match(/^(?:hay\s+|tiene\s+)?(dos|tres|cuatro|cinco|seis|\d+)\s+(puertas?|ventanas?|balconeras?|de\b)/); if (m) uds = /^\d/.test(m[1]) ? +m[1] : { dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6 }[m[1]]; }
       let d = pm.dims.slice();
       if (uds != null && d.length === 3 && pm.n === null) d = d.slice(1);
-      let an = d[0], al = d[1];
+      if (uds != null && pm.n === null && d.length && d[0] === uds && /^(dos|tres|cuatro|cinco|seis|\d+)\s+de\b/.test(n)) d = d.slice(1);
       const conv = (v) => (v == null ? v : (pm.cm || (v > 10 && Number.isInteger(v)) ? round2(v / 100) : v));
-      an = conv(an); al = conv(al);
+      let an = conv(d[0]), al = conv(d[1]);
       if (!tipo && an == null) continue;
-      out.push({ tipo: tipo || (al >= 1.9 && an <= 1.2 ? 'puerta' : 'ventana'), uds: uds || 1, an: an ?? null, al: al ?? null, bal: /balconera/.test(n) });
+      if (!tipo) tipo = tipoPrev || (al >= 1.9 && an <= 1.2 ? 'puerta' : 'ventana'); // «una de 90»: mismo tipo que el anterior
+      tipoPrev = tipo;
+      out.push({ tipo, uds: uds || 1, an: an ?? null, al: al ?? null, bal: /balconera/.test(n) });
     }
     return out;
   }
@@ -3866,6 +3874,36 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         const r1 = this.resolverEleccion(text, n, input);
         if (r1 !== false) return r1;
       }
+      if (g.propuesta) {
+        const pr = g.propuesta; const v = input && input.act && typeof input.act.ok === 'boolean' ? input.act.ok : yesNo(n);
+        if (v !== null) {
+          g.propuesta = null;
+          if (!v) { this.save(); return this.repetir('Vale, no cambio nada. Dímelo de otra forma o di «atrás».'); }
+          const z = this.zona(pr.zid);
+          if (z) { if (pr.huecos) z.huecos = pr.huecos; if (pr.altura) z.altura = pr.altura; }
+          this.save(); this.io.flash && this.io.flash('ok');
+          return this.repetir('Corregido.');
+        }
+        g.propuesta = null;
+      }
+      // «Las ventanas de antes son puertas»: cambio de tipo de los huecos anotados
+      if (!(input && input.act)) {
+        const mt = n.match(/(puertas?|ventanas?|balconeras?)\b.*\b(?:son|eran|es|era|serian|en realidad son)\s+(?:unas?\s+|las?\s+|todas?\s+)?(puertas?|ventanas?|balconeras?)/);
+        if (mt && mt[1].slice(0, 4) !== mt[2].slice(0, 4)) {
+          const de = /^puert/.test(mt[1]) ? 'puerta' : /^balc/.test(mt[1]) ? 'balconera' : 'ventana', a = /^puert/.test(mt[2]) ? 'puerta' : /^balc/.test(mt[2]) ? 'balconera' : 'ventana';
+          const z = this.zonaHuecos(n, (x) => x.tipo === (de === 'balconera' ? 'puerta' : de) && (de !== 'balconera' || x.bal));
+          if (z) {
+            const hs = z.huecos.map((x) => Object.assign({}, x));
+            hs.forEach((x) => { if (x.tipo === (de === 'balconera' ? 'puerta' : de)) { x.tipo = a === 'balconera' ? 'puerta' : a; x.bal = a === 'balconera'; if (x.tipo === 'puerta' && !x.al) x.al = 2.03; } });
+            return this.proponer(z, { huecos: hs }, 'Cambio en ' + art(z.nombre) + ' las ' + plural(2, de) + ' a ' + plural(2, a) + '. Quedaría: ' + huecosTxt(hs) + '. ¿Correcto?');
+          }
+        }
+        // Corrección de algo dicho antes que no se resuelve con las reglas: la arregla la IA con el contexto
+        if (CORR_REF.test(n) && n.split(' ').length >= 3 && /(puert|ventan|hueco|balconer|altura|alto)/.test(n) && !/(iguales? que|mism[ao]s? que)/.test(n)) {
+          const z = this.zonaHuecos(n, () => true);
+          if (z && this.aiOk()) return this.editarConIA(text, z);
+        }
+      }
       // «No, era 2,03» justo después de anotar algo: se corrige lo último sin volver atrás
       if (!(input && input.act) && g.ultima && /^(digo|perdon|perdona|me he equivocado|me equivoque|corrijo|rectifico|mejor dicho|quiero decir|no+,? (era|es|eran|son|digo|perdon) )/.test(n) && !/\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\b/.test(n)) {
         const resto = text.replace(/^\s*(?:no+[\s,]+)?(?:digo|perd[oó]n|perdona|me he equivocado|me equivoqu[eé]|corrijo|rectifico|mejor dicho|quiero decir|era|es|eran|son)\b[\s,.:;]*/i, '').replace(/^(?:era|es|eran|son)\s+/i, '');
@@ -4054,6 +4092,45 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       if (r === false) return this.repetir('No he podido corregirlo; dímelo de nuevo.');
       g.ultima = { paso: u.paso, d: u.d, text: nuevo };
       return r;
+    }
+    /** Estancia a la que se refiere una corrección: la nombrada, la de la pregunta en curso o la última con huecos. */
+    zonaHuecos(n, filtro) {
+      const ints = this.toma.zonas.filter((x) => x.ambito === 'interior');
+      const nombrada = buscarZona({ toma: { zonas: ints } }, n);
+      if (nombrada) return nombrada;
+      const actual = this.g.d && this.g.d.zid ? this.zona(this.g.d.zid) : null;
+      if (actual && actual.ambito === 'interior' && (actual.huecos || []).some(filtro)) return actual;
+      return ints.filter((x) => (x.huecos || []).some(filtro)).pop() || null;
+    }
+    /** Propone un cambio y espera el sí o el no antes de aplicarlo. */
+    proponer(z, cambio, texto) {
+      this.g.propuesta = Object.assign({ zid: z.id }, cambio); this.save();
+      return this.ask(texto, [{ label: 'Sí, correcto', value: 'sí', act: { ok: true } }, { label: 'No', value: 'no', act: { ok: false } }]);
+    }
+    /** La IA rehace los datos de la estancia a partir de la corrección y de la conversación; el usuario confirma. */
+    editarConIA(text, z) {
+      const io = this.io; const token = (this.aiTok = (this.aiTok || 0) + 1);
+      io.note && io.note('Lo reviso con la IA…');
+      const ctx = {
+        obra_id: this.obra.id, frase: text, estancia: z.nombre, altura: z.altura || null, planta: '', activa: null, otras: [], resto: [], candidatas: [],
+        historial: (io.history ? io.history() : []).slice(-8),
+        pendiente: ('CORRECCIÓN DE DATOS DE LA ESTANCIA «' + z.nombre + '». Anotado ahora: altura ' + (z.altura ? fmt(z.altura) : '¿?') + '; huecos: ' + huecosTxt(z.huecos) + '. El usuario corrige lo anotado (mira también la conversación). Devuelve SOLO una acción "orden" cuyo "texto" sea el estado COMPLETO y CORREGIDO con este formato exacto: «altura A | huecos: N puertas de ANCHO por ALTO, N ventanas de ANCHO por ALTO» en metros con coma decimal; puerta sin alto: 2,03; sin huecos: «huecos: ninguno». Si no se puede deducir, sin acciones y con una "pregunta" breve.').slice(0, 600)
+      };
+      const fallo = () => { if (token !== this.aiTok) return; this.ask('No he podido entender la corrección. Dime de nuevo todos los huecos de ' + art(z.nombre) + ', o di «atrás».', []); };
+      const timer = setTimeout(() => { if (token === this.aiTok) { this.aiTok++; fallo(); } }, 15000);
+      Promise.resolve(io.guia ? io.guia(ctx) : io.agent(ctx)).then((raw) => {
+        clearTimeout(timer); if (token !== this.aiTok) return;
+        const r = raw && raw.result ? raw.result : raw;
+        const txt = respuestaIA(r);
+        if (!txt) return r && r.pregunta ? this.ask(r.pregunta, []) : fallo();
+        const partes = txt.split('|');
+        const alt = /altura/i.test(partes[0]) ? num(partes[0]) : null;
+        const hsTxt = (partes.find((x) => /huecos?/i.test(x)) || txt).replace(/^.*huecos?\s*:?/i, '');
+        const hs = /ningun/i.test(hsTxt) ? [] : parseHuecos(hsTxt).map((x) => (x.tipo === 'puerta' && x.an && !x.al ? Object.assign(x, { al: 2.03 }) : x));
+        if (!hs.length && !/ningun/i.test(hsTxt) && !alt) return fallo();
+        const cambio = { huecos: hs }; if (alt && alt > 1 && alt < 8) cambio.altura = round2(alt);
+        return this.proponer(z, cambio, 'Te propongo dejar ' + art(z.nombre) + ' así: ' + (cambio.altura ? 'altura ' + fmt(cambio.altura) + '; ' : '') + 'huecos: ' + huecosTxt(hs) + '. ¿Correcto?');
+      }).catch(() => { clearTimeout(timer); fallo(); });
     }
     /* ---- borrar zonas ---- */
     pedirBorrar(z) {
@@ -4412,6 +4489,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   P.est_huecos = {
     q(d) {
       const z = this.zona(d.zid); const h = z.huecos || [];
+      if (d.pend && d.pend.an) return { t: '¿Qué alto tiene ' + (d.pend.tipo === 'puerta' ? 'la puerta' : 'la ventana') + ' de ' + fmt(d.pend.an) + ' de ancho?', c: CH(d.pend.tipo === 'puerta' ? ['2,03', '2,10'] : ['0,90', '1,10', '1,20']) };
       if (d.pend) return { t: '¿Qué medidas tiene ' + (d.pend.tipo === 'puerta' ? 'la puerta' : 'la ventana') + '? Ancho por alto, por ejemplo «0,82 por 2,03».', c: CH(d.pend.tipo === 'puerta' ? ['0,72 por 2,03', '0,82 por 2,03'] : ['1,20 por 1,10']) };
       if (h.length) return { t: '¿Alguna puerta o ventana más?', c: CH(['No, ninguna más', 'Otra igual']) };
       // (también vale «la ventana igual que el salón»)
@@ -4424,10 +4502,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     a(text, n, input, d) {
       const z = this.zona(d.zid); z.huecos = z.huecos || [];
       if (d.pend) {
-        const dm = dims2(text);
-        if (!(dm.ancho > 0 && dm.alto > 0)) return false;
-        z.huecos.push(Object.assign({}, d.pend, { an: dm.ancho, al: dm.alto })); this.g.d = { zid: d.zid }; this.save();
-        return this.repetir('Anotada.');
+        let an, al;
+        if (d.pend.an) { const v = numeros(text)[0]; if (!(v > 0)) return false; an = d.pend.an; al = v > 10 ? round2(v / 100) : v; }
+        else { const dm = dims2(text); if (!(dm.ancho > 0 && dm.alto > 0)) return false; an = dm.ancho; al = dm.alto; }
+        z.huecos.push(Object.assign({}, d.pend, { an, al }));
+        const cola = (d.cola || []).slice();
+        this.g.d = cola.length ? { zid: d.zid, pend: cola[0], cola: cola.slice(1) } : { zid: d.zid }; this.save();
+        return this.repetir('Anotada: ' + fmt(an) + ' por ' + fmt(al) + '.');
       }
       // «La puerta y la ventana iguales que en el salón», «las mismas que la anterior»
       if (/(igual|iguales|misma|mismas|mismo|mismos|lo mismo)/.test(n) && !/^(otra|otro) igual/.test(n)) {
@@ -4452,10 +4533,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (yesNo(n) === true) return this.ask('Dímela con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «una ventana de 1,20 por 1,10».', CH(['Una puerta de 0,82 por 2,03', 'Una ventana de 1,20 por 1,10']));
         return false;
       }
-      const sinMedida = hs.find((x) => !(x.an && x.al));
+      let notaAlto = '';
+      hs.forEach((x) => { if (x.tipo === 'puerta' && x.an && !x.al) { x.al = 2.03; notaAlto = ' A las puertas sin alto les pongo 2,03.'; } });
+      const sinMedida = hs.filter((x) => !(x.an && x.al));
       hs.filter((x) => x.an && x.al).forEach((x) => z.huecos.push(x));
       this.save();
-      if (sinMedida) { this.g.d = { zid: d.zid, pend: sinMedida }; return this.repetir(); }
+      const hechos = hs.filter((x) => x.an && x.al);
+      const pre = (hechos.length ? 'Anotado: ' + hechos.map((x) => fmtUds(x.uds) + ' ' + plural(x.uds, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(', ') + '.' : '') + notaAlto;
+      if (sinMedida.length) { this.g.d = { zid: d.zid, pend: sinMedida[0], cola: sinMedida.slice(1) }; return this.repetir(pre.trim()); }
+      if (hechos.length) return this.repetir(pre.trim());
       return this.repetir('Anotado: ' + hs.map((x) => fmtUds(x.uds) + ' ' + plural(x.uds, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(' y ') + '.');
     }
   };
@@ -5938,16 +6024,26 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         try { synth.cancel(); } catch (e) {}
         const parts = splitSentences(text);
         speaking = true; lastSaid = text; state();
-        let i = 0, done = false;
-        const finish = () => { if (done) return; done = true; lastStop = Date.now(); if (my === speakId) { speaking = false; state(); } resolve(); };
+        let i = 0, done = false, poll = null, cur = null;
+        const finish = () => { if (done) return; done = true; clearInterval(poll); lastStop = Date.now(); if (my === speakId) { speaking = false; state(); } resolve(); };
         const guard = setTimeout(finish, 4000 + text.length * 95);
+        // En muchos Android el aviso de «fin de frase» no llega nunca: se comprueba si sigue hablando
+        const t0 = Date.now(); let quieto = 0;
+        poll = setInterval(() => {
+          if (done) return;
+          if (my !== speakId) { clearTimeout(guard); return finish(); }
+          if (Date.now() - t0 < 700) return;
+          if (!synth.speaking && !synth.pending) { if (++quieto >= 2) { quieto = 0; cur = null; if (i < parts.length) next(); else { clearTimeout(guard); finish(); } } }
+          else quieto = 0;
+        }, 250);
         const next = () => {
           if (done) return;
           if (my !== speakId) { clearTimeout(guard); return finish(); } // interrumpido: no se leen las frases que faltan
           if (i >= parts.length) { clearTimeout(guard); return setTimeout(finish, 250); }
           const u = new SpeechSynthesisUtterance(parts[i++]);
           u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = rate;
-          u.onend = next; u.onerror = () => { clearTimeout(guard); finish(); };
+          cur = u;
+          u.onend = () => { if (cur === u) { cur = null; next(); } }; u.onerror = () => { if (cur === u) { clearTimeout(guard); finish(); } };
           synth.speak(u);
           // Chrome Android a veces deja la síntesis en pausa
           try { if (synth.paused) synth.resume(); } catch (e) {}
@@ -6124,7 +6220,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
       const ds = await navigator.mediaDevices.enumerateDevices();
       const antes = S.btDetectado;
-      S.btDetectado = ds.some((d) => (d.kind === 'audioinput' || d.kind === 'audiooutput') && /bluetooth|airpods|buds|auricular|headset|headphone|hands-?free|manos libres|bt |jabra|bose|sony|beats|jbl|plantronics|poly/i.test(d.label || ''));
+      S.btDetectado = ds.some((d) => (d.kind === 'audioinput' || d.kind === 'audiooutput') && /bluetooth|airpods|buds|auriculares|headphones|manos libres|\bbt\b|jabra|bose|sony|beats|jbl|plantronics|\bpoly\b/i.test(d.label || '') && !/earpiece|speakerphone|altavoz|default|predeterminado|communications/i.test(d.label || ''));
       if (S.btDetectado !== antes) { VoiceAdapter.setEcho(!auriculares()); if (S.view === 'ajustes') render(); }
     } catch (e) {}
   }

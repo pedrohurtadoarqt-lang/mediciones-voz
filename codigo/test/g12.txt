@@ -1,0 +1,14 @@
+vivienda
+salón 4 por 3
+2,60
+tengo una ventana de 80, una ventana de 70 y una ventana de 60x69, perdón, son una puerta de 80, una de 90 y una ventana de 60x90
+la segunda
+no
+cocina 3 por 3
+2,60
+una ventana de 80 y una ventana de 70
+1,10
+1,20
+no
+las ventanas de antes son puertas
+sí

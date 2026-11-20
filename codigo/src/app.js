@@ -158,16 +158,26 @@
         try { synth.cancel(); } catch (e) {}
         const parts = splitSentences(text);
         speaking = true; lastSaid = text; state();
-        let i = 0, done = false;
-        const finish = () => { if (done) return; done = true; lastStop = Date.now(); if (my === speakId) { speaking = false; state(); } resolve(); };
+        let i = 0, done = false, poll = null, cur = null;
+        const finish = () => { if (done) return; done = true; clearInterval(poll); lastStop = Date.now(); if (my === speakId) { speaking = false; state(); } resolve(); };
         const guard = setTimeout(finish, 4000 + text.length * 95);
+        // En muchos Android el aviso de «fin de frase» no llega nunca: se comprueba si sigue hablando
+        const t0 = Date.now(); let quieto = 0;
+        poll = setInterval(() => {
+          if (done) return;
+          if (my !== speakId) { clearTimeout(guard); return finish(); }
+          if (Date.now() - t0 < 700) return;
+          if (!synth.speaking && !synth.pending) { if (++quieto >= 2) { quieto = 0; cur = null; if (i < parts.length) next(); else { clearTimeout(guard); finish(); } } }
+          else quieto = 0;
+        }, 250);
         const next = () => {
           if (done) return;
           if (my !== speakId) { clearTimeout(guard); return finish(); } // interrumpido: no se leen las frases que faltan
           if (i >= parts.length) { clearTimeout(guard); return setTimeout(finish, 250); }
           const u = new SpeechSynthesisUtterance(parts[i++]);
           u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = rate;
-          u.onend = next; u.onerror = () => { clearTimeout(guard); finish(); };
+          cur = u;
+          u.onend = () => { if (cur === u) { cur = null; next(); } }; u.onerror = () => { if (cur === u) { clearTimeout(guard); finish(); } };
           synth.speak(u);
           // Chrome Android a veces deja la síntesis en pausa
           try { if (synth.paused) synth.resume(); } catch (e) {}
@@ -344,7 +354,7 @@
       if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
       const ds = await navigator.mediaDevices.enumerateDevices();
       const antes = S.btDetectado;
-      S.btDetectado = ds.some((d) => (d.kind === 'audioinput' || d.kind === 'audiooutput') && /bluetooth|airpods|buds|auricular|headset|headphone|hands-?free|manos libres|bt |jabra|bose|sony|beats|jbl|plantronics|poly/i.test(d.label || ''));
+      S.btDetectado = ds.some((d) => (d.kind === 'audioinput' || d.kind === 'audiooutput') && /bluetooth|airpods|buds|auriculares|headphones|manos libres|\bbt\b|jabra|bose|sony|beats|jbl|plantronics|\bpoly\b/i.test(d.label || '') && !/earpiece|speakerphone|altavoz|default|predeterminado|communications/i.test(d.label || ''));
       if (S.btDetectado !== antes) { VoiceAdapter.setEcho(!auriculares()); if (S.view === 'ajustes') render(); }
     } catch (e) {}
   }
