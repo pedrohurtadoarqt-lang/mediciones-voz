@@ -30,11 +30,8 @@
   const NO = /^(no|nop|ninguno|ninguna|nada|tampoco|sin|negativo|para nada|no tiene|no lleva|no hay)\b/;
   function yesNo(n) { if (NO.test(n)) return false; if (SI.test(n)) return true; return null; }
   const FIN = /^(ya esta|ya|listo|lista|hecho|termin|terminado|terminamos|fin|nada mas|no hay mas|ninguna mas|ninguno mas|no mas|eso es todo|es todo|basta|siguiente|seguimos|vale ya|ya he terminado|he terminado|cierra|cierro|ninguna|ninguno|no)\b/;
-  function cmv(v, tk) { // centímetros/milímetros → metros
-    if (tk && tk.unit === 'mm') return round2(v / 1000);
-    if (tk && tk.unit === 'cm') return round2(v / 100);
-    return v;
-  }
+  // El tokenizador del motor ya pasa «30 cm» y «300 mm» a metros: aquí no se vuelve a convertir
+  function cmv(v) { return v; }
   /** Primer número de la frase (en metros si dice cm/mm). */
   function num(text) {
     const t = tokenize(text).filter((x) => x.k === 'N');
@@ -571,6 +568,11 @@
         const z = buscarZona(this.obra, mb[1] || '') || (/^(esta|este)?\s*(estancia|zona|habitacion)?$/.test(mb[1] || '') ? this.zona() : null);
         if (z) return this.pedirBorrar(z);
       }
+      // Incidencia fuera del guion («este pilar tiene los hierros oxidados…»)
+      if (!(input && input.act) && !/^(inc_|nueva_|borrar_)/.test(g.paso) && g.paso !== 'trabajos' && n.split(' ').length >= 3) {
+        const inc = detectarIncidencia(n);
+        if (inc) return this.incidencia(inc, text);
+      }
       // «Añade armario empotrado en la habitación»: partida dictada en cualquier momento
       const mp = n.match(/^(?:anade|anadir|añade|añadir|crea|crear|apunta|mete|quiero (?:anadir|poner)|nueva partida|otra partida|partida nueva)\s+(?:una |un |la |el |partida (?:de |para )?)?(.{4,})$/);
       if (mp && !(input && input.act) && !/^(puerta|ventana|hueco|otra igual|otro igual|faldon|fachada)/.test(mp[1])) return this.nuevaPartida(text.replace(/^\s*\S+\s+(?:(?:una|un|la|el)\s+)?(?:partida\s+(?:de\s+|para\s+)?)?/i, ''));
@@ -690,6 +692,30 @@
       if (t === 'instalaciones') return 'ins_tipo';
       return this.toma.zonas.some((z) => z.ambito === 'interior') ? 'est_mas' : 'est_nombre';
     }
+    /* ---- incidencias fuera del guion ---- */
+    incidencia(inc, frase) {
+      const g = this.g;
+      if (!g.ret) g.ret = { paso: g.paso, d: g.d, fin: g.fin };
+      g.fin = false;
+      const z = this.zona && g.d && g.d.zid ? this.zona(g.d.zid) : null;
+      const ult = this.toma.zonas.length ? this.toma.zonas[this.toma.zonas.length - 1] : null;
+      inc.est = z ? z.nombre : (g.paso && g.paso !== 'hecho' && g.paso !== 'libre' && ult ? ult.nombre : (this.obra.estActiva || ''));
+      g.paso = 'inc_q'; g.d = { inc, i: -1 }; this.fails = 0; this.save();
+      return this.sigIncQ('Entendido: ' + INC_TXT[inc.tipo](inc).toLowerCase().replace(/^./, (c) => c.toUpperCase()) + '.');
+    }
+    sigIncQ(pre) {
+      const d = this.g.d; const inc = d.inc;
+      let i = d.i + 1; while (INC_Q[i] && !INC_Q[i].si.call(this, inc)) i++;
+      if (INC_Q[i]) { this.g.d = { inc, i }; this.save(); return this.repetir(pre); }
+      // Todas las respuestas: se anotan las partidas
+      const hechas = anotarIncidencia(this.obra, this.dlg.cat, inc, inc.est);
+      this.save();
+      this.io.flash && this.io.flash('ok');
+      const cant = inc.tipo === 'humedad' ? fmt(inc.largo) + ' metros de muro' : inc.tipo === 'fisura' ? fmt(inc.largo) + ' metros de fisuras'
+        : inc.el === 'canto' ? fmt(inc.largo) + ' metros de canto' : fmt(hechas[0] ? E.parcial(hechas[0].l) : 0) + ' metros cuadrados de reparación';
+      const msg = (pre ? pre + ' ' : '') + 'Anotado' + (inc.est ? ' en ' + art(inc.est) : '') + ': ' + cant + (hechas.length > 1 ? ', en ' + hechas.length + ' partidas' : ', en una partida') + '.';
+      return this.volver(msg + ' Seguimos.');
+    }
     /* ---- partida dictada que no está en la lista ---- */
     nuevaPartida(frase) {
       const g = this.g;
@@ -757,6 +783,91 @@
     const li = ac.find((a) => a.tipo === 'anadir_lineas' && a.lineas_nuevas && a.lineas_nuevas.length);
     if (li) return li.lineas_nuevas.map((l) => [(l.comentario || ''), l.uds && l.uds !== 1 ? l.uds + ' de' : '', [l.largo, l.ancho, l.alto].filter((v) => v != null).map((v) => String(v).replace('.', ',')).join(' por ')].filter(Boolean).join(' ')).join(' y ');
     return '';
+  }
+
+  /* ============================================================
+   * INCIDENCIAS FUERA DEL GUION
+   * El usuario describe a su manera una patología que ve («ese pilar tiene los
+   * hierros oxidados, habrá que repararlo»). Se detecta en cualquier momento,
+   * se hacen las preguntas justas y se añaden todas las partidas del proceso
+   * (desglosadas por fases o en una partida completa). Después se sigue donde se estaba.
+   * ============================================================ */
+  const P_HA = /(oxid|corro|armadura|hierros?\b|ferralla|desconch|desprend|saltad|carbonata|aluminosis|pasivar|pasivad|mortero de reparacion|recomponer|reconstruir|sanear|saneado|picar el hormigon|hormigon (danad|en mal estado|deteriorad|roto|podrid|suelto))/;
+  function detectarIncidencia(n) {
+    const t = ' ' + n + ' ';
+    const el = /\b(pilar|pilares|columna|columnas|soporte)\b/.test(t) ? 'pilar' : /\b(viga|vigas|jacena|jacenas|dintel)\b/.test(t) ? 'viga'
+      : /(canto|cantos|frente|frentes) (de|del) (forjado|losa)|borde del forjado|cantos? de forjado/.test(t) ? 'canto'
+      : /\b(techo|forjado|losa|vigueta|viguetas|bovedilla|muro|pared|paramento)\b/.test(t) ? 'superficie' : null;
+    if (P_HA.test(n) && (el || /(armadura|hierros?\b|ferralla|oxid|corro|pasiv)/.test(n))) return { tipo: 'rep_ha', el: el || 'superficie' };
+    if (/(humedad|humedades|capilaridad|salitre|eflorescencia|sube el agua|humedo por abajo)/.test(n)) return { tipo: 'humedad' };
+    if (/(fisura|fisuras|grieta|grietas|agrietad|fisurad|rajad)/.test(n)) return { tipo: 'fisura' };
+    return null;
+  }
+  const EL_TXT = { pilar: ['pilar', 'pilares'], viga: ['viga', 'vigas'], canto: ['canto de forjado', 'cantos de forjado'], superficie: ['zona', 'zonas'] };
+  const INC_TXT = {
+    rep_ha: (i) => 'Reparación de ' + (i.el === 'superficie' ? 'hormigón armado' : EL_TXT[i.el][1]) + ' con armaduras oxidadas: picado del hormigón, cepillado de armaduras, pasivado y mortero de reparación',
+    humedad: () => 'Tratamiento de humedad por capilaridad: picado del revestimiento, barrera química por inyección y mortero de saneamiento',
+    fisura: () => 'Reparación de fisuras: apertura, limpieza y sellado'
+  };
+  /** Preguntas de cada incidencia (en orden; se saltan las que no aplican). */
+  const INC_Q = [
+    { k: 'n', tipo: 'count', si: (i) => i.tipo === 'rep_ha' && (i.el === 'pilar' || i.el === 'viga'), q: (i) => (i.el === 'viga' ? '¿Cuántas vigas hay en esa situación, contando esta?' : '¿Cuántos pilares hay en esa situación, contando este?'), c: ['1', '2', '3', '4'] },
+    { k: 'sec', tipo: 'dims', si: (i) => i.tipo === 'rep_ha' && i.el === 'pilar', q: () => '¿Qué sección tienen? Por ejemplo «30 por 30».', c: ['25 por 25', '30 por 30', '40 por 40'] },
+    { k: 'sec', tipo: 'dims', si: (i) => i.tipo === 'rep_ha' && i.el === 'viga', q: () => '¿Qué sección tienen, ancho por canto? Por ejemplo «25 por 40».', c: ['25 por 40', '30 por 50'] },
+    { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'rep_ha' && i.el === 'pilar', q: (i) => '¿Cuántos metros de altura hay que reparar en ' + (i.n > 1 ? 'cada pilar' : 'el pilar') + '? Si es entero, dime su altura.', c: ['1', '2', '2,60', '3'] },
+    { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'rep_ha' && i.el === 'viga', q: (i) => '¿Cuántos metros de ' + (i.n > 1 ? 'cada viga' : 'viga') + ' hay que reparar?', c: ['1', '2', '3', '4'] },
+    { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'rep_ha' && i.el === 'canto', q: () => '¿Cuántos metros de canto de forjado hay que reparar en total?', c: [] },
+    { k: 'canto', tipo: 'num', si: (i) => i.tipo === 'rep_ha' && i.el === 'canto', q: () => '¿Qué canto tiene el forjado? Lo normal son 30 centímetros.', c: ['25 cm', '30 cm', '35 cm'] },
+    { k: 'sup', tipo: 'dims', si: (i) => i.tipo === 'rep_ha' && i.el === 'superficie', q: () => '¿Qué superficie hay que reparar? Largo por ancho, por ejemplo «3 por 2». Si son varias zonas, dime el total.', c: [] },
+    { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'humedad', q: () => '¿Cuántos metros de muro tienen humedad?', c: [] },
+    { k: 'alto', tipo: 'num', si: (i) => i.tipo === 'humedad', q: () => '¿Hasta qué altura hay que tratar? Normalmente 1 metro por encima de la mancha.', c: ['1', '1,20', '1,50'] },
+    { k: 'largo', tipo: 'num', si: (i) => i.tipo === 'fisura', q: () => '¿Cuántos metros de fisuras o grietas hay en total?', c: [] },
+    { k: 'modo', tipo: 'modo', si: function (i) { return !this.g.incModo; }, q: () => '¿Lo pongo desglosado por fases, una partida por cada trabajo, o en una sola partida que lo incluya todo?', c: [{ label: 'Desglosado por fases', value: 'desglosado' }, { label: 'Una sola partida', value: 'una sola partida' }] }
+  ];
+  /** Partidas de cada incidencia: [código, unidad, resumen si no está en la base, línea]. */
+  function incPartidas(i, modo) {
+    const N = i.n || 1, f = (v) => fmt(v);
+    if (i.tipo === 'rep_ha') {
+      let line, com;
+      if (i.el === 'pilar') { const per = round2(2 * (i.sec[0] + i.sec[1])); com = (N > 1 ? N + ' pilares ' : 'Pilar ') + f(i.sec[0]) + '×' + f(i.sec[1]) + ', ' + f(i.largo) + ' m de altura'; line = L(com, N, per, null, i.largo); }
+      else if (i.el === 'viga') { const des = round2(i.sec[0] + 2 * i.sec[1]); com = (N > 1 ? N + ' vigas ' : 'Viga ') + f(i.sec[0]) + '×' + f(i.sec[1]) + ' (cara inferior y laterales), ' + f(i.largo) + ' m'; line = L(com, N, i.largo, null, des); }
+      else if (i.el === 'canto') { com = 'Canto de forjado de ' + f(i.canto) + ' m, ' + f(i.largo) + ' m'; line = L(com, 1, i.largo, null, i.canto); }
+      else { com = 'Superficie de hormigón armado'; line = L(com, 1, i.sup[0], i.sup[1]); }
+      if (modo === 'una') {
+        if (i.el === 'canto') return [['EHY090', 'm', 'Reparación de canto de forjado por corrosión de armaduras', L(com, 1, i.largo)]];
+        return [[i.el === 'pilar' ? 'EHY095' : i.el === 'viga' ? 'EHY096' : 'EHY097', 'm2', 'Reparación de hormigón armado con armaduras corroídas', line]];
+      }
+      return [['D3001.0070', 'm2', 'Picado de hormigón deteriorado', line], ['EHK045', 'm2', 'Limpieza de armaduras con cepillo metálico', Object.assign({}, line)], ['D3002.0020', 'm2', 'Pasivado de armaduras', Object.assign({}, line)], ['D3002.0030', 'm2', 'Reconstrucción con mortero de reparación', Object.assign({}, line)]];
+    }
+    if (i.tipo === 'humedad') {
+      const com = 'Muro de ' + f(i.largo) + ' m, tratado hasta ' + f(i.alto) + ' m';
+      if (modo === 'una') return [['NHX010', 'm', 'Tratamiento de muro con humedad por capilaridad', L(com, 1, i.largo)]];
+      return [['DRF010b', 'm2', 'Picado del revestimiento', L(com, 1, i.largo, null, i.alto)], ['D3006.0060', 'm', 'Barrera química por inyección', L(com, 1, i.largo)], ['D3006.0010', 'm2', 'Mortero macroporoso de saneamiento', L(com, 1, i.largo, null, i.alto)]];
+    }
+    const com = 'Fisuras, ' + f(i.largo) + ' m';
+    if (modo === 'una') return [['3009.0050', 'm', 'Limpieza y cosido de grietas', L(com, 1, i.largo)]];
+    return [['D3001.0120', 'm', 'Apertura de fisura', L(com, 1, i.largo)], ['D3002.0080', 'm', 'Sellado de fisuras', L(com, 1, i.largo)]];
+  }
+  /** Anota las partidas de la incidencia en la obra (no se tocan al regenerar las del asistente). */
+  function anotarIncidencia(obra, cat, i, est) {
+    const modo = (obra.guia && obra.guia.incModo) || 'fases';
+    const seq = (obra.guia.incSeq = (obra.guia.incSeq || 0) + 1);
+    const hechas = [];
+    incPartidas(i, modo).forEach(([code, u, label, ln]) => {
+      const d = cat.byCode.get(code) || (cat.index.search(label).filter((r) => r.doc.u === u && r.s >= 0.6)[0] || {}).doc || null;
+      let p = obra.partidas.find((x) => x.ref === (d ? d.c : 'INC.' + code));
+      if (!p) {
+        p = d ? { ref: d.c, u: d.u, r: d.r, t: d.t, chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder, subTitle: d.subTitle }
+          : { ref: 'INC.' + code, propia: true, u, r: label, t: label, chap: 'G-reparaciones', chapTitle: 'REPARACIONES', chapOrder: 950, subTitle: '' };
+        Object.assign(p, { uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), lineas: [], creada: Date.now() + obra.partidas.length });
+        p.orient = orientOf(p); obra.partidas.push(p);
+      }
+      const id = p.lineas.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1;
+      const l = Object.assign({ id, est: est || '' }, ln, { inc: 'i' + seq });
+      p.lineas.push(l); p.mod = Date.now(); hechas.push({ p, l });
+    });
+    E.obraChapters(obra);
+    return hechas;
   }
 
   /* ---------------- Pasos del guion ----------------
@@ -1033,6 +1144,23 @@
       return P.ins_tipo.a.call(this, text, n, {}, {});
     }
   };
+  P.inc_q = {
+    q(d) { const it = INC_Q[d.i]; return it ? { t: it.q.call(this, d.inc), c: CH(it.c) } : { t: '', c: [] }; },
+    ayuda(d) { const it = INC_Q[d.i]; return it && it.tipo === 'dims' ? 'Dime dos medidas separadas por «por», por ejemplo «30 por 30».' : it && it.tipo === 'modo' ? 'Di «desglosado» o «una sola partida».' : 'Dime solo el número.'; },
+    formato(d) { const it = INC_Q[d.i]; return it && it.tipo === 'dims' ? '«A por B» en metros' : it && it.tipo === 'modo' ? '«desglosado» o «una sola partida»' : 'un número'; },
+    saltar() { this.g.ret = this.g.ret || null; return this.volver('Dejo esa reparación sin anotar.'); },
+    a(text, n, input, d) {
+      const it = INC_Q[d.i]; const inc = d.inc;
+      if (!it) return this.sigIncQ();
+      if (/^(cancela|no lo anotes|olvidalo|dejalo|no hace falta)/.test(n)) return this.volver('Vale, no lo anoto.');
+      if (it.tipo === 'count') { const c = count(text); if (!(c >= 1)) return false; inc.n = c; }
+      else if (it.tipo === 'num') { let v = num(text); if (v == null) return false; if (it.k === 'canto' && v > 1.5) v = round2(v / 100); if (v > 200 && it.k !== 'canto') v = round2(v / 100); if (!(v > 0)) return false; inc[it.k] = round2(v); }
+      else if (it.tipo === 'dims') { const dm = dims2(text); if (!(dm.ancho > 0 && dm.alto > 0)) return false; const sc = (v) => (it.k === 'sec' && v > 2 ? round2(v / 100) : v); inc[it.k] = [sc(dm.ancho), sc(dm.alto)]; }
+      else if (it.tipo === 'modo') { if (/(desglos|fases|separad|por partes|cada trabajo|varias)/.test(n)) this.g.incModo = 'fases'; else if (/(una|sola|junta|todo|complet|unica)/.test(n)) this.g.incModo = 'una'; else return false; }
+      this.g.d = { inc, i: d.i }; this.save();
+      return this.sigIncQ();
+    }
+  };
   P.borrar_zona = {
     q(d) { const z = this.zona(d.zid); return { t: '¿Elimino ' + (z ? art(z.nombre) : 'esa zona') + '?', c: CH(['Sí, eliminar', 'No']) }; },
     ayuda: () => 'Di «sí» para eliminarla o «no» para dejarla.',
@@ -1113,6 +1241,7 @@
         if (best && bs >= 0.6) { sel[best.id].on = !quitar; marcados.push(best.label.toLowerCase()); }
       });
       if (!marcados.length) {
+        const inc = detectarIncidencia(n); if (inc && n.split(' ').length >= 3) return this.incidencia(inc, text);
         if (contentLen(n) >= 2 && !/^(no|si|vale|ok|bueno)\b/.test(n)) return this.nuevaPartida(text);
         return false;
       }
@@ -1575,7 +1704,7 @@
     }
   };
 
-  const api = { Guia, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
+  const api = { Guia, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Guia = api;
 })(typeof self !== 'undefined' ? self : this);

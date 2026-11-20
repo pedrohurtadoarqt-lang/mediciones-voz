@@ -1,0 +1,16 @@
+fachada
+fachada norte 12 por 7
+la viga del balcón tiene los hierros al aire y se cae el hormigón
+2
+25 por 40
+3
+una sola partida
+ya está
+no
+#marca fac_pint
+generar
+además hay varios cantos de forjado con el hormigón desconchado que hay que reparar
+14
+30 cm
+hay grietas en el muro de la escalera
+6

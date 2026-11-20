@@ -92,3 +92,17 @@ flowchart TD
 | Desagües | Ø32 lavabo y bidé · Ø40 ducha, bañera, fregadero, lavadero, lavadora y lavavajillas · Ø110 inodoro (CTE DB HS 5, tabla 4.1) |
 | Electricidad «según normativa» | REBT ITC-BT-25, electrificación básica, con la superficie medida de la estancia |
 | Lavadora / lavavajillas | se registran en fontanería y pasan a electricidad como tomas de 16 A con toma de tierra |
+
+## Incidencias fuera del guion
+En cualquier momento (también con el asistente terminado) el usuario puede describir a su manera una patología que ve, y la app la recoge sin perder el hilo:
+
+| Lo que dice (ejemplos) | Pregunta | Partidas (desglosado / una sola) |
+|---|---|---|
+| «este pilar tiene los hierros oxidados», «se cae el hormigón del pilar» | ¿Cuántos pilares así? · sección · altura a reparar | Picado de hormigón · cepillado de armaduras · pasivado · mortero de reparación / Reparación de pilar completa (m² desarrollados) |
+| «la viga tiene las armaduras al aire» | ¿Cuántas vigas? · sección ancho × canto · metros | Igual, sobre cara inferior y laterales / Reparación de viga completa |
+| «cantos de forjado desconchados» | metros · canto del forjado | Igual, sobre el frente / Reparación de canto de forjado (m) |
+| «el techo/muro tiene hierros oxidados» | superficie | Igual / Reparación de superficie de hormigón armado |
+| «sube la humedad por el muro», «salitre» | metros de muro · altura a tratar | Picado del revestimiento · barrera química por inyección · mortero de saneamiento / Tratamiento de humedad por capilaridad (m) |
+| «hay grietas en el muro» | metros de fisura | Apertura · sellado / Limpieza y cosido de grietas |
+
+La primera vez pregunta si se quiere **desglosado por fases** o **en una sola partida** y lo recuerda para la obra. Las líneas llevan la estancia o zona donde se estaba midiendo y, al terminar, el asistente vuelve a la pregunta en curso.

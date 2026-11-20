@@ -117,5 +117,40 @@
   "ch": "D1405",
   "r": "Ayudas de albañilería para instalaciones en reforma de vivienda",
   "t": "Repercusión por m² de superficie reformada de las ayudas de albañilería necesarias para la ejecución de las instalaciones (fontanería, saneamiento, electricidad y telecomunicaciones) en reforma de vivienda: apertura y tapado de rozas, apertura de huecos y pasos en paramentos y forjados, recibido de cajas, tubos y elementos, sellado de pasos y limpieza. Incluso material auxiliar."
+ },
+ {
+  "c": "EHK045",
+  "u": "m2",
+  "ch": "D3202",
+  "r": "Limpieza de armaduras con cepillo metálico",
+  "t": "Preparación de la superficie de las armaduras descubiertas en elementos de hormigón armado, para la posterior aplicación de productos pasivadores y reparadores, mediante cepillado manual o mecánico con cepillo de púas metálicas hasta eliminar la herrumbre, la cascarilla, la suciedad superficial y toda sustancia que pueda disminuir la adherencia entre las armaduras y el material de reparación, incluso soplado con aire a presión y carga de los restos sobre camión o contenedor. Medida la superficie del elemento tratado."
+ },
+ {
+  "c": "EHY095",
+  "u": "m2",
+  "ch": "D3202",
+  "r": "Reparación de pilar de hormigón armado con armaduras corroídas",
+  "t": "Reparación de pilar de hormigón armado con armaduras corroídas, incluyendo: picado del hormigón deteriorado y carbonatado con martillo eléctrico hasta descubrir las armaduras y dejarlas exentas en todo su perímetro; limpieza de las armaduras con cepillo metálico hasta eliminar la herrumbre; aplicación manual de mortero pasivador monocomponente a base de cemento e inhibidores de corrosión, como protección de las armaduras y puente de unión; y reconstrucción de la sección original del pilar con mortero de reparación tixotrópico de retracción compensada, clase R3/R4 según UNE-EN 1504-3, con acabado fratasado. Incluso medios auxiliares y retirada de escombros. Medida la superficie desarrollada reparada."
+ },
+ {
+  "c": "EHY096",
+  "u": "m2",
+  "ch": "D3202",
+  "r": "Reparación de viga de hormigón armado con armaduras corroídas",
+  "t": "Reparación de viga o jácena de hormigón armado con armaduras corroídas, por su cara inferior y laterales, incluyendo: picado del hormigón deteriorado y carbonatado con martillo eléctrico hasta descubrir las armaduras; limpieza de las armaduras con cepillo metálico hasta eliminar la herrumbre; aplicación manual de mortero pasivador monocomponente a base de cemento e inhibidores de corrosión, como protección de las armaduras y puente de unión; y reconstrucción de la sección original con mortero de reparación tixotrópico de retracción compensada, clase R3/R4 según UNE-EN 1504-3, con acabado fratasado. Incluso apuntalamiento provisional si fuera necesario, medios auxiliares y retirada de escombros. Medida la superficie desarrollada reparada."
+ },
+ {
+  "c": "EHY097",
+  "u": "m2",
+  "ch": "D3202",
+  "r": "Reparación de superficie de hormigón armado con armaduras corroídas (muro, losa o forjado)",
+  "t": "Reparación de paramento de hormigón armado (muro, losa, intradós de forjado) con armaduras corroídas, incluyendo: picado del hormigón deteriorado con martillo eléctrico hasta descubrir las armaduras afectadas; limpieza de las armaduras con cepillo metálico hasta eliminar la herrumbre; aplicación manual de mortero pasivador monocomponente a base de cemento e inhibidores de corrosión; y reconstrucción del recubrimiento con mortero de reparación tixotrópico de retracción compensada, clase R3 según UNE-EN 1504-3, con acabado fratasado. Incluso medios auxiliares y retirada de escombros."
+ },
+ {
+  "c": "NHX010",
+  "u": "m",
+  "ch": "D3206",
+  "r": "Tratamiento de muro con humedad por capilaridad",
+  "t": "Tratamiento de muro afectado por humedad de capilaridad, incluyendo: picado del revestimiento existente hasta 1 m por encima de la zona afectada; ejecución de barrera química horizontal mediante taladros cada 12 cm e inyección de resina de silicato potásico y siliconato metílico de potasio; y revestimiento del paramento con mortero macroporoso transpirable de saneamiento, con acabado fratasado. Incluso limpieza y retirada de escombros. Medido por metro lineal de muro tratado."
  }
 ]
