@@ -115,3 +115,9 @@ La primera vez pregunta si se quiere **desglosado por fases** o **en una sola pa
 Se añaden solas a cualquier estado de mediciones (se pueden desmarcar en la pantalla de trabajos):
 - **Gestión de residuos:** contenedores de 4,2 m³. La app los estima con las demoliciones medidas (volumen esponjado ×1,3) y al generar pregunta «¿lo dejo así o cuántos pongo?».
 - **Seguridad y salud:** partida alzada al 2 % del PEM por defecto; se cambia diciendo «seguridad y salud al 3 por ciento».
+
+## Modo breve
+En Ajustes («Modo breve») o por voz («modo breve» / «modo completo»). Las preguntas quedan en lo esencial («¿Qué medimos?», «¿Altura del salón?», «¿Puertas o ventanas? Con medidas, o "ninguna"»), sin ejemplos ni explicaciones, y el micro se abre antes. Al terminar una medición se ofrece el botón «Modo breve».
+
+## Humedades
+Se pregunta la causa (capilaridad, condensación o filtración) salvo que se diga en la frase, y se puede cambiar diciéndolo en cualquier momento. Condensación: limpieza con fungicida y pintura antimoho (m²). Filtración: picado, impermeabilización con mortero impermeable y enfoscado (m²). Capilaridad: como antes (metros de muro y altura). Si la frase trae la superficie («unos dos metros cuadrados»), no se vuelve a preguntar.

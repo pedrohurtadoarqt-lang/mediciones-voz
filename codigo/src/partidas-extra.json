@@ -187,5 +187,40 @@
   "ch": "D2803",
   "r": "Partida alzada de seguridad y salud",
   "t": "Partida alzada a justificar para la adopción de las medidas de seguridad y salud en la obra (protecciones colectivas e individuales, señalización, instalaciones de higiene y bienestar, formación y medicina preventiva), según el estudio o estudio básico de seguridad y salud, valorada en el porcentaje indicado del presupuesto de ejecución material."
+ },
+ {
+  "c": "RIX010",
+  "u": "m2",
+  "ch": "D3206",
+  "r": "Limpieza de paramento con solución fungicida",
+  "t": "Limpieza de paramento afectado por humedad de condensación y moho, mediante cepillado y aplicación de solución fungicida y algicida, dejando actuar el tiempo indicado por el fabricante, y aclarado posterior. Incluso protección de los elementos próximos."
+ },
+ {
+  "c": "RIX020",
+  "u": "m2",
+  "ch": "D3206",
+  "r": "Pintura antimoho",
+  "t": "Pintura plástica antimoho para interiores, con aditivos fungicidas, acabado mate, aplicada en dos manos sobre paramento previamente limpio y tratado con fungicida, incluso imprimación si fuera necesaria."
+ },
+ {
+  "c": "RIX030",
+  "u": "m2",
+  "ch": "D3206",
+  "r": "Tratamiento de humedad por condensación",
+  "t": "Tratamiento de paramento afectado por humedad de condensación, incluyendo: cepillado y limpieza con solución fungicida y algicida, aclarado, imprimación y pintura plástica antimoho con aditivos fungicidas en dos manos. Incluso protección de los elementos próximos."
+ },
+ {
+  "c": "NIX010",
+  "u": "m2",
+  "ch": "D3206",
+  "r": "Impermeabilización de paramento con mortero impermeable",
+  "t": "Impermeabilización de paramento afectado por filtraciones de agua mediante mortero impermeabilizante cementoso flexible de dos componentes, aplicado en dos capas cruzadas con brocha o llana sobre soporte limpio, saneado y humedecido, incluso tratamiento de encuentros y puntos singulares."
+ },
+ {
+  "c": "NIX020",
+  "u": "m2",
+  "ch": "D3206",
+  "r": "Reparación de humedad por filtración",
+  "t": "Reparación de paramento afectado por filtraciones de agua, incluyendo: picado del revestimiento deteriorado hasta el soporte, limpieza, impermeabilización con mortero impermeabilizante cementoso flexible en dos capas y nuevo revestimiento con enfoscado de mortero de cemento, preparado para pintar. Incluso retirada de escombros."
  }
 ]

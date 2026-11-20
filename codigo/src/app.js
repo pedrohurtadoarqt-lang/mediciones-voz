@@ -166,14 +166,14 @@
         poll = setInterval(() => {
           if (done) return;
           if (my !== speakId) { clearTimeout(guard); return finish(); }
-          if (Date.now() - t0 < 700) return;
+          if (Date.now() - t0 < 450) return;
           if (!synth.speaking && !synth.pending) { if (++quieto >= 2) { quieto = 0; cur = null; if (i < parts.length) next(); else { clearTimeout(guard); finish(); } } }
           else quieto = 0;
-        }, 250);
+        }, 150);
         const next = () => {
           if (done) return;
           if (my !== speakId) { clearTimeout(guard); return finish(); } // interrumpido: no se leen las frases que faltan
-          if (i >= parts.length) { clearTimeout(guard); return setTimeout(finish, 250); }
+          if (i >= parts.length) { clearTimeout(guard); return setTimeout(finish, 60); }
           const u = new SpeechSynthesisUtterance(parts[i++]);
           u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = rate;
           cur = u;
@@ -288,6 +288,8 @@
     // Croquis de la planta: solo en la conversación (se guarda en la obra; no va en el PDF ni en los archivos)
     sketch: (svg, titulo) => { if (!svg) return; S.log.push({ who: 'app', text: titulo || 'Planta', svg }); renderTalk(); },
     confirmPick: () => S.settings.confirm !== false,
+    breve: () => S.settings.breve === true,
+    setBreve: (v) => { S.settings.breve = !!v; saveSettings(); if (S.view === 'ajustes') render(); },
     // Asistente guiado: abre o cierra la pantalla de selección de trabajos
     trabajos: (on) => { S.view = on ? 'trabajos' : 'obra'; S.tq = ''; render(); },
     pause: () => { sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); VoiceAdapter.needTap = true; }
@@ -343,7 +345,7 @@
   }
   /** Reabre el micro tras hablar. Con auriculares Bluetooth se espera a que el móvil cambie el audio a modo llamada. */
   function reabrir(tk) {
-    const ms = auriculares() ? 900 : 0;
+    const ms = auriculares() ? 700 : 0;
     const go = () => { if ((tk === undefined || tk === sayToken) && !VoiceAdapter.speaking && !VoiceAdapter.listening && vozVista() && S.session) VoiceAdapter.listen(false); };
     if (ms) setTimeout(go, ms); else go();
   }
@@ -690,6 +692,8 @@
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkia"' + (S.settings.ia !== false ? ' checked' : '') + '> Usar la IA cuando la app no entienda algo (necesita cuenta y conexión)</label>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkauri"' + (auriculares() ? ' checked' : '') + '> Uso con auriculares o manos libres Bluetooth' + (S.btDetectado && S.settings.auriculares == null ? ' (detectados)' : '') + '</label>' +
       '<p class="hint">Con auriculares la app espera un instante a que el móvil cambie el audio antes de escuchar, y no filtra el eco. Si tus auriculares no tienen micrófono, habla al del móvil.</p>' +
+      '<label class="row" style="gap:10px"><input type="checkbox" id="chkbreve"' + (S.settings.breve ? ' checked' : '') + '> Modo breve: preguntas cortas, sin ejemplos ni explicaciones</label>' +
+      '<p class="hint">Recomendado cuando ya conoces la app: habla menos y el micro se abre antes. También por voz: «modo breve» o «modo completo».</p>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkconfirm"' + (S.settings.confirm !== false ? ' checked' : '') + '> Confirmar la partida antes de medir («¿Es X?»)</label>' +
       '<div class="field"><label for="rate">Velocidad de lectura: ' + S.settings.rate.toFixed(2) + '</label><input id="rate" type="range" min="0.7" max="1.6" step="0.05" value="' + S.settings.rate + '"></div></div>' +
       viewEmpresa() +
@@ -1184,6 +1188,7 @@
     if (ev.target.dataset && ev.target.dataset.a === 'trule') { const w = ((S.obra.guia && S.obra.guia.extra) || []).find((x) => x.id === ev.target.dataset.id); if (w) { w.regla = ev.target.value; saveObra(); } }
     if (ev.target.id === 'chkia') { S.settings.ia = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkauri') { S.settings.auriculares = ev.target.checked; VoiceAdapter.setEcho(!ev.target.checked); saveSettings(); }
+    if (ev.target.id === 'chkbreve') { S.settings.breve = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);

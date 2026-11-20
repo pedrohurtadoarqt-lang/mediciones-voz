@@ -11,6 +11,7 @@ io = { say: (t, ch) => out.push('  APP: ' + t + (ch && ch.length ? '\n       [' 
 // IA simulada: GUIA_IA='{"texto":"..."}' responde con una orden
 if (process.env.GUIA_IA) io.agent = async () => ({ acciones: [{ tipo: 'orden', texto: JSON.parse(process.env.GUIA_IA).texto }], mensaje: '', pregunta: null, opciones: [] });
 if (process.env.GUIA_IA) io.aiReady = () => true;
+if (process.env.BREVE) { io.breve = () => true; io.setBreve = () => {}; }
 const d = new E.Dialog(io);
 const obra = { id: 't', titulo: 'Prueba', partidas: [], estancias: [] };
 d.setObra(obra);
