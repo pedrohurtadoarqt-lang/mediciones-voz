@@ -256,3 +256,32 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .logo-box { min-height: 64px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 12px; padding: 10px; background: #fff; }
 .logo-box img { max-height: 70px; max-width: 100%; object-fit: contain; }
 .logo-box .hint { color: #555; }
+
+/* Guía de uso */
+.mlead { font-size: 17px; line-height: 1.45; margin: 4px 2px 14px; }
+.msec { padding: 0; }
+.msec > summary { list-style: none; padding: 16px; font-weight: 800; font-size: 17px; display: flex; justify-content: space-between; align-items: center; min-height: 52px; }
+.msec > summary::-webkit-details-marker { display: none; }
+.msec > summary::after { content: '+'; font-size: 24px; font-weight: 400; color: var(--muted); }
+.msec[open] > summary::after { content: '–'; }
+.mbody { padding: 0 16px 16px; font-size: 16px; line-height: 1.45; }
+.mbody h4 { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.mrow { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.mrow:last-child { border-bottom: 0; }
+.mi { flex: none; min-width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); display: inline-grid; place-items: center; padding: 0 4px; }
+.mi svg { width: 22px; height: 22px; }
+.mi.big { border-radius: 50%; background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.mi.stop { color: var(--rec); border-color: var(--rec); }
+.mbody li .mi, .mbody p .mi { min-width: 30px; height: 30px; border-radius: 8px; vertical-align: middle; }
+.mbody li .mi svg, .mbody p .mi svg, .mbody li > svg { width: 18px; height: 18px; vertical-align: middle; }
+.mrow .mi:has(.mchip) { border: 0; background: none; }
+.mchip { display: inline-block; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-weight: 600; font-size: 14px; white-space: nowrap; }
+.msay { display: inline-block; color: var(--accent); font-weight: 600; margin: 1px 2px; }
+.msteps, .mlist { margin: 0; padding-left: 22px; }
+.msteps li, .mlist li { margin: 8px 0; }
+.mtip { background: var(--card-2); border-radius: 10px; padding: 10px 12px; margin: 12px 0 0; font-size: 15px; }
+.mtab { width: 100%; border-collapse: collapse; }
+.mtab th { text-align: left; font-weight: 700; padding: 10px 0 2px; display: block; }
+.mtab td { display: block; padding: 0 0 10px; border-bottom: 1px solid var(--line); }
+.mfirst { width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.mfirst .mi { font-weight: 800; font-size: 22px; background: var(--accent); color: var(--accent-fg); border-color: var(--accent); border-radius: 50%; }

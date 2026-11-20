@@ -438,6 +438,7 @@
     document.getElementById('app').dataset.view = S.view;
     $('#btnSol').setAttribute('aria-pressed', S.settings.mode === 'sol');
     $('#btnBack').hidden = S.view === 'obras';
+    $('#btnHelp').setAttribute('aria-pressed', S.view === 'manual');
     $('#dock').hidden = !vozVista();
     const v = $('#view');
     const t = $('#title');
@@ -447,6 +448,7 @@
     else if (S.view === 'resumen') { t.innerHTML = 'Resumen<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewResumen(); }
     else if (S.view === 'catalogos') { t.innerHTML = 'Bases de datos BC3<small>Sin precios: código, unidad, resumen y texto</small>'; v.innerHTML = viewCatalogos(); }
     else if (S.view === 'ajustes') { t.innerHTML = 'Ajustes'; v.innerHTML = viewAjustes(); }
+    else if (S.view === 'manual') { t.innerHTML = 'Cómo se usa<small>Guía rápida de Mediciona</small>'; v.innerHTML = viewManual(); }
     else if (S.view === 'admin') { t.innerHTML = '<span class="brandtitle">Administración</span><small>Usuarios, sugerencias e IA</small>'; v.innerHTML = viewAdmin(); }
     renderMic();
     if (vozVista()) { renderTalk(); renderChips(); const nr = $('tr.new'); if (nr) nr.scrollIntoView({ block: 'nearest' }); }
@@ -613,6 +615,7 @@
       else h += '<div class="syncline"><span class="dot' + (navigator.onLine === false ? ' off' : '') + '"></span>' + (navigator.onLine === false ? 'Sin conexión: tus obras se guardan aquí y se subirán al volver la red' : 'Obras guardadas en la nube · ' + esc((Cloud.perfil && (Cloud.perfil.empresa || Cloud.perfil.nombre)) || Cloud.user.email)) + ' <button class="linkbtn" data-a="account">Mi cuenta</button></div>';
     }
     if (canOfferInstall()) h += '<div class="installcard"><img src="' + ($('#brandlogo') ? $('#brandlogo').src : '') + '" alt=""><div class="tx"><b>Instalar en este móvil</b>Úsala como una app, desde un icono y a pantalla completa.</div><button class="btn primary" data-a="install">Instalar</button></div>';
+    if (!S.settings.manualVisto) h += '<button class="installcard mfirst" data-a="manual"><span class="mi">?</span><span class="tx"><b>¿Primera vez?</b>Mira en 1 minuto cómo se usa Mediciona.</span></button>';
     h += '<div class="row" style="justify-content:space-between">' + plan + '<button class="btn primary" data-a="newobra"' + (canNew ? '' : ' disabled') + '>Nueva obra</button></div>';
     if (!canNew) h += '<p class="hint">Has llegado al límite del plan Demo. Borra una obra o activa el plan Pro en Ajustes.</p>';
     if (!list.length) h += '<div class="card"><h3>Sin obras todavía</h3><p class="hint">Crea una obra, elige el ámbito de la visita y dicta las partidas y medidas mientras recorres la obra.</p></div>';
@@ -788,9 +791,88 @@
     if (window.Cloud && Cloud.user) items.push(['logout', ICON.undo, 'Cerrar sesión (' + Cloud.user.email + ')']);
     if (window.Cloud && Cloud.isAdmin) items.push(['admin', ICON.list, 'Administración' + (S.sgNew ? ' · ' + S.sgNew + (S.sgNew === 1 ? ' sugerencia nueva' : ' sugerencias nuevas') : '')]);
     items.push(['sugerencias', ICON.help, 'Buzón de sugerencias']);
-    items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Qué puedo decir']);
+    items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Cómo se usa (ayuda)']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' || a === 'sendmail' || a === 'share' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
+  /* ---- Guía de uso ---- */
+  function viewManual() {
+    const ic = (sel, cls) => { const el = $(sel); const sv = el && el.querySelector('svg'); return '<span class="mi' + (cls ? ' ' + cls : '') + '">' + (sv ? sv.outerHTML : '') + '</span>'; };
+    const btn = (sel, txt, cls) => '<div class="mrow">' + ic(sel, cls) + '<div>' + txt + '</div></div>';
+    const chip = (t) => '<span class="mchip">' + t + '</span>';
+    const say = (t) => '<span class="msay">«' + t + '»</span>';
+    const sec = (id, tit, body, open) => '<details class="card msec" id="m_' + id + '"' + (open ? ' open' : '') + '><summary>' + tit + '</summary><div class="mbody">' + body + '</div></details>';
+    let h = '<p class="mlead">Mediciona mide la obra <b>hablando</b>. Tú dices las medidas en voz alta y la app las apunta, calcula y prepara el estado de mediciones en PDF, Excel o BC3.</p>';
+    h += sec('pasos', '1. Empezar en 4 pasos', '<ol class="msteps">' +
+      '<li>En <b>Mis obras</b>, pulsa <b>Nueva obra</b> y ponle un nombre.</li>' +
+      '<li>Pulsa <b>Empezar medición guiada</b>. La primera vez el móvil te pedirá permiso para el micrófono: dale a <b>Permitir</b>.</li>' +
+      '<li>La app te hace preguntas en voz alta. <b>Contesta hablando</b>, con naturalidad: ' + say('vivienda') + ', ' + say('el salón') + ', ' + say('4 por 3') + ', ' + say('dos sesenta') + '.</li>' +
+      '<li>Al terminar, <b>marca en la pantalla los trabajos</b> que vas a hacer y pulsa <b>Generar mediciones</b>. Ya puedes exportar el PDF.</li></ol>' +
+      '<p class="mtip">No hace falta pulsar nada mientras hablas: el micrófono se abre solo cuando la app termina de hablar.</p>', true);
+    h += sec('botones', '2. Para qué sirve cada botón',
+      '<h4>Arriba</h4>' +
+      btn('#btnBack', '<b>Volver</b>: regresa a la pantalla anterior o a tus obras.') +
+      btn('#btnHelp', '<b>Ayuda</b>: abre esta guía.') +
+      btn('#btnSol', '<b>Modo sol</b>: más contraste para ver bien la pantalla al aire libre.') +
+      btn('#btnMenu', '<b>Menú</b>: tus obras, resumen, exportar (PDF, Excel, BC3), compartir, enviar al correo, bases de precios, ajustes y tu cuenta.') +
+      '<h4>Abajo, mientras mides</h4>' +
+      btn('#btnMic', '<b>Micrófono</b>: cuando se mueven las ondas, la app te está escuchando. Púlsalo si quieres hablar tú primero o si se ha cerrado.', 'big') +
+      btn('[data-a="stop"]', '<b>Parar</b>: corta la voz de la app y deja de escuchar. Úsalo para hacer una pausa.', 'stop') +
+      btn('#btnKeyboard', '<b>Teclado</b>: escribe en lugar de hablar (útil si hay mucho ruido). Escribe lo mismo que dirías.') +
+      btn('#btnDock', '<b>Ocultar / mostrar conversación</b>: deja más espacio para ver las mediciones. Púlsalo otra vez para recuperarla.') +
+      '<div class="mrow"><span class="mi">' + chip('Sí') + '</span><div><b>Botones de respuesta</b>: aparecen debajo de cada pregunta. Si no quieres hablar, pulsa la respuesta.</div></div>' +
+      '<div class="mrow"><span class="mi">' + chip('↩ Atrás') + '</span><div><b>Atrás</b>: deshace lo último que has dicho. Úsalo si te has equivocado.</div></div>' +
+      '<h4>En la pantalla de la obra</h4>' +
+      '<div class="mrow"><span class="mi">' + ICON.pin + '</span><div><b>Estancia</b>: indica dónde estás midiendo (salón, baño…). Púlsalo para cambiar de estancia.</div></div>' +
+      '<div class="mrow"><span class="mi">' + ICON.edit + '</span><div><b>Editar línea</b>: cambia a mano una medida.</div></div>' +
+      '<div class="mrow"><span class="mi">' + ICON.del + '</span><div><b>Borrar</b>: quita una línea o una estancia.</div></div>' +
+      '<h4>En la pantalla de trabajos</h4>' +
+      '<p>Cada trabajo tiene una casilla: <b>márcala</b> si lo vas a hacer. Debajo eliges en qué estancias. Con <b>Añadir</b> buscas cualquier partida de la base, y con <b>Crear partida</b> haces una nueva. Al acabar, <b>Generar mediciones</b>.</p>');
+    h += sec('decir', '3. Qué puedo decir',
+      '<table class="mtab"><tbody>' +
+      [['Qué medimos', 'vivienda · estancia · instalaciones · fachada · cubierta · piscina · otra cosa'],
+        ['Una habitación rectangular', '4 por 3 · cuatro con veinte por tres'],
+        ['Una habitación con otra forma', '4 metros, giro a la derecha, 3 metros, derecha · cierra'],
+        ['La altura', 'dos sesenta · 2,60'],
+        ['Puertas y ventanas', 'una puerta de 0,82 por 2,03 y dos ventanas de 1,20 por 1,10 · ninguna'],
+        ['Algo que ves y hay que arreglar', 'este pilar tiene los hierros oxidados · hay humedad en el muro · hay grietas'],
+        ['Una partida que no está', 'añade mover la estatua del jardín'],
+        ['Cambiar de sitio', 'pasamos al baño · borra el pasillo'],
+        ['Terminar', 'elegir trabajos · generar mediciones · finalizar'],
+        ['Exportar', 'exporta el PDF · comparte los archivos'],
+        ['Si te pierdes', 'ayuda · repite · atrás · saltar']].map(([a, b]) => '<tr><th>' + a + '</th><td>' + b.split(' · ').map(say).join(' ') + '</td></tr>').join('') +
+      '</tbody></table><p class="mtip">Habla con normalidad. Si la app no entiende algo, te lo vuelve a preguntar o lo consulta con la IA (con la cuenta iniciada y conexión).</p>');
+    h += sec('errores', '4. Si me equivoco', '<ul class="mlist">' +
+      '<li>Di ' + say('atrás') + ' o ' + say('me he equivocado') + ', o pulsa ' + chip('↩ Atrás') + '. Se borra lo último.</li>' +
+      '<li>Corrige en la misma frase: ' + say('2,60, no, perdón, 2,70') + '. La app te preguntará cuál es la buena.</li>' +
+      '<li>Corrige algo de antes: ' + say('las ventanas de antes son puertas') + ' o ' + say('la altura era 2,50') + '.</li>' +
+      '<li>En el estado de mediciones puedes tocar ' + ICON.edit + ' para cambiar cualquier número a mano.</li></ul>');
+    h += sec('exportar', '5. Sacar el PDF, Excel o BC3', '<ul class="mlist">' +
+      '<li>Abre el ' + ic('#btnMenu') + ' <b>Menú</b> y elige <b>Exportar PDF</b>, <b>Excel</b> o <b>BC3</b> (para Presto o Arquímedes).</li>' +
+      '<li>En el móvil, <b>Compartir archivos</b> te deja enviarlos por WhatsApp, correo, Drive…</li>' +
+      '<li>El logo y los datos de tu empresa salen en el PDF: ponlos en <b>Ajustes</b>.</li></ul>');
+    h += sec('manos', '6. Manos libres y auriculares', '<ul class="mlist">' +
+      '<li>Puedes medir con el móvil en el bolsillo: la app pregunta, tú contestas, y vuelve a escuchar sola.</li>' +
+      '<li>Con auriculares bluetooth, comprueba que en Ajustes está marcado <b>Uso con auriculares o manos libres</b> (normalmente se detectan solos).</li>' +
+      '<li>¿La app habla demasiado? Di ' + say('modo breve') + ': las preguntas serán cortas y sin ejemplos. ' + say('modo completo') + ' lo deja como estaba.</li>' +
+      '<li>Para pausar, pulsa ' + ic('[data-a="stop"]', 'stop') + ' <b>Parar</b>. Para seguir, el ' + ic('#btnMic') + ' <b>micrófono</b>.</li></ul>');
+    h += sec('problemas', '7. Problemas frecuentes', '<ul class="mlist">' +
+      '<li><b>No me oye:</b> comprueba que el navegador tiene permiso de micrófono y que se mueven las ondas del micrófono. En iPhone usa Safari; en Android, Chrome.</li>' +
+      '<li><b>Me interrumpe o se oye a sí misma:</b> baja el volumen o usa auriculares.</li>' +
+      '<li><b>Hay mucho ruido:</b> usa el ' + ic('#btnKeyboard') + ' teclado.</li>' +
+      '<li><b>No entiende un número:</b> dilo con coma: ' + say('dos coma sesenta') + ' o ' + say('dos sesenta') + '.</li>' +
+      '<li><b>¿Se guarda?</b> Sí, todo se guarda solo en el móvil y, con cuenta, en la nube.</li>' +
+      '<li><b>¿Algo no funciona?</b> Escríbenos desde el Menú, en <b>Buzón de sugerencias</b>.</li></ul>');
+    h += '<div class="row" style="justify-content:center;margin:16px 0 40px"><button class="btn primary" data-a="mclose">Entendido</button></div>';
+    return h;
+  }
+  function abrirManual(sec) {
+    closeSheet();
+    if (S.view !== 'manual') S.prevView = S.view;
+    S.view = 'manual'; S.settings.manualVisto = true; saveSettings(); render();
+    window.scrollTo(0, 0);
+    if (sec) { const d = $('#m_' + sec); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }
+  }
+  function cerrarManual() { S.view = S.prevView && S.prevView !== 'manual' && (S.obra || !/^(obra|trabajos|resumen)$/.test(S.prevView)) ? S.prevView : 'obras'; render(); }
   function helpSheet() {
     sheet('<h2>Qué puedo decir</h2><div class="hint" style="display:flex;flex-direction:column;gap:6px">' +
       ['<b>Trabajo:</b> «picado de azulejos», «pintura plástica en techo», «nueva partida rozas»',
@@ -1113,7 +1195,9 @@
       case 'resumen': closeSheet(); S.view = 'resumen'; render(); break;
       case 'catalogos': closeSheet(); S.view = 'catalogos'; render(); break;
       case 'ajustes': closeSheet(); S.view = 'ajustes'; render(); break;
-      case 'ayuda': helpSheet(); break;
+      case 'ayuda': abrirManual(); break;
+      case 'manual': abrirManual(el.dataset.s); break;
+      case 'mclose': cerrarManual(); break;
       case 'sugerencias': closeSheet(); suggestionSheet(); break;
       case 'login': closeSheet(); accountSheet('login'); break;
       case 'signup': closeSheet(); accountSheet('signup'); break;
@@ -1196,7 +1280,8 @@
     if (ev.target.id === 'restorefile' && ev.target.files[0]) restore(ev.target.files[0]);
     if (ev.target.id === 'logofile' && ev.target.files[0]) { try { S.settings.logo = await leerLogo(ev.target.files[0]); await saveSettings(); render(); toast('Logo guardado: saldrá en el PDF'); } catch (e) { toast(e.message); } }
   });
-  $('#btnBack').addEventListener('click', () => { if (S.view === 'obra' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
+  $('#btnHelp').addEventListener('click', () => (S.view === 'manual' ? cerrarManual() : abrirManual()));
+  $('#btnBack').addEventListener('click', () => { if (S.view === 'manual') return cerrarManual(); if (S.view === 'obra' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
   $('#btnMenu').addEventListener('click', menuSheet);
   $('#btnSol').addEventListener('click', () => { S.settings.mode = S.settings.mode === 'sol' ? 'obra' : 'sol'; saveSettings(); render(); });
   $('#btnDock').addEventListener('click', () => { S.settings.dockMin = !S.settings.dockMin; saveSettings(); renderMic(); });
