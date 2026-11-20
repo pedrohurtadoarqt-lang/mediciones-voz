@@ -257,6 +257,7 @@
       const conv = (v) => (v == null ? v : (pm.cm || (v > 10 && Number.isInteger(v)) ? round2(v / 100) : v));
       let an = conv(d[0]), al = conv(d[1]);
       if (!tipo && an == null) continue;
+      if (an == null && /\b(no|ni|ningun|ninguna|sin|aun no|todavia no)\b/.test(n)) continue; // «no estamos con puertas ni ventanas»
       if (!tipo) tipo = tipoPrev || (al >= 1.9 && an <= 1.2 ? 'puerta' : 'ventana'); // «una de 90»: mismo tipo que el anterior
       tipoPrev = tipo;
       out.push({ tipo, uds: uds || 1, an: an ?? null, al: al ?? null, bal: /balconera/.test(n) });
@@ -484,7 +485,7 @@
       const g = obra.guia || {};
       if (g.contenedores) return [L('Contenedores indicados en obra', g.contenedores)];
       const r = estimarResiduos(obra);
-      return [L('Estimación según las demoliciones: ' + fmt(r.vol) + ' m³ de escombro esponjado', r.n)];
+      return [L(r.vol > 0 ? 'Estimación según las demoliciones: ' + fmt(r.vol) + ' m³ de escombro esponjado' : 'Mínimo: 1 contenedor', r.n)];
     },
     sys: (zs, w, obra) => [L('Partida alzada: ' + fmt((obra.guia && obra.guia.sysPct) || 2, 1).replace(/,0$/, '') + ' % del presupuesto de ejecución material', 1)],
     ud_obra: () => [L('Vivienda', 1)],
@@ -688,6 +689,7 @@
 
     /* ---- salida ---- */
     ask(text, chips, opts) {
+      if (this._captura !== undefined) { this._captura = text; return; } // respuesta aplicada en silencio (se dirá junto a lo siguiente)
       if (this.io.breve && this.io.breve()) text = abreviar(text);
       const c = (chips || []).slice();
       const g = this.obra && this.obra.guia;
@@ -719,6 +721,11 @@
       this.aiTok = (this.aiTok || 0) + 1; // si había una consulta a la IA en curso, se abandona
       if (/^(para|parar|paro|stop|basta|basta ya|calla|callate|silencio|espera|pausa|para de escuchar|deja de escuchar|para ya)$/.test(n)) { this.io.pause && this.io.pause(); return; }
       if (/^(repite|repitelo|como dices|que has dicho|perdona|seguir midiendo|seguimos|continuar|continua|otra vez)$/.test(n)) return this.repetir();
+      if (/^(finalizar|finaliza|acabar|acaba|terminar medicion|acabar medicion|terminamos|salir|hay que salir|no apuntes nada mas)\b|(hay que salir|acabar (la )?medicion|terminar (la )?medicion|finalizar (la )?medicion|demasiados errores)/.test(n) && !/^(inc_|nueva_)/.test(g.paso)) {
+        g.ultima = null;
+        if (this.toma.zonas.length) return this.abrirTrabajos('Vale, dejamos de medir. Lo anotado se queda.');
+        g.fin = true; this.save(); return this.ask('Vale, salimos del asistente. No hay nada medido todavía.', this.dlg.idleChips());
+      }
       if (/^(modo breve|habla menos|sin ejemplos|menos explicaciones|modo rapido|mas corto|abrevia)\b/.test(n)) { this.io.setBreve && this.io.setBreve(true); return this.repetir('Vale, modo breve.'); }
       if (/^(modo completo|con ejemplos|mas explicaciones|explicamelo|modo normal)\b/.test(n)) { this.io.setBreve && this.io.setBreve(false); return this.repetir('Vale, te lo explico todo.'); }
       if (g.elegir) {
@@ -736,6 +743,39 @@
           return this.repetir('Corregido.');
         }
         g.propuesta = null;
+      }
+      // Corrección de la última reparación anotada («el pilar… serían cuatro metros»)
+      if (!(input && input.act) && g.ultInc && /\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) {
+        const ui = g.ultInc; const el = ui.inc.el;
+        const habla = ui.inc.tipo === 'rep_ha' ? new RegExp('\\b(' + (el === 'pilar' ? 'pilar|pilares' : el === 'viga' ? 'vigas?' : el === 'canto' ? 'cantos?' : 'reparacion') + ')\\b') : ui.inc.tipo === 'humedad' ? /\bhumedad\b/ : /\b(fisuras?|grietas?)\b/;
+        if (habla.test(n) && /(serian|son|en total|total|metros|en las|cada|no es|era|eran|corrige|cambia|mejor)/.test(n)) {
+          let v = null;
+          const tot = n.match(/(?:serian|son|en total|total|eran|era)\s+(\S+(?:\s+con\s+\S+)?)\s+metros?/);
+          if (tot) v = num(tot[1]);
+          if (v == null) { const mult = n.match(/en (?:las|los|sus)? ?(dos|tres|cuatro|2|3|4) (esquinas|aristas|caras|lados|cantos)/); const b = num(text); if (mult && b) v = round2(b * ({ dos: 2, tres: 3, cuatro: 4 }[mult[1]] || +mult[1])); else v = b; }
+          if (v > 0) {
+            const k = ui.inc.tipo === 'humedad' && ui.inc.causa !== 'capilaridad' ? 'sup' : 'largo';
+            g.propInc = { v, k };
+            this.save();
+            return this.ask('¿Cambio la reparación ' + (el === 'pilar' ? 'del pilar' : el === 'viga' ? 'de la viga' : '') + ' a ' + fmt(v) + (k === 'sup' ? ' metros cuadrados' : ' metros') + (ui.inc.n > 1 ? ' por elemento' : '') + '?', [{ label: 'Sí, cámbialo', value: 'sí', act: { ok: true } }, { label: 'No', value: 'no', act: { ok: false } }]);
+          }
+        }
+      }
+      if (!(input && input.act) && g.ultInc && g.ultInc.inc.tipo === 'rep_ha' && !/\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n) && new RegExp('\\b(' + (g.ultInc.inc.el === 'viga' ? 'vigas?' : 'pilar|pilares') + ')\\b').test(n) && !detectarIncidencia(n)) {
+        const ui = g.ultInc.inc; return this.repetir('Ya tengo anotada la reparación: ' + fmt((ui.n || 1) * (ui.largo || 0)) + ' metros' + (ui.n > 1 ? ' en ' + ui.n + ' elementos' : '') + '. Si hay que cambiarla, dime los metros.');
+      }
+      if (g.propInc) {
+        const v = input && input.act && typeof input.act.ok === 'boolean' ? input.act.ok : yesNo(n);
+        const pi = g.propInc; g.propInc = null;
+        if (v === true) {
+          const ui = g.ultInc; ui.inc[pi.k] = pi.v;
+          this.obra.partidas.forEach((p) => { p.lineas = p.lineas.filter((l) => l.inc !== ui.id); });
+          this.obra.partidas = this.obra.partidas.filter((p) => p.lineas.length || !p.creada || p.guia);
+          const hechas = anotarIncidencia(this.obra, this.dlg.cat, ui.inc, ui.inc.est, ui.id);
+          this.save(); this.io.flash && this.io.flash('ok');
+          return this.repetir('Corregido: ' + fmt(pi.v) + ' metros en ' + hechas.length + ' ' + plural(hechas.length, 'partida') + '.');
+        }
+        if (v === false) { this.save(); return this.repetir('Vale, lo dejo como estaba.'); }
       }
       // «Las ventanas de antes son puertas»: cambio de tipo de los huecos anotados
       if (!(input && input.act)) {
@@ -783,7 +823,20 @@
       // Incidencia fuera del guion («este pilar tiene los hierros oxidados…»)
       if (!(input && input.act) && !/^(inc_|nueva_|borrar_)/.test(g.paso) && g.paso !== 'trabajos' && n.split(' ').length >= 3) {
         const inc = detectarIncidencia(n);
-        if (inc) return this.incidencia(inc, text);
+        if (inc) {
+          const corte = text.search(/\b(pero|y tambi[eé]n|tambi[eé]n|adem[aá]s|por cierto|y veo|veo que|veo tambi[eé]n|me fijo|ojo)\b/i);
+          let pre = '';
+          if (corte > 3) {
+            const parte = text.slice(0, corte).trim();
+            const s0 = this.pasos[g.paso];
+            if (s0 && !detectarIncidencia(norm(parte))) {
+              this._captura = ''; let r0, cap;
+              try { r0 = s0.a.call(this, parte, norm(parte), {}, this.g.d); } finally { cap = this._captura; this._captura = undefined; }
+              if (r0 !== false) pre = (cap || '').replace(/\s*¿[^?]*\?\s*$/, '').trim();
+            }
+          }
+          return this.incidencia(inc, text, pre);
+        }
       }
       // «Añade armario empotrado en la habitación»: partida dictada en cualquier momento
       const mp = n.match(/^(?:anade|anadir|añade|añadir|crea|crear|apunta|mete|quiero (?:anadir|poner)|nueva partida|otra partida|partida nueva)\s+(?:una |un |la |el |partida (?:de |para )?)?(.{4,})$/);
@@ -1016,7 +1069,7 @@
       return this.toma.zonas.some((z) => z.ambito === 'interior') ? 'est_mas' : 'est_nombre';
     }
     /* ---- incidencias fuera del guion ---- */
-    incidencia(inc, frase) {
+    incidencia(inc, frase, pre) {
       const g = this.g;
       if (!g.ret) g.ret = { paso: g.paso, d: g.d, fin: g.fin };
       g.fin = false;
@@ -1024,7 +1077,7 @@
       const ult = this.toma.zonas.length ? this.toma.zonas[this.toma.zonas.length - 1] : null;
       inc.est = z ? z.nombre : (g.paso && g.paso !== 'hecho' && g.paso !== 'libre' && ult ? ult.nombre : (this.obra.estActiva || ''));
       g.paso = 'inc_q'; g.d = { inc, i: -1 }; this.fails = 0; this.save();
-      return this.sigIncQ('Entendido: ' + INC_TXT[inc.tipo](inc).toLowerCase().replace(/^./, (c) => c.toUpperCase()) + '.');
+      return this.sigIncQ((pre ? pre + ' ' : '') + 'Entendido: ' + INC_TXT[inc.tipo](inc).toLowerCase().replace(/^./, (c) => c.toUpperCase()) + '.');
     }
     sigIncQ(pre) {
       const d = this.g.d; const inc = d.inc;
@@ -1032,11 +1085,12 @@
       if (INC_Q[i]) { this.g.d = { inc, i }; this.save(); return this.repetir(pre); }
       // Todas las respuestas: se anotan las partidas
       const hechas = anotarIncidencia(this.obra, this.dlg.cat, inc, inc.est);
+      if (hechas[0]) this.g.ultInc = { id: hechas[0].l.inc, inc: JSON.parse(JSON.stringify(inc)) };
       this.save();
       this.io.flash && this.io.flash('ok');
       const cant = inc.tipo === 'humedad' ? (inc.causa === 'capilaridad' ? fmt(inc.largo) + ' metros de muro' : fmt(inc.sup) + ' metros cuadrados') : inc.tipo === 'fisura' ? fmt(inc.largo) + ' metros de fisuras'
         : inc.el === 'canto' ? fmt(inc.largo) + ' metros de canto' : inc.el === 'pilar' || inc.el === 'viga' ? fmt(hechas[0] ? E.parcial(hechas[0].l) : 0) + ' metros lineales de ' + inc.el + (inc.n > 1 ? (inc.el === 'pilar' ? 'es' : 's') : '') : fmt(hechas[0] ? E.parcial(hechas[0].l) : 0) + ' metros cuadrados de reparación';
-      const msg = (pre ? pre + ' ' : '') + 'Anotado' + (inc.est ? ' en ' + art(inc.est) : '') + ': ' + cant + (hechas.length > 1 ? ', en ' + hechas.length + ' partidas' : ', en una partida') + '.';
+      const msg = (pre ? pre + ' ' : '') + 'Anotado' + (inc.est ? ' en ' + art(inc.est) : '') + ': ' + (inc.nota ? inc.nota + ', ' : '') + cant + (hechas.length > 1 ? ', en ' + hechas.length + ' partidas' : ', en una partida') + '.';
       return this.volver(msg + ' Seguimos.');
     }
     /* ---- partida dictada que no está en la lista ---- */
@@ -1201,9 +1255,9 @@
     return [['D3001.0120', 'm', 'Apertura de fisura', L(com, 1, i.largo)], ['D3002.0080', 'm', 'Sellado de fisuras', L(com, 1, i.largo)]];
   }
   /** Anota las partidas de la incidencia en la obra (no se tocan al regenerar las del asistente). */
-  function anotarIncidencia(obra, cat, i, est) {
+  function anotarIncidencia(obra, cat, i, est, idFijo) {
     const modo = (obra.guia && obra.guia.incModo) || 'fases';
-    const seq = (obra.guia.incSeq = (obra.guia.incSeq || 0) + 1);
+    const seq = idFijo ? idFijo.slice(1) : (obra.guia.incSeq = (obra.guia.incSeq || 0) + 1);
     const hechas = [];
     incPartidas(i, modo).forEach(([code, u, label, ln]) => {
       const d = cat.byCode.get(code) || (cat.index.search(label).filter((r) => r.doc.u === u && r.s >= 0.6)[0] || {}).doc || null;
@@ -1251,7 +1305,7 @@
         else if (/(instalac|fontaner|electric|agua|enchufe|luz|desague|saneamiento)/.test(n)) k = 'instalaciones';
         else if (/(vivienda|piso|casa|integral|completa|chalet|apartamento|toda la|reforma)/.test(n)) k = 'vivienda';
         else if (/^(otra|otro|otra cosa|algo distinto|libre|diferente)/.test(n)) k = 'otra';
-        else { const m = n.match(/(estancia|habitacion|parcial|bano|aseo|cocina|dormitorio|salon|comedor|pasillo|terraza|local|despacho|oficina|lavadero|recibidor)/); if (m) { k = 'estancia'; if (!/^(estancia|habitacion|parcial)$/.test(m[1])) est = estanciaName(text.replace(/^(?:una?|el|la)\s+/i, '')); } }
+        else { const m = n.match(/(estancia|habitacion|parcial|bano|aseo|cocina|dormitorio|salon|comedor|pasillo|terraza|local|despacho|oficina|lavadero|recibidor|sotano|garaje|trastero|buhardilla|atico|estudio|vestidor|despensa|galeria|porche|bodega|almacen|nave|sala)/); if (m) { k = 'estancia'; if (!/^(estancia|habitacion|parcial)$/.test(m[1])) est = estanciaName(text.replace(/^(?:una?|el|la)\s+/i, '')); } }
       }
       if (!k) return false;
       this.obra.ambito = { vivienda: 'vivienda', estancia: 'estancia', instalaciones: 'instalaciones', fachada: 'libre', cubierta: 'libre', otra: 'libre' }[k];
@@ -1318,7 +1372,7 @@
       if (/^superficie y perimetro$/.test(n)) return this.ask('Dime la superficie y el perímetro, por ejemplo «superficie 18 y perímetro 17».', []);
       if (/^(empezar de nuevo|empezamos de nuevo|borra|de nuevo|otra vez)/.test(n)) { z.tramos = []; delete z.area; delete z.perimetro; this.save(); return this.repetir('Empezamos de nuevo.'); }
       if (/(puerta|ventana|balconera)/.test(n)) z.huecosMencion = true;
-      const cierra = /(cierr|ya esta|termin|vuelvo al principio|eso es todo|hasta el inicio)/.test(n);
+      const cierra = /(cierr|cerrar|cerramos|cerrado|ya esta|termin|vuelvo al principio|eso es todo|hasta el inicio|poligono)/.test(n);
       const w = parseWalk(text);
       if (!w && cierra && z.tramos && z.tramos.length >= 2) return this.cerrarPlanta(z, true);
       if (!w) return false;
@@ -1363,6 +1417,7 @@
     aprox(text) { const v = numeros(text).map((x) => (x > 20 ? round2(x / 100) : x)).filter((x) => x > 1.5 && x < 8); return v.length ? { txt: String(v[0]).replace('.', ','), q: '¿La altura es ' + fmt(v[0]) + ' metros?' } : null; },
     a(text, n, input, d) {
       const z = this.zona(d.zid);
+      if (/(cierr|cerrar|poligono)/.test(n) && !/\d/.test(n)) return this.repetir('La planta ya está cerrada.');
       let v = null;
       if (/(misma|igual|lo mismo)/.test(n)) { const cand = this.toma.zonas.filter((x) => x.ambito === 'interior' && x.altura && x.id !== d.zid); const prev = buscarZona({ toma: { zonas: cand } }, n) || cand.pop(); if (prev) v = prev.altura; }
       if (v == null) v = num(text);
@@ -1388,7 +1443,11 @@
     saltar(d) { return this.siguienteEstancia(d); },
     a(text, n, input, d) {
       const z = this.zona(d.zid); z.huecos = z.huecos || [];
-      if (d.pend && !/\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien)\b/.test(n)) return this.repetir();
+      if (d.pend && /^(cero|0)$|(no es ninguna|no hay|no es una|ninguna ventana|ninguna puerta|elimina|quita|borra|olvida|no existe|no la|no lo|cancela|eso no es)/.test(n)) {
+        const cola = (d.cola || []).slice(); this.g.d = cola.length ? { zid: d.zid, pend: cola[0], cola: cola.slice(1) } : { zid: d.zid }; this.save();
+        return this.repetir('Vale, quito ' + (d.pend.tipo === 'puerta' ? 'esa puerta' : 'esa ventana') + '.');
+      }
+      if (d.pend && /^(si|sí)?\s*(tiene|hay)?\s*una? (ventana|puerta)$/.test(n)) return this.repetir();
       if (d.pend) {
         let an, al;
         if (d.pend.an) { const v = numeros(text)[0]; if (!(v > 0)) return false; an = d.pend.an; al = v > 10 ? round2(v / 100) : v; }
@@ -1532,7 +1591,11 @@
       if (it.tipo === 'causa') { const c3 = causaHumedad(n); if (!c3) return false; inc.causa = c3; this.g.d = { inc, i: d.i }; this.save(); return this.sigIncQ(); }
       if (it.tipo === 'area') { const dm = dims2(text); let v = dm.ancho > 0 && dm.alto > 0 ? round2(dm.ancho * dm.alto) : num(text); if (!(v > 0)) return false; inc.sup = round2(v); this.g.d = { inc, i: d.i }; this.save(); return this.sigIncQ(); }
       if (it.tipo === 'count') { const c = count(text); if (!(c >= 1)) return false; inc.n = c; }
-      else if (it.tipo === 'num') { let v = num(text); if (v == null) return false; if (it.k === 'canto' && v > 1.5) v = round2(v / 100); if (v > 200 && it.k !== 'canto') v = round2(v / 100); if (!(v > 0)) return false; inc[it.k] = round2(v); }
+      else if (it.tipo === 'num') { let v = num(text);
+        const mult = n.match(/en (?:las|los|sus)? ?(dos|tres|cuatro|2|3|4) (esquinas|aristas|caras|lados|cantos)/);
+        const tot = n.match(/(?:serian|son|en total|total)\s+(\S+(?:\s+con\s+\S+)?)\s+metros?/);
+        if (tot && num(tot[1]) > 0) v = num(tot[1]);
+        else if (mult && v > 0) { const k = { dos: 2, tres: 3, cuatro: 4 }[mult[1]] || +mult[1]; v = round2(v * k); inc.nota = fmt(v) + ' metros (' + mult[1] + ' ' + mult[2] + ')'; } if (v == null) return false; if (it.k === 'canto' && v > 1.5) v = round2(v / 100); if (v > 200 && it.k !== 'canto') v = round2(v / 100); if (!(v > 0)) return false; inc[it.k] = round2(v); }
       else if (it.tipo === 'dims') { const dm = dims2(text); if (!(dm.ancho > 0 && dm.alto > 0)) return false; const sc = (v) => (it.k === 'sec' && v > 2 ? round2(v / 100) : v); inc[it.k] = [sc(dm.ancho), sc(dm.alto)]; }
       else if (it.tipo === 'modo') { if (/(una sola|en una|completa|todo junto)/.test(n)) { this.g.incModo = 'una'; this.g.d = { inc, i: d.i }; this.save(); return this.sigIncQ(); } }
       if (it.tipo === 'modo') { if (/(desglos|fases|separad|por partes|cada trabajo|varias)/.test(n)) this.g.incModo = 'fases'; else if (/(una|sola|junta|todo|complet|unica)/.test(n)) this.g.incModo = 'una'; else return false; }
@@ -1607,6 +1670,7 @@
     formato: () => '«generar mediciones» si ha terminado de elegir; «medir algo más» si quiere volver a medir; o la lista de trabajos que nombra separados por comas',
     a(text, n) {
       if (/(generar|genera|general|mediciones|ediciones|listo|ya esta|hecho|terminar|termina|terminado|acabar|acabado|fin\b|vale ya|eso es todo|hazlo|calcula|con lo marcado|lo marcado|asi esta bien|adelante)/.test(n) || /^(ya|vale|ok|si)$/.test(n)) return this.generarMediciones();
+      if (/^(no,? )?(elegir|elige|ver|vamos a) (los )?trabajos/.test(n)) return this.repetir('Ya estamos en los trabajos.');
       if (/(medir algo mas|medir mas|otra estancia|volver a medir|me falta|falta medir|otra zona)/.test(n)) { this.io.trabajos && this.io.trabajos(false); return this.volverAMedir(); }
       const ws = trabajosPara(this.obra);
       const sel = seleccion(this.obra);
@@ -1825,7 +1889,7 @@
       const z = this.zona(d.zid);
       if (/^superficie y perimetro$/.test(n)) return this.ask('Dime la superficie y el perímetro, por ejemplo «superficie 48 y perímetro 28».', []);
       if (/^(empezar de nuevo|borra|de nuevo)/.test(n)) { z.tramos = []; this.save(); return this.repetir('Empezamos de nuevo.'); }
-      const cierra = /(cierr|ya esta|termin|vuelvo al principio|eso es todo)/.test(n);
+      const cierra = /(cierr|cerrar|cerramos|cerrado|ya esta|termin|vuelvo al principio|eso es todo|poligono)/.test(n);
       const w = parseWalk(text);
       const fin = (pre) => this.say('cub_remonte', { zid: z.id }, pre);
       if (!w && cierra && z.tramos && z.tramos.length >= 2) { this.cerrarCub(z); return fin(this.msgCub(z)); }
