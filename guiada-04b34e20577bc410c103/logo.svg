@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A3447"/><stop offset="1" stop-color="#1A2231"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g stroke="#22D3EE" stroke-width="5" stroke-dasharray="2 11" stroke-linecap="round" opacity=".85">
+    <path d="M150 70V450M256 70V450M362 70V450M60 150H452M60 262H452M60 374H452"/>
+  </g>
+  <g stroke="#94A3B8" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M160 108H352M174 96L160 108L174 120M338 96L352 108L338 120"/>
+    <path d="M100 160V364M88 174L100 160L112 174M88 350L100 364L112 350"/>
+    <path d="M396 182L420 262L396 330M362 214L396 182M362 214L420 262"/>
+  </g>
+  <g fill="#94A3B8"><circle cx="396" cy="182" r="10"/><circle cx="420" cy="262" r="10"/><circle cx="396" cy="330" r="10"/></g>
+  <path fill="#14E4FA" d="M150 374V150H206L256 248L306 150H362V374H318V230L272 318H240L194 230V374Z"/>
+  <g stroke="#1E293B" stroke-width="7" stroke-linecap="square">
+    <path d="M150 170H176M150 194H168M150 218H176M150 242H168M150 266H176M150 290H168M150 314H176M150 338H168M150 358H176"/>
+  </g>
+  <circle cx="362" cy="214" r="11" fill="#1E293B"/>
+  <text x="330" y="196" font-family="Montserrat, Arial, sans-serif" font-weight="800" font-size="40" fill="#1E293B" text-anchor="middle">AI</text>
+  <g fill="#94A3B8" font-family="Arial, sans-serif" font-weight="700" font-size="34"><text x="340" y="432" text-anchor="middle">3D</text></g>
+  <path d="M310 400H370M322 390L310 400L322 410M358 390L370 400L358 410" stroke="#94A3B8" stroke-width="5" fill="none" stroke-linecap="round"/>
+</svg>
