@@ -258,9 +258,10 @@
       let an = conv(d[0]), al = conv(d[1]);
       if (!tipo && an == null) continue;
       if (an == null && /\b(no|ni|ningun|ninguna|sin|aun no|todavia no)\b/.test(n)) continue; // «no estamos con puertas ni ventanas»
+      const deducido = !tipo && !tipoPrev;
       if (!tipo) tipo = tipoPrev || (al >= 1.9 && an <= 1.2 ? 'puerta' : 'ventana'); // «una de 90»: mismo tipo que el anterior
       tipoPrev = tipo;
-      out.push({ tipo, uds: uds || 1, an: an ?? null, al: al ?? null, bal: /balconera/.test(n) });
+      out.push({ tipo, uds: uds || 1, an: an ?? null, al: al ?? null, bal: /balconera/.test(n), deducido, palabras: n.split(' ').filter((w) => w.length > 3 && !/^(puerta|ventana|metros?|tiene|cuarenta|treinta|veinte|sesenta|setenta|ochenta|noventa)/.test(w)).length });
     }
     return out;
   }
@@ -910,8 +911,9 @@
       // Si se puede adivinar lo que quería decir, se confirma en vez de repetir la pregunta
       const guess = s.aprox ? s.aprox.call(this, text, g.d) : null;
       if (guess && this.fails <= 3) { g.conf = guess; this.save(); return this.ask(guess.q, CH([{ label: 'Sí', value: 'sí' }, { label: 'No', value: 'no' }]).concat(salidas)); }
-      if (this.fails === 1) return this.ask('Perdona, no te he entendido. ' + ayuda, chips.concat(salidas).slice(0, 6));
-      if (this.fails === 2 && this.aiOk()) return this.consultarIA(text, s, ayuda);
+      // Lo que la app no entiende sola lo interpreta la IA a la primera, con todo el contexto
+      if (this.fails === 1 && this.aiOk() && !this._enIA) return this.interpretarConIA(text, s, ayuda);
+      if (this.fails <= 2) return this.ask((this.fails === 1 ? 'Perdona, no te he entendido. ' : 'Sigo sin entenderlo. ') + ayuda, chips.concat(salidas).slice(0, 6));
       if (this.fails <= 3) return this.ask('No consigo entenderlo. Podemos volver al paso anterior' + (s.saltar ? ', saltar este dato' : '') + ' o probar otra vez: ' + ayuda, salidas.concat(chips).slice(0, 6));
       // No se insiste más: se vuelve un paso atrás para no atascarse
       this.lastFail = null;
@@ -920,6 +922,70 @@
       return this.atras('Para no atascarnos, volvemos al paso anterior.');
     }
     aiOk() { return !!(this.io.agent && this.io.aiReady && this.io.aiReady()); }
+    /** Resumen breve de lo medido en la zona actual, para dar contexto a la IA. */
+    contextoZona() {
+      const z = (this.g.d && this.g.d.zid && this.zona(this.g.d.zid)) || this.toma.zonas[this.toma.zonas.length - 1];
+      if (!z) return 'sin datos';
+      if (z.ambito === 'interior') return z.nombre + ': ' + (z.area != null ? fmt(z.area) + ' m², ' : '') + (z.altura ? 'altura ' + fmt(z.altura) + ', ' : '') + 'huecos ' + huecosTxt(z.huecos);
+      return z.nombre;
+    }
+    /** La IA deduce qué quiere el usuario (contestar, corregir, volver, terminar, una reparación…) y la app lo ejecuta. */
+    interpretarConIA(text, s, ayuda) {
+      const io = this.io; const g = this.g;
+      const q = this.preg(g.paso, g.d);
+      const formato = s.formato ? s.formato.call(this, g.d) : ayuda;
+      const token = (this.aiTok = (this.aiTok || 0) + 1);
+      const paso = g.paso;
+      io.note && io.note('Lo consulto con la IA…');
+      const corto = (x, n) => String(x || '').replace(/\s+/g, ' ').slice(0, n);
+      const pendiente = ('ASISTENTE GUIADO de mediciones. Pregunta en curso: «' + corto(q.t, 130) + '». Formato de la respuesta: ' + corto(formato, 90) + '. Medido: ' + corto(this.contextoZona(), 90) +
+        '. Entiende qué quiere el usuario aunque lo diga mal y responde SOLO con una acción "orden" cuyo texto sea UNA de: «responder: RESPUESTA», «atras», «terminar», «saltar», «repetir», «corregir: QUÉ CAMBIA, dicho claro», «incidencia: PATOLOGÍA Y ELEMENTO», «partida: DESCRIPCIÓN | ud/m/m2/m3», «estancia: NOMBRE», «borrar: NOMBRE». Si dudas, sin acciones y con una pregunta breve.').slice(0, 600);
+      const ctx = { obra_id: this.obra.id, frase: text, estancia: (this.zona() || {}).nombre || '', altura: null, planta: '', activa: null, otras: [], resto: [], candidatas: [], historial: (io.history ? io.history() : []).slice(-8), pendiente };
+      const fallback = () => { if (token !== this.aiTok || this.g.paso !== paso) return; this.ask('Perdona, no te he entendido. ' + ayuda, q.c); };
+      const timer = setTimeout(() => { if (token === this.aiTok) { this.aiTok++; fallback(); } }, 15000);
+      Promise.resolve(io.guia ? io.guia(Object.assign({ pregunta: q.t, formato }, ctx)) : io.agent(ctx)).then((raw) => {
+        clearTimeout(timer);
+        if (token !== this.aiTok || this.g.paso !== paso) return;
+        const r = raw && raw.result ? raw.result : raw;
+        const txt = respuestaIA(r);
+        if (!txt) return r && r.pregunta ? this.ask(r.pregunta, (r.opciones || []).slice(0, 4).map((o) => ({ label: cap(o), value: o })).concat(q.c || []).slice(0, 6)) : fallback();
+        return this.ejecutarIntencion(txt, s, text) || fallback();
+      }).catch(() => { clearTimeout(timer); fallback(); });
+    }
+    ejecutarIntencion(txt, s, original) {
+      const g = this.g;
+      const m = String(txt).match(/^\s*(responder|atras|atrás|terminar|saltar|repetir|ayuda|corregir|incidencia|partida|estancia|borrar)\s*:?\s*([\s\S]*)$/i);
+      if (!m) { const r0 = s.a.call(this, txt, norm(txt), {}, g.d); return r0 === false ? null : r0; } // respuesta directa
+      const tipo = norm(m[1]), val = (m[2] || '').trim();
+      const reentra = (frase) => { this._enIA = true; try { return this.handle(frase, norm(frase), {}); } finally { this._enIA = false; } };
+      switch (tipo) {
+        case 'responder': {
+          if (!val) return null;
+          // Lo que crea estancias o zonas se confirma; el resto se aplica y se dice
+          if (/^(inicio|est_nombre|est_mas|ele_est|fon_est|cub_nombre|mas_zona)$/.test(g.paso)) { g.conf = { txt: val, q: 'He entendido: «' + val + '». ¿Es correcto?' }; this.save(); return this.ask(g.conf.q, CH([{ label: 'Sí', value: 'sí' }, { label: 'No', value: 'no' }])); }
+          const r1 = s.a.call(this, val, norm(val), { conf: true }, g.d);
+          return r1 === false ? null : r1;
+        }
+        case 'atras': return this.atras();
+        case 'terminar': return reentra('finalizar');
+        case 'saltar': return s.saltar ? s.saltar.call(this, g.d) : this.repetir('Este dato no se puede saltar.');
+        case 'repetir': return this.repetir();
+        case 'ayuda': return this.ayuda();
+        case 'corregir': return val ? reentra(val) : null;
+        case 'incidencia': { const inc = detectarIncidencia(norm(val + ' ' + original)); return inc ? this.incidencia(inc, val) : null; }
+        case 'partida': { const [desc, u] = val.split('|').map((x) => (x || '').trim()); if (!desc) return null; const un = /^(ud|m|m2|m3)$/.test(norm(u || '')) ? norm(u) : null; if (!un) return this.nuevaPartida(desc); const amb = this.ambitoActual(); const w = anadirPropia(this.obra, desc, un, amb, this.zonasPara(amb, null)); return this.terminarNueva(w); }
+        case 'estancia': {
+          if (!val) return null;
+          const ya = buscarZona({ toma: { zonas: this.toma.zonas.filter((x) => x.ambito === 'interior') } }, norm(val));
+          if (ya) return this.repetir('«' + ya.nombre + '» ya está medida; si hay que corregir algo, dímelo.');
+          this._captura = ''; try { this.say('est_nombre', {}); } finally { this._captura = undefined; }
+          const r2 = P.est_nombre.a.call(this, val, norm(val), { conf: true }, {});
+          return r2 === false ? this.repetir() : r2;
+        }
+        case 'borrar': { const z = buscarZona(this.obra, norm(val)); return z ? this.pedirBorrar(z) : null; }
+      }
+      return null;
+    }
     consultarIA(text, s, ayuda) {
       const io = this.io;
       const q = s.q.call(this, this.g.d);
@@ -1337,7 +1403,7 @@
     a(text, n, input) {
       const limpio = text.replace(/^(?:empezamos|empezamos por|vamos|vamos al?|vamos a la|por|el|la|en|al|seguimos (?:con|por)|ahora|pasamos al?|pasamos a la)\s+/i, '').replace(/^(?:el|la)\s+/i, '');
       const mw = limpio.match(/^(.*?)[,.]?\s+(\d+(?:[.,]\d+)?\s*(?:por|x|metros|m\b|derecha|izquierda).*)$/i);
-      const base = (mw ? mw[1] : limpio).split(/[,.]/)[0].replace(/\s+(?:que\s+)?(?:es|mide|tiene|son|de|con|rectangular|cuadrad[oa]|rectangulo|en forma de l|irregular|y)\b.*$/i, '').trim();
+      const base = (mw ? mw[1] : limpio).split(/[,.]/)[0].replace(/\s+(?:que\s+)?(?:es|mide|tiene|son|con|rectangular|cuadrad[oa]|rectangulo|en forma de l|irregular|y)\b.*$|\s+de\s+(?=\d|rectang|cuadrad|unos|unas|uno\b|dos\b|tres\b|cuatro\b|cinco\b).*$/i, '').trim();
       const nombre = estanciaName(base || limpio);
       if (!nombre || nombre.split(' ').length > 4 || !/[a-zñ]/i.test(norm(nombre)) || yesNo(norm(nombre)) !== null || NO_NOMBRE.test(norm(nombre)) || /^\d|\bpor\b/.test(norm(nombre))) return false;
       if (!input || (!input.conf && !input.act)) {
@@ -1475,9 +1541,10 @@
       }
       if (/^otra igual|^otro igual|^la misma|^igual/.test(n) && z.huecos.length) { const u = z.huecos[z.huecos.length - 1]; u.uds = (u.uds || 1) + 1; this.save(); return this.repetir('Anotada otra igual: ' + fmtUds(u.uds) + ' en total.'); }
       const hs = parseHuecos(text);
+      if (hs.length && hs.every((x) => x.deducido) && hs[0].palabras >= 3 && !(input && input.conf)) return false; // frase rara: que la interprete la IA
       if (!hs.length) {
         if (FIN.test(n) || yesNo(n) === false) return this.siguienteEstancia(d);
-        if (yesNo(n) === true) return this.ask('Dímela con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «una ventana de 1,20 por 1,10».', CH(['Una puerta de 0,82 por 2,03', 'Una ventana de 1,20 por 1,10']));
+        if (yesNo(n) === true && n.split(' ').length <= 4) return this.ask('Dímela con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «una ventana de 1,20 por 1,10».', CH(['Una puerta de 0,82 por 2,03', 'Una ventana de 1,20 por 1,10']));
         return false;
       }
       let notaAlto = '';

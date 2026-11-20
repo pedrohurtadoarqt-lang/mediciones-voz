@@ -690,7 +690,7 @@
     s = s.replace(/^(el|la|los|las|al|a|en)\s+/, '');
     // números en palabra → dígito
     s = s.split(' ').map((w) => (w in NUMW && w !== 'un' && w !== 'una') ? String(NUMW[w]) : w).join(' ');
-    s = s.replace(/\bbano\b/g, 'baño').replace(/\bsalon\b/g, 'salón').replace(/\bhabitacion\b/g, 'habitación').replace(/\bbalcon\b/g, 'balcón')
+    s = s.replace(/\s+(de|del|con|y)$/, '').replace(/\bnin([ao]s?)\b/g, 'niñ$1').replace(/\bbano\b/g, 'baño').replace(/\bsalon\b/g, 'salón').replace(/\bhabitacion\b/g, 'habitación').replace(/\bbalcon\b/g, 'balcón')
       .replace(/\bjardin\b/g, 'jardín').replace(/\bsotano\b/g, 'sótano').replace(/\batico\b/g, 'ático').replace(/\balmacen\b/g, 'almacén').replace(/\bgaleria\b/g, 'galería').replace(/\blavanderia\b/g, 'lavandería');
     return titleCase(s);
   }

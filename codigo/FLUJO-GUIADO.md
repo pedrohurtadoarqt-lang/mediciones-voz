@@ -121,3 +121,6 @@ En Ajustes («Modo breve») o por voz («modo breve» / «modo completo»). Las 
 
 ## Humedades
 Se pregunta la causa (capilaridad, condensación o filtración) salvo que se diga en la frase, y se puede cambiar diciéndolo en cualquier momento. Condensación: limpieza con fungicida y pintura antimoho (m²). Filtración: picado, impermeabilización con mortero impermeable y enfoscado (m²). Capilaridad: como antes (metros de muro y altura). Si la frase trae la superficie («unos dos metros cuadrados»), no se vuelve a preguntar.
+
+## Cuando no entiende algo: la IA interpreta la intención
+Si una frase no encaja con lo que la app sabe reconocer (aunque esté mal dicha: «bueno, esto ya lo dejamos aquí que tengo prisa», «espera, la altura que te he dicho no era esa», «vámonos a la habitación de la niña», «hay que poner un rodapié de madera nuevo en todo esto»), al primer fallo la consulta a la IA con el contexto de la pregunta y de la estancia. La IA la traduce a una orden: responder a la pregunta, volver atrás, terminar, saltar, repetir, corregir un dato, anotar una incidencia, añadir una partida, cambiar a otra estancia o borrar una. Lo que crea algo nuevo (una estancia, la respuesta a qué medimos) se confirma antes de aplicarlo. Sin conexión o sin sesión iniciada, sigue como antes: reformula la pregunta y ofrece volver atrás.
