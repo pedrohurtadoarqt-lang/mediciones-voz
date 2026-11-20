@@ -75,8 +75,9 @@ flowchart TD
 5. Tercer fallo: ofrece volver al paso anterior, saltar el dato o probar otra vez.
 6. Cuarto fallo: vuelve solo al paso anterior («Para no atascarnos, volvemos al paso anterior») y quita la estancia que se había empezado sin medidas.
 7. Para corregir basta con decir «me he equivocado», «eso está mal», «atrás»… o pulsar «↩ Atrás», que está siempre visible. Primero deshace lo último anotado en la misma pregunta (la última puerta, pared, fachada o faldón); si no hay nada, vuelve a la pregunta anterior y dice qué ha quitado.
-8. Lo que interpreta la IA y los nombres de estancia poco habituales se confirman antes de aplicarse: el asistente nunca sigue por su cuenta con algo que no se ha dicho.
-9. En cualquier momento: «atrás», «ayuda», «repite», «saltar», «cancela» (medición libre), «borra el pasillo», «añade armario empotrado en el dormitorio».
+8. **Correcciones al dictar:** si en la misma frase se corrige una medida («0,82 por 2,30, no, perdón, 2,03», «dos sesenta… digo dos setenta», «12 por 7, no, 8 de alto»), la app no anota nada y pregunta cuál de las dos versiones oídas es la correcta (botones o «la primera / la segunda / la medida»). Si la corrección llega en la frase siguiente («no, era 2,10»), compara lo anotado con lo nuevo y pregunta igual; solo cambia lo anotado si se elige la nueva.
+9. Lo que interpreta la IA y los nombres de estancia poco habituales se confirman antes de aplicarse: el asistente nunca sigue por su cuenta con algo que no se ha dicho.
+10. En cualquier momento: «atrás», «ayuda», «repite», «saltar», «cancela» (medición libre), «borra el pasillo», «añade armario empotrado en el dormitorio».
 
 ## Reglas de medición
 | Regla | Cálculo |

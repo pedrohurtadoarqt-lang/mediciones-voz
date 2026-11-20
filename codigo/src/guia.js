@@ -72,6 +72,64 @@
     return cap(out.join(' ').trim());
   }
 
+  /* ---------------- Autocorrecciones dentro de una frase ----------------
+   * «una puerta de 0,82 por 2,30, no, perdón, 2,03» → «una puerta de 0,82 por 2,03»
+   * «dos sesenta… digo dos setenta» → «2,7» · «12 por 7, no, 8 de alto» → «12 por 8» */
+  const MARCA = /^(no|noo|perdon|perdona|digo|corrijo|rectifico|error|espera|mejor|dicho|quiero|decir|sea|equivocado|equivoque|me|he|era|eran|es|son)$/;
+  const MARCA_INI = /^(no|noo|perdon|perdona|digo|corrijo|rectifico|error|espera|mejor|quiero|sea|equivocado|equivoque)$/;
+  const numTxt = (v) => String(round2(v)).replace('.', ',');
+  const txtTok = (t) => (t.k === 'N' ? (t.art ? t.orig : numTxt(t.v)) : t.w);
+  function corregirFrase(text) {
+    let tk = tokenize(String(text));
+    for (let vuelta = 0; vuelta < 4; vuelta++) {
+      const esN = (t) => t.k === 'N' && !t.art;
+      // última marca de corrección con números delante y detrás
+      let i0 = -1;
+      for (let i = tk.length - 1; i > 0; i--) {
+        if (tk[i].k === 'W' && MARCA_INI.test(tk[i].n) && !(tk[i].n === 'mejor' && !(tk[i + 1] && tk[i + 1].n === 'dicho')) && !(tk[i].n === 'quiero' && !(tk[i + 1] && tk[i + 1].n === 'decir'))) {
+          if (tk.slice(0, i).some(esN) && tk.slice(i + 1).some(esN)) { i0 = i; break; }
+        }
+      }
+      if (i0 < 0) break;
+      // la marca puede ser una racha («no, perdón, digo»): se salta entera
+      let a = i0; while (a > 0 && tk[a - 1].k === 'W' && MARCA.test(tk[a - 1].n)) a--;
+      let b = i0; while (b + 1 < tk.length && tk[b + 1].k === 'W' && MARCA.test(tk[b + 1].n)) b++;
+      const izq = tk.slice(0, a), der = tk.slice(b + 1);
+      const iN = izq.map((t, k) => (esN(t) ? k : -1)).filter((k) => k >= 0);
+      const dN = der.filter(esN);
+      const etiqueta = der.find((t) => t.k === 'W' && /^(alto|altura|ancho|anchura|largo|longitud)$/.test(t.n));
+      let res;
+      if (dN.length === 1 && etiqueta && iN.length >= 2) {
+        res = izq.slice(); const k = /^alt/.test(etiqueta.n) ? iN[iN.length - 1] : iN[0]; res[k] = Object.assign({}, res[k], { v: dN[0].v });
+      } else if (dN.length < iN.length) {
+        res = izq.slice(); const sust = iN.slice(iN.length - dN.length);
+        sust.forEach((k, j) => { res[k] = Object.assign({}, res[k], { v: dN[j].v }); });
+        der.filter((t) => t.k === 'W' && /^(izquierda|derecha|grados?)$/.test(t.n)).forEach((t) => res.push(t));
+      } else {
+        const lead = []; for (const t of izq) { if (esN(t)) break; lead.push(t); }
+        const derLead = []; for (const t of der) { if (esN(t)) break; derLead.push(t); }
+        res = (derLead.some((t) => t.k === 'W' && !/^(de|la|el|es|son|era|a|y)$/.test(t.n)) ? [] : lead).concat(der);
+      }
+      tk = res;
+    }
+    return tk.map(txtTok).join(' ');
+  }
+
+  /** Primera versión oída: lo dicho antes de la primera marca de corrección (con números a ambos lados). */
+  function primeraVersion(text) {
+    const tk = tokenize(String(text)); const esN = (t) => t.k === 'N' && !t.art;
+    for (let i = 1; i < tk.length; i++) {
+      if (tk[i].k === 'W' && MARCA_INI.test(tk[i].n) && tk.slice(0, i).some(esN) && tk.slice(i + 1).some(esN)) {
+        let a = i; while (a > 0 && tk[a - 1].k === 'W' && MARCA.test(tk[a - 1].n)) a--;
+        return tk.slice(0, a).map(txtTok).join(' ');
+      }
+    }
+    return null;
+  }
+  /** Texto para leer y mostrar: los números con dos decimales. */
+  const verTxt = (text) => tokenize(String(text)).map((t) => (t.k === 'N' ? (t.art ? t.orig : fmt(t.v)) : t.w)).join(' ');
+  const numsDe = (text) => tokenize(String(text)).filter((t) => t.k === 'N' && !t.art).map((t) => round2(t.v));
+
   /* ---------------- Recorrido de paredes ---------------- */
   const ANG = new Set([30, 45, 60, 90, 120, 135, 150, 180, 270]);
   /** Lee paredes dictadas: "4 derecha 3 derecha…", "pared uno 4 metros, giro 90 a la derecha…",
@@ -568,7 +626,7 @@
       const g = this.g;
       if (g.paso && g.paso !== paso) { g.hist = (g.hist || []).concat([{ paso: g.paso, d: g.d, toma: JSON.stringify(this.toma) }]).slice(-40); }
       g.paso = paso; g.d = Object.assign({}, d || {}); g.fin = false;
-      this.fails = 0; g.conf = null; g.buf = null; this.lastFail = null;
+      this.fails = 0; g.conf = null; g.buf = null; g.elegir = null; this.lastFail = null;
       this.save();
       const s = this.pasos[paso];
       const q = s.q.call(this, g.d);
@@ -584,6 +642,17 @@
       this.aiTok = (this.aiTok || 0) + 1; // si había una consulta a la IA en curso, se abandona
       if (/^(para|parar|paro|stop|basta|basta ya|calla|callate|silencio|espera|pausa|para de escuchar|deja de escuchar|para ya)$/.test(n)) { this.io.pause && this.io.pause(); return; }
       if (/^(repite|repitelo|como dices|que has dicho|perdona|seguir midiendo|seguimos|continuar|continua|otra vez)$/.test(n)) return this.repetir();
+      if (g.elegir) {
+        const r1 = this.resolverEleccion(text, n, input);
+        if (r1 !== false) return r1;
+      }
+      // «No, era 2,03» justo después de anotar algo: se corrige lo último sin volver atrás
+      if (!(input && input.act) && g.ultima && /^(no+|perdon|perdona|me he equivocado|me equivoque|error|corrijo|rectifico|espera|mejor dicho|quiero decir|era|eran)\b/.test(n) && /\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\b/.test(n)) {
+        const u = g.ultima;
+        const resto = text.replace(/^\s*(?:no+|perd[oó]n|perdona|me he equivocado|me equivoqu[eé]|error|corrijo|rectifico|espera|mejor dicho|quiero decir)\b[\s,.:;]*/i, '').replace(/^(?:era|eran|es|son)\s+/i, '');
+        const nuevo = corregirFrase(u.text + ' , no , ' + resto), viejo = corregirFrase(u.text);
+        if (numsDe(nuevo).join() !== numsDe(viejo).join()) return this.elegirEntre([viejo, nuevo], 'ultima', 'Tengo anotado');
+      }
       if (!(input && input.act) && (/^(atras|anterior|deshaz|deshacer|corrige|corregir|rectifica|error)\b/.test(n) || /(me he equivocado|me equivoque|me he confundido|esta mal|eso no es|no es eso|eso no\b|vuelve atras|volver atras|vamos atras|ir atras|para atras|paso anterior|un paso atras|retrocede|no queria decir|no era eso|borra eso|quita eso|deshaz eso)/.test(n))) return this.atras();
       if (/^(ayuda|que puedo decir|no se|como)\b/.test(n) && !(input && input.act)) return this.ayuda();
       if (/^(saltar|salta|siguiente pregunta|pasa|no lo se|no se sabe|luego)$/.test(n) && this.pasos[g.paso].saltar) return this.pasos[g.paso].saltar.call(this, g.d);
@@ -607,6 +676,7 @@
       if (mp && !(input && input.act) && !/^(puerta|ventana|hueco|otra igual|otro igual|faldon|fachada)/.test(mp[1])) return this.nuevaPartida(text.replace(/^\s*\S+\s+(?:(?:una|un|la|el)\s+)?(?:partida\s+(?:de\s+|para\s+)?)?/i, ''));
       const s = this.pasos[g.paso];
       if (!s) { g.fin = true; return this.dlg.st_idle(text, n, input); }
+      const pasoIni = g.paso, dIni = g.d;
       // Confirmación de una interpretación aproximada («¿Es rectangular de 3 por 3?»)
       if (g.conf) {
         const c = g.conf; g.conf = null;
@@ -616,10 +686,17 @@
       }
       // Frase cortada por una pausa («3 por…»): se espera al resto
       if (g.buf) { text = g.buf + ' ' + text; n = norm(text); g.buf = null; }
+      // Corrección dentro de la misma frase: se pregunta cuál de las dos versiones oídas es la buena
+      if (!(input && input.act) && /\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n)) {
+        const c = corregirFrase(text), p0 = primeraVersion(text);
+        if (p0 && norm(c) !== norm(p0) && numsDe(c).join() !== numsDe(p0).join()) return this.elegirEntre([p0, c], 'frase', 'He oído dos medidas');
+      }
       if (!(input && input.act) && /\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n) && /\b(por|x|de|con|coma|punto|y|mas)\s*$/.test(n)) { g.buf = text; this.save(); return this.ask('Sigue, te escucho.', []); }
       const r = s.a.call(this, text, n, input || {}, g.d);
       if (r === false) return this.noEntiendo(text);
       this.lastFail = null;
+      // Se recuerda la última respuesta con medidas para poder corregirla en la frase siguiente
+      if (this.obra.guia && /\d/.test(corregirFrase(text))) this.obra.guia.ultima = { paso: pasoIni, d: dIni, text };
       return r;
     }
     atras(msg) {
@@ -694,6 +771,60 @@
       }).catch(() => { clearTimeout(timer); fallback(); });
     }
 
+    /** Pregunta cuál de las versiones oídas es la correcta (no se anota nada hasta elegir). */
+    elegirEntre(ops, modo, intro) {
+      const g = this.g;
+      g.elegir = { ops, modo };
+      this.save();
+      const t = intro === 'Tengo anotado'
+        ? 'Tengo anotado «' + verTxt(ops[0]) + '» y ahora me dices «' + verTxt(ops[1]) + '». ¿Cuál es la correcta?'
+        : intro + ': «' + verTxt(ops[0]) + '» y «' + verTxt(ops[1]) + '». ¿Cuál es la correcta?';
+      return this.ask(t, [{ label: verTxt(ops[1]), value: 'la segunda', act: { op: 1 } }, { label: verTxt(ops[0]), value: 'la primera', act: { op: 0 } }, { label: 'Ninguna, lo repito', value: 'ninguna', act: { op: -1 } }]);
+    }
+    resolverEleccion(text, n, input) {
+      const g = this.g; const e = g.elegir;
+      let op = input && input.act && typeof input.act.op === 'number' ? input.act.op : null;
+      if (op === null) {
+        if (/^(ninguna|ninguno|ni una ni otra|lo repito|ninguna de las dos)/.test(n)) op = -1;
+        else if (/(primer|la de antes|la anterior|la vieja|la que tenias|como estaba|la uno)/.test(n)) op = 0;
+        else if (/(segund|ultim|la nueva|la buena|la otra|la dos|la correcta es la segunda|la que te acabo)/.test(n)) op = 1;
+        else {
+          const ns = numsDe(text);
+          if (ns.length) { const enA = ns.every((v) => numsDe(e.ops[0]).includes(v)), enB = ns.every((v) => numsDe(e.ops[1]).includes(v)); if (enB && !enA) op = 1; else if (enA && !enB) op = 0; }
+        }
+      }
+      if (op === null) { g.elegir = null; this.save(); return false; } // no es una elección: se trata como respuesta nueva
+      g.elegir = null; this.save();
+      if (op === -1) return this.repetir('Vale, dímelo otra vez.');
+      const elegido = e.ops[op];
+      if (e.modo === 'ultima') return op === 0 ? this.repetir('Vale, lo dejo como estaba.') : this.corregirUltima(elegido, true);
+      // Corrección en la misma frase: se aplica la versión elegida a la pregunta en curso
+      const s = this.pasos[g.paso];
+      const r = s.a.call(this, elegido, norm(elegido), {}, g.d);
+      if (r === false) return this.noEntiendo(elegido);
+      if (this.obra.guia) this.obra.guia.ultima = { paso: g.paso, d: g.d, text: elegido };
+      return r;
+    }
+    /** Deshace en silencio la última respuesta con medidas y aplica la versión elegida. */
+    corregirUltima(text, elegido) {
+      const g = this.g; const u = g.ultima; if (!u || !this.pasos[u.paso]) return false;
+      const nuevo = elegido ? text : corregirFrase(u.text + ' , no , ' + text);
+      if (norm(nuevo) === norm(corregirFrase(u.text))) return false;
+      // Volver al estado de antes de esa respuesta
+      const sp = this.pasos[g.paso];
+      if (g.paso === u.paso && sp.deshacer) { if (!sp.deshacer.call(this, g.d)) return false; }
+      else {
+        const h = (g.hist || []).slice().reverse().find((x) => x.paso === u.paso); if (!h) return false;
+        while (g.hist.length && g.hist[g.hist.length - 1] !== h) g.hist.pop();
+        g.hist.pop(); this.obra.toma = JSON.parse(h.toma);
+      }
+      g.paso = u.paso; g.d = u.d; g.conf = null; g.buf = null; g.ultima = null; this.fails = 0; this.save();
+      this.io.note && this.io.note('Corrijo: ' + verTxt(nuevo));
+      const r = this.pasos[u.paso].a.call(this, nuevo, norm(nuevo), {}, g.d);
+      if (r === false) return this.repetir('No he podido corregirlo; dímelo de nuevo.');
+      g.ultima = { paso: u.paso, d: u.d, text: nuevo };
+      return r;
+    }
     /* ---- borrar zonas ---- */
     pedirBorrar(z) {
       const g = this.g;
@@ -1754,7 +1885,7 @@
     }
   };
 
-  const api = { Guia, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
+  const api = { Guia, corregirFrase, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Guia = api;
 })(typeof self !== 'undefined' ? self : this);
