@@ -3297,6 +3297,55 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     return null;
   }
+  /* Correcciones de palabra («una puerta, digo una ventana»): categorías de palabras que se sustituyen entre sí */
+  const CATS = [
+    /^(puertas?|ventanas?|balconeras?|ventanal(es)?|huecos?)$/, /^(plana|inclinada|azotea|tejado)$/, /^(plato|banera|ducha)$/,
+    /^(derecha|izquierda)$/, /^(fontaneria|electricidad|instalaciones)$/, /^(reducido|normal|suspendido)$/,
+    /^(unidades|unidad|metros?|cuadrados?|cubicos?|lineales?)$/, /^(norte|sur|este|oeste|principal|trasera|lateral|delantera|posterior)$/,
+    /^(salon|comedor|cocina|bano|aseo|dormitorio|habitacion|pasillo|recibidor|terraza|balcon|galeria|lavadero|despacho|estudio|vestidor|trastero|garaje|sotano|cuarto|sala|local|oficina|entrada|distribuidor)$/,
+    /^(pilar|pilares|viga|vigas|canto|cantos|muro|techo|forjado)$/, /^(si|no)$/
+  ];
+  const catDe = (w) => CATS.findIndex((re) => re.test(w));
+  const FUERTE = /\b(digo|perdon|perdona|mejor dicho|quiero decir|me he equivocado|me equivoque|corrijo|rectifico|o sea)\b/;
+  /** Dos versiones de una frase con corrección de palabra, o null. */
+  function versionesPalabra(text, estricto) {
+    const orig = String(text).replace(/(?<!\d)[.,;:]|[.,;:](?!\d)|[!?¡¿]/g, ' ').split(/\s+/).filter(Boolean);
+    const w = orig.map((x) => norm(x));
+    // última marca: fuerte, o «no» entre dos palabras de la misma categoría
+    let a = -1, b = -1;
+    for (let i = w.length - 1; i > 0; i--) {
+      const dos = w[i - 1] + ' ' + w[i];
+      if (/^(mejor dicho|quiero decir|me equivoque|o sea)$/.test(dos)) { a = i - 1; b = i; break; }
+      if (/^(he equivocado)$/.test(dos) && w[i - 2] === 'me') { a = i - 2; b = i; break; }
+      if (/^(digo|perdon|perdona|corrijo|rectifico)$/.test(w[i])) { a = i; b = i; break; }
+      if (w[i] === 'no' && i + 1 < w.length) {
+        const der = w.slice(i + 1).map(catDe).filter((c) => c >= 0 && c !== CATS.length - 1);
+        const izq = w.slice(0, i).map(catDe).filter((c) => c >= 0 && c !== CATS.length - 1);
+        if (der.length && izq.includes(der[0])) { a = i; b = i; break; }
+      }
+    }
+    if (a < 1 || b >= w.length - 1) return null;
+    while (a > 0 && /^(no|perdon|perdona|digo|eh|bueno)$/.test(w[a - 1])) a--;
+    while (b + 1 < w.length && /^(no|perdon|perdona|digo|eh|bueno|que)$/.test(w[b + 1])) b++;
+    const L = orig.slice(0, a), Rr = orig.slice(b + 1), lw = w.slice(0, a), rw = w.slice(b + 1);
+    if (!L.length || !Rr.length) return null;
+    // ¿Qué palabra corrige? La primera de la derecha con categoría conocida, sustituida en la izquierda
+    for (let j = 0; j < rw.length; j++) {
+      const c = catDe(rw[j]); if (c < 0) continue;
+      let k = -1; for (let q = lw.length - 1; q >= 0; q--) if (catDe(lw[q]) === c) { k = q; break; }
+      if (k >= 0) {
+        // Expresión entera de esa categoría («plato de ducha» → «bañera»)
+        let k0 = k; while (k0 - 2 >= 0 && lw[k0 - 1] === 'de' && catDe(lw[k0 - 2]) === c) k0 -= 2;
+        const ART = /^(el|la|los|las|un|una|unos|unas)$/;
+        let ini = k0, nuevo = [Rr[j]];
+        if (j > 0 && ART.test(rw[j - 1]) && k0 > 0 && ART.test(lw[k0 - 1])) { nuevo = [Rr[j - 1], Rr[j]]; ini = k0 - 1; }
+        const v2 = L.slice(0, ini).concat(nuevo, L.slice(k + 1), Rr.slice(j + 1));
+        return [L.join(' '), v2.join(' ')];
+      }
+    }
+    // Sin palabra equivalente: la segunda versión es lo dicho después de la marca
+    return estricto ? null : [L.join(' '), Rr.join(' ')];
+  }
   /** Texto para leer y mostrar: los números con dos decimales. */
   const verTxt = (text) => tokenize(String(text)).map((t) => (t.k === 'N' ? (t.art ? t.orig : fmt(t.v)) : t.w)).join(' ');
   const numsDe = (text) => tokenize(String(text)).filter((t) => t.k === 'N' && !t.art).map((t) => round2(t.v));
@@ -3818,6 +3867,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (r1 !== false) return r1;
       }
       // «No, era 2,03» justo después de anotar algo: se corrige lo último sin volver atrás
+      if (!(input && input.act) && g.ultima && /^(digo|perdon|perdona|me he equivocado|me equivoque|corrijo|rectifico|mejor dicho|quiero decir|no+,? (era|es|eran|son|digo|perdon) )/.test(n) && !/\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\b/.test(n)) {
+        const resto = text.replace(/^\s*(?:no+[\s,]+)?(?:digo|perd[oó]n|perdona|me he equivocado|me equivoqu[eé]|corrijo|rectifico|mejor dicho|quiero decir|era|es|eran|son)\b[\s,.:;]*/i, '').replace(/^(?:era|es|eran|son)\s+/i, '');
+        const vp = resto.trim() ? versionesPalabra(g.ultima.text + ' digo ' + resto, true) : null;
+        if (vp && norm(vp[0]) !== norm(vp[1])) return this.elegirEntre([g.ultima.text, vp[1]], 'ultima', 'Tengo anotado');
+      }
       if (!(input && input.act) && g.ultima && /^(no+|perdon|perdona|me he equivocado|me equivoque|error|corrijo|rectifico|espera|mejor dicho|quiero decir|era|eran)\b/.test(n) && /\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\b/.test(n)) {
         const u = g.ultima;
         const resto = text.replace(/^\s*(?:no+|perd[oó]n|perdona|me he equivocado|me equivoqu[eé]|error|corrijo|rectifico|espera|mejor dicho|quiero decir)\b[\s,.:;]*/i, '').replace(/^(?:era|eran|es|son)\s+/i, '');
@@ -3862,12 +3916,17 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         const c = corregirFrase(text), p0 = primeraVersion(text);
         if (p0 && norm(c) !== norm(p0) && numsDe(c).join() !== numsDe(p0).join()) return this.elegirEntre([p0, c], 'frase', 'He oído dos medidas');
       }
+      if (!(input && input.act)) {
+        const vp = versionesPalabra(text);
+        if (vp && norm(vp[0]) !== norm(vp[1])) return this.elegirEntre(vp, 'frase', 'He oído dos cosas');
+        if (!vp && FUERTE.test(n) && n.split(' ').length > 2 && !/^(digo|perdon|perdona|me he equivocado|me equivoque|corrijo|rectifico)\b/.test(n)) return this.ask('Me has corregido algo y no sé qué parte. Dímelo otra vez, solo la versión buena.', this.pasos[g.paso].q.call(this, g.d).c);
+      }
       if (!(input && input.act) && /\d|\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/.test(n) && /\b(por|x|de|con|coma|punto|y|mas)\s*$/.test(n)) { g.buf = text; this.save(); return this.ask('Sigue, te escucho.', []); }
       const r = s.a.call(this, text, n, input || {}, g.d);
       if (r === false) return this.noEntiendo(text);
       this.lastFail = null;
       // Se recuerda la última respuesta con medidas para poder corregirla en la frase siguiente
-      if (this.obra.guia && /\d/.test(corregirFrase(text))) this.obra.guia.ultima = { paso: pasoIni, d: dIni, text };
+      if (this.obra.guia && !(input && input.act) && n.split(' ').length >= 1 && !/^(si|no|vale|ok|ninguna|ninguno|ya esta|atras)$/.test(n)) this.obra.guia.ultima = { paso: pasoIni, d: dIni, text };
       return r;
     }
     atras(msg) {
@@ -3980,7 +4039,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     corregirUltima(text, elegido) {
       const g = this.g; const u = g.ultima; if (!u || !this.pasos[u.paso]) return false;
       const nuevo = elegido ? text : corregirFrase(u.text + ' , no , ' + text);
-      if (norm(nuevo) === norm(corregirFrase(u.text))) return false;
+      if (norm(nuevo) === norm(u.text) || (!elegido && norm(nuevo) === norm(corregirFrase(u.text)))) return false;
       // Volver al estado de antes de esa respuesta
       const sp = this.pasos[g.paso];
       if (g.paso === u.paso && sp.deshacer) { if (!sp.deshacer.call(this, g.d)) return false; }
@@ -4417,7 +4476,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     ayuda: () => 'Dime el nombre de la siguiente estancia, o «elegir trabajos» si ya has medido todas.',
     formato: () => '«elegir trabajos» si ha terminado de medir estancias, o el nombre de la siguiente estancia',
     a(text, n, input) {
-      if (/(instalac|fontaner|electric)/.test(n)) { this.g.insPreguntado = true; return P.ins_tipo.a.call(this, text, n, {}, {}); }
+      if (/(instalac|fontaner|electric)/.test(n)) { this.g.insPreguntado = true; const ri = P.ins_tipo.a.call(this, text, n, {}, {}); return ri === false ? this.say('ins_tipo', {}) : ri; }
       if (/(trabajo|terminar|termin|ya esta|ya estan|eso es todo|no hay mas|ninguna mas|nada mas|elegir|seleccion|he acabado|ya he medido)/.test(n) || /^(no|ninguna|listo|ya)$/.test(n)) return this.finEstancias();
       if (/^(si|otra|otra estancia|seguimos|vale)$/.test(n)) return this.say('est_nombre', {});
       return P.est_nombre.a.call(this, text, n, input, {});
@@ -5056,7 +5115,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
   };
 
-  const api = { Guia, corregirFrase, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
+  const api = { Guia, corregirFrase, versionesPalabra, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Guia = api;
 })(typeof self !== 'undefined' ? self : this);

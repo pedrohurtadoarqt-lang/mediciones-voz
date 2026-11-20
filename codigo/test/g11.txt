@@ -1,0 +1,23 @@
+vivienda
+salón 4 por 3
+2,60
+dos puertas de 0,82 por 2,03
+sí, una puerta, digo una ventana
+la segunda
+1,20 por 1,10
+no
+cocina, digo el baño
+la segunda
+2 por 1,8
+2,50
+ninguna
+instalaciones
+fontanería
+baño
+1
+2
+sí
+plato de ducha, no, bañera
+la segunda
+no
+digo electricidad
