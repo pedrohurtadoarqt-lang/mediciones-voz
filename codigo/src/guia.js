@@ -2356,7 +2356,7 @@
     }
   };
 
-  const api = { Guia, corregirFrase, versionesPalabra, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
+  const api = { Guia, numeros, corregirFrase, versionesPalabra, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Guia = api;
 })(typeof self !== 'undefined' ? self : this);

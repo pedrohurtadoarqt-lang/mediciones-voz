@@ -166,7 +166,46 @@
     }
     function splitSentences(t) { return (t.match(/[^.?!;]+[.?!;]*/g) || [t]).map((s) => s.trim()).filter(Boolean); }
     let speakId = 0;
-    function speak(text) {
+    // Voz natural en la nube: si responde rápido se usa; si no, la voz del móvil
+    let cloudTTS = null, fuente = null;
+    const cacheVoz = new Map();
+    function playPCM(b64, rate, my) {
+      return new Promise((resolve) => {
+        const c = audioCtx(); if (!c) return resolve(false);
+        try {
+          const bin = atob(b64), n = bin.length >> 1, buf = c.createBuffer(1, n, rate || 24000), ch = buf.getChannelData(0);
+          for (let i = 0; i < n; i++) { let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
+          const src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination);
+          fuente = src;
+          const fin = () => { if (fuente === src) fuente = null; resolve(true); };
+          src.onended = fin;
+          setTimeout(fin, buf.duration * 1000 + 1500); // por si no llega el aviso de fin
+          if (my !== speakId) return resolve(true);
+          src.start();
+        } catch (e) { resolve(false); }
+      });
+    }
+    async function speakCloud(text) {
+      const my = ++speakId;
+      if (mode === 'native' && listening) { try { rec && rec.abort(); } catch (e) {} listening = false; }
+      speaking = true; lastSaid = text; state();
+      let r = cacheVoz.get(text) || null;
+      if (!r) {
+        try { r = await Promise.race([cloudTTS(text), new Promise((res) => setTimeout(() => res(null), 4500))]); } catch (e) { r = null; }
+        if (r && r.audio) { cacheVoz.set(text, r); if (cacheVoz.size > 40) cacheVoz.delete(cacheVoz.keys().next().value); }
+      }
+      if (my !== speakId) return true; // interrumpido mientras se generaba
+      if (!r || !r.audio) { speaking = false; state(); return false; }
+      const ok = await playPCM(r.audio, r.rate, my);
+      lastStop = Date.now();
+      if (my === speakId) { speaking = false; state(); }
+      return ok;
+    }
+    async function speak(text) {
+      if (text && cloudTTS && navigator.onLine !== false) { if (await speakCloud(text)) return; }
+      return speakLocal(text);
+    }
+    function speakLocal(text) {
       return new Promise((resolve) => {
         if (!text) return resolve();
         const my = ++speakId;
@@ -200,7 +239,7 @@
           const frase = parts[i++];
           const u = new SpeechSynthesisUtterance(frase);
           u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = rate;
-          if (pitchQ && /\?\s*$/.test(frase)) { u.pitch = 1.18; u.rate = rate * 0.97; } // la pregunta, algo más aguda y pausada
+          if (pitchQ && /\?\s*$/.test(frase)) { u.pitch = 1.08; } // la pregunta, algo más aguda y pausada
           cur = u;
           u.onend = () => { if (cur === u) { cur = null; next(); } }; u.onerror = () => { if (cur === u) { clearTimeout(guard); finish(); } };
           synth.speak(u);
@@ -219,7 +258,7 @@
       const said = new Set(w(lastSaid));
       return h.filter((x) => said.has(x)).length / h.length >= 0.75;
     }
-    function stopSpeaking() { if (speaking) lastStop = Date.now(); speakId++; if (synth) try { synth.cancel(); } catch (e) {} if (tts) try { tts.stop(); } catch (e) {} speaking = false; state(); }
+    function stopSpeaking() { if (fuente) { try { fuente.stop(); } catch (e) {} fuente = null; } if (speaking) lastStop = Date.now(); speakId++; if (synth) try { synth.cancel(); } catch (e) {} if (tts) try { tts.stop(); } catch (e) {} speaking = false; state(); }
     /** fromTap: true si viene de un toque del usuario. */
     function listen(fromTap) {
       if (fromTap) { needTap = false; autoRestarts = 0; unlock(); }
@@ -276,7 +315,7 @@
       get mode() { return mode; }, get listening() { return listening; }, get speaking() { return speaking; },
       get needTap() { return needTap; }, set needTap(v) { needTap = v; state(); },
       get micState() { return micState; }, get inFrame() { return inFrame; },
-      setRate(r) { rate = r; }, setVoice(uri) { pickVoice(uri); },
+      setRate(r) { rate = r; }, setVoice(uri) { pickVoice(uri); }, setCloudTTS(fn) { cloudTTS = fn; cacheVoz.clear(); },
       voices() { return synth ? synth.getVoices().filter((v) => /^es/i.test(v.lang)) : []; },
       get voiceName() { return voice ? voice.name : ''; },
       get voiceURI() { return voice && voice.voiceURI; },
@@ -354,6 +393,11 @@
     if (lg.length > 1500) lg.splice(0, lg.length - 1500);
   }
   let sayToken = 0;
+  /** Voz natural (nube) si hay cuenta y está activada en Ajustes. */
+  function configurarVoz() {
+    const on = S.settings.vozNatural !== false && window.Cloud && Cloud.user && Cloud.voz;
+    VoiceAdapter.setCloudTTS(on ? (t) => Cloud.voz(t, S.settings.vozNombre || 'Kore') : null);
+  }
   const vozVista = () => S.view === 'obra' || S.view === 'trabajos';
   async function say(text, chips, opts) {
     opts = opts || {};
@@ -366,7 +410,7 @@
     if (!S.session) return; // hasta el primer toque el navegador no deja hablar ni escuchar
     const tk = ++sayToken;
     if (opts.end) VoiceAdapter.stopListening();
-    await VoiceAdapter.speak(text);
+    await VoiceAdapter.speak(opts.voz || text);
     if (opts.end) { endVoiceSession(); return; }
     if (tk !== sayToken) return;
     // Al acabar una pregunta, pitido de «te toca»
@@ -716,7 +760,9 @@
       (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>';
     return planCard +
       '<div class="card"><h3>Voz</h3><div class="meta">Reconocimiento: ' + ({ native: 'del navegador (es-ES)', claude: 'dictado de Claude', none: 'no disponible, usa el teclado' }[VoiceAdapter.mode]) + '.</div>' +
-      (vs.length ? '<div class="field"><label for="selvoice">Voz del asistente</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' +
+      '<label class="row" style="gap:10px"><input type="checkbox" id="chkvozn"' + (S.settings.vozNatural !== false ? ' checked' : '') + '> Voz natural (más humana; necesita cuenta y conexión, si tarda usa la del móvil)</label>' +
+      '<div class="field"><label for="selvozn">Voz natural</label><select id="selvozn">' + [['Kore', 'Mujer, firme'], ['Aoede', 'Mujer, ligera'], ['Leda', 'Mujer, juvenil'], ['Zephyr', 'Mujer, clara'], ['Puck', 'Hombre, animado'], ['Charon', 'Hombre, informativo'], ['Fenrir', 'Hombre, enérgico'], ['Orus', 'Hombre, firme']].map(([v, l]) => '<option value="' + v + '"' + ((S.settings.vozNombre || 'Kore') === v ? ' selected' : '') + '>' + l + ' (' + v + ')</option>').join('') + '</select></div>' +
+      (vs.length ? '<div class="field"><label for="selvoice">Voz del móvil (sin conexión)</label><select id="selvoice">' + vs.map((v) => '<option value="' + esc(v.voiceURI) + '"' + (v.voiceURI === VoiceAdapter.voiceURI ? ' selected' : '') + '>' + esc(v.name + ' (' + v.lang + ')') + '</option>').join('') + '</select></div>' +
         '<div class="row"><button class="btn small" data-a="testvoice" type="button">Probar la voz</button></div>' +
         '<details class="hint"><summary>¿Suena robótica? Instala una voz mejor (gratis)</summary>' +
         '<p><b>Android:</b> Ajustes → Accesibilidad → Salida de texto a voz → Motor preferido: «Servicios de voz de Google» → icono de ajustes → Instalar datos de voz → Español (España) → elige una voz y descárgala. Después reinicia el navegador.</p>' +
@@ -1313,6 +1359,8 @@
     if (ev.target.id === 'chktono') { S.settings.tono = ev.target.checked; VoiceAdapter.setPitchQ(ev.target.checked); saveSettings(); if (ev.target.checked) VoiceAdapter.speak('¿Se nota que te pregunto?').then(() => VoiceAdapter.earcon()); }
     if (ev.target.id === 'chkbreve') { S.settings.breve = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
+    if (ev.target.id === 'chkvozn') { S.settings.vozNatural = ev.target.checked; saveSettings(); configurarVoz(); VoiceAdapter.speak('Así sueno ahora.'); }
+    if (ev.target.id === 'selvozn') { S.settings.vozNombre = ev.target.value; saveSettings(); configurarVoz(); VoiceAdapter.speak('Hola, así suena esta voz. ¿Seguimos midiendo?'); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'bc3file' && ev.target.files[0]) importBC3(ev.target.files[0]);
     if (ev.target.id === 'restorefile' && ev.target.files[0]) restore(ev.target.files[0]);
@@ -1637,7 +1685,7 @@
   async function boot() {
     const st = await StorageAdapter.get('ajustes', 'settings');
     if (st) Object.assign(S.settings, st);
-    BillingGuard.plan = S.settings.plan; VoiceAdapter.setRate(S.settings.rate); VoiceAdapter.setPitchQ(S.settings.tono !== false); if (S.settings.voice) VoiceAdapter.setVoice(S.settings.voice);
+    BillingGuard.plan = S.settings.plan; VoiceAdapter.setRate(S.settings.rate); VoiceAdapter.setPitchQ(S.settings.tono !== false); configurarVoz(); if (S.settings.voice) VoiceAdapter.setVoice(S.settings.voice);
     // Catálogo base embebido → IndexedDB en el primer arranque
     let cats = await StorageAdapter.all('catalogos');
     const stored = cats.find((c) => c.id === 'palma48');
@@ -1651,7 +1699,7 @@
     // Servidor: sesión, sincronización y recuperación de contraseña
     if (window.Cloud && Cloud.init()) {
       Cloud.onAuth((ev, user) => {
-        applyServerPlan();
+        applyServerPlan(); configurarVoz();
         if (ev === 'PASSWORD_RECOVERY') accountSheet('newpass');
         if (user && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
           syncNow();

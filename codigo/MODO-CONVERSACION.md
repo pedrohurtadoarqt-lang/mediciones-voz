@@ -21,3 +21,14 @@ Cuenta iniciada y conexión. Sin IA, la obra nueva empieza con el asistente guia
 ## Pruebas
 - `BC3=… node test/conversa-sim.js test/c1.js`: conversación desordenada con IA simulada (respuestas fijas) y estado de mediciones resultante.
 - `node test/ui-conversa.js`: lo mismo en el navegador.
+
+## Correcciones a partir de la Prueba 16
+- **Cambios de idea**: «mejor que sea…», «en lugar de…», «no hace falta que sea…» sustituyen el trabajo anterior del mismo tipo (la IA lo quita; si no, la app quita el parecido anotado en los últimos turnos).
+- **Una sola demolición** al «picar las paredes» (la del revestimiento que se va a poner).
+- **Sanitarios** pedidos como trabajos (inodoro, lavabo, plato, mampara…) se anotan en la fontanería de la estancia, que genera aparatos, instalación y desagües.
+- **Números**: la app comprueba los de la IA con los dichos en la frase (altura con un solo número; rectángulo dicho con dos números aunque la IA mande superficie y perímetro).
+- **Preguntas sobre lo anotado** («¿cómo quedan las medidas del baño?», «¿qué trabajos llevamos?»): las contesta la app al momento, sin IA.
+- **Voz**: lo que dice en voz alta es más corto que lo que muestra («Apunto 9 trabajos.»).
+
+## Voz natural
+Función `voz` (Gemini, texto a voz): con cuenta y conexión la app habla con una voz natural (8 voces a elegir en Ajustes). Si tarda más de 4,5 s o falla, usa la voz del móvil. El servidor elige solo el modelo de voz disponible (o `TTS_MODELO`); el estilo se puede cambiar con `TTS_ESTILO`.
