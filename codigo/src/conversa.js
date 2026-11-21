@@ -48,7 +48,7 @@
     }
     resume() {
       const n = this.toma.zonas.length;
-      this.ask(n ? 'Seguimos. Llevo ' + n + ' ' + plural(n, 'zona') + ' anotadas. Cuéntame.' : 'Cuéntame la obra: por dónde empezamos y qué hay que hacer.', this.chips());
+      this.ask(n ? 'Seguimos. Llevo ' + n + ' ' + plural(n, 'zona anotada', 'zonas anotadas') + '. Cuéntame.' : 'Cuéntame la obra: por dónde empezamos y qué hay que hacer.', this.chips());
     }
 
     /* ---- entrada ---- */
@@ -142,15 +142,22 @@
 
     /* ---- consulta ---- */
     consultar(text) {
-      const tk = ++this.tok;
+      const tk = ++this.tok, obraId = this.obra.id;
       this.io.note && this.io.note('Tomando nota…');
       const ctx = this.contexto(text);
-      const lim = new Promise((r) => setTimeout(() => r({ timeout: true }), 25000));
+      const t0 = Date.now();
+      const lim = new Promise((r) => setTimeout(() => r({ timeout: true }), 45000));
+      // Si tarda, que se note que sigue trabajando
+      const aviso = setTimeout(() => { if (tk === this.tok) this.io.note && this.io.note('Sigo con ello…'); }, 7000);
       return Promise.race([Promise.resolve().then(() => this.io.conversa(ctx)), lim]).then((res) => {
-        if (tk !== this.tok) return;
-        if (!res || res.timeout || !res.result) throw new Error((res && res.error) || 'sin respuesta');
+        clearTimeout(aviso);
+        if (tk !== this.tok || !this.obra || this.obra.id !== obraId) return;
+        if (res && res.timeout) throw new Error('la IA no ha contestado a tiempo');
+        if (!res || !res.result) throw new Error((res && res.error) || 'sin respuesta');
+        if (this.io.esAdmin && this.io.esAdmin()) this.io.note && this.io.note('(IA: ' + (res.modelo || '?') + ', ' + fmt((Date.now() - t0) / 1000, 1) + ' s' + (res.aviso_claude ? '; Claude: ' + String(res.aviso_claude).slice(0, 140) : '') + ')');
         return this.aplicar(res.result, text);
       }).catch((e) => {
+        clearTimeout(aviso);
         if (tk !== this.tok) return;
         this.ask('No he podido consultarlo ahora mismo (' + (e && e.message ? e.message : 'error') + '). Repítemelo, o si prefieres te pregunto yo paso a paso.', [{ label: 'Repetir', value: text }, { label: 'Medición guiada', value: 'modo guiado' }]);
       });

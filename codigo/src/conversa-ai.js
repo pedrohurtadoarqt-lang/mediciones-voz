@@ -112,6 +112,11 @@
       '',
       'EL MENSAJE ("mensaje"): español de España, como un compañero de obra, MUY corto (máximo 12 palabras) porque se lee en voz alta. La app ya repite en voz alta lo que ha anotado (medidas y trabajos), así que NO repitas números ni listes trabajos: normalmente vacío. Úsalo solo para algo que la app no diga (una aclaración o una respuesta a una pregunta del usuario).',
       '',
+      'FORMATO DE LA RESPUESTA: SOLO un objeto JSON, sin texto antes ni después y sin ```. Pon ÚNICAMENTE los campos que tengan valor (omite los vacíos, null, "" y []). Ejemplo:',
+      '{"zonas":[{"ambito":"interior","nombre":"Dormitorio","largo":3,"ancho":3,"huecos_modo":"anadir","huecos":[{"tipo":"ventana","uds":1,"ancho":1.2,"alto":1.2},{"tipo":"puerta","uds":1,"ancho":0.8,"alto":2}]}],"trabajos":[{"id":"dem_gres","zonas":["Dormitorio"]},{"buscar":"Recrecido de mortero para nivelación de suelo","unidad":"m2","ambito":"interior","zonas":["Dormitorio"]}],"pregunta":"¿Qué altura tiene el dormitorio?"}',
+      'Campos posibles: zonas[] (ref, ambito, nombre, borrar, largo, ancho, superficie, perimetro, tramos[{largo,giro,angulo}], altura, huecos_modo, huecos[{tipo,uds,ancho,alto}], cub_tipo, remonte, pendiente, faldones[{nombre,largo,ancho}], prof_min, prof_max, fon_tipo, agua_fria, agua_fria_caliente, inodoro, ducha, mampara, bide, lavadora, lavavajillas, cuadro, puntos_luz, tomas, segun_norma, horno); trabajos[] (id, codigo, buscar, unidad, ambito, zonas[], quitar, medidas[{zona,comentario,uds,largo,ancho,alto}]); contenedores; seguridad_pct; accion; mensaje; pregunta; opciones[].',
+      'Números con punto decimal (1.2), en metros. "giro": "izquierda"/"derecha"/"". "tipo" de hueco: puerta, ventana o balconera. Valores si/no: "si" o "no".',
+      '',
       'CATÁLOGO DE TRABAJOS (id | ámbito | trabajo | unidad | cómo se mide):',
       cat
     ].join('\n');
@@ -134,10 +139,45 @@
       c ? 'PARTIDAS CANDIDATAS DE LA BASE (código | unidad | resumen):\n' + c : ''
     ].filter(Boolean).join('\n\n');
   }
-  /** Las respuestas de Claude usan "" y 0 para «sin dato»: se vuelven null. */
+  /** Saca el objeto JSON de un texto (por si viene con ``` o texto alrededor). */
+  function extraeJSON(txt) {
+    if (txt && typeof txt === 'object') return txt;
+    const t = String(txt || '').replace(/```(?:json)?/gi, '');
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
+  }
+  const ZV = { ref: '', ambito: 'interior', nombre: '', borrar: false, largo: null, ancho: null, superficie: null, perimetro: null, tramos: [], altura: null, huecos_modo: '', huecos: [], cub_tipo: '', remonte: null, pendiente: null, faldones: [], prof_min: null, prof_max: null, fon_tipo: '', agua_fria: null, agua_fria_caliente: null, inodoro: '', ducha: '', mampara: '', bide: '', lavadora: '', lavavajillas: '', cuadro: '', puntos_luz: null, tomas: null, segun_norma: '', horno: '' };
+  const TV = { id: '', codigo: '', buscar: '', unidad: '', ambito: '', zonas: [], quitar: false, medidas: [] };
+  const numOk = (v) => { if (typeof v === 'string') v = parseFloat(v.replace(',', '.')); return typeof v === 'number' && isFinite(v) ? v : null; };
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+  /** Completa la respuesta (los campos omitidos toman su valor vacío) y "" / 0 pasan a null. */
   function normaliza(out) {
-    const N = (v) => (v === '' || v === 0 ? null : v);
+    out = extraeJSON(out);
+    const N = (v) => { v = numOk(v); return v === 0 ? null : v; };
     if (!out || typeof out !== 'object') return null;
+    out = Object.assign({ zonas: [], trabajos: [], contenedores: null, seguridad_pct: null, accion: '', mensaje: '', pregunta: null, opciones: [] }, out);
+    out.zonas = arr(out.zonas).filter((z) => z && typeof z === 'object').map((z) => {
+      const o = Object.assign({}, ZV, z);
+      ['ref', 'ambito', 'nombre', 'huecos_modo', 'cub_tipo', 'fon_tipo', 'inodoro', 'ducha', 'mampara', 'bide', 'lavadora', 'lavavajillas', 'cuadro', 'segun_norma', 'horno'].forEach((k) => { o[k] = str(o[k]); });
+      if (!o.ambito) o.ambito = 'interior';
+      o.borrar = o.borrar === true;
+      o.tramos = arr(o.tramos).map((t) => ({ largo: numOk(t && t.largo), giro: str(t && t.giro), angulo: numOk(t && t.angulo) || 90 })).filter((t) => t.largo);
+      o.huecos = arr(o.huecos).map((h) => ({ tipo: str(h && h.tipo) || 'ventana', uds: numOk(h && h.uds) || 1, ancho: numOk(h && h.ancho), alto: numOk(h && h.alto) }));
+      o.faldones = arr(o.faldones).map((f) => ({ nombre: str(f && f.nombre), largo: numOk(f && f.largo), ancho: numOk(f && f.ancho) })).filter((f) => f.largo && f.ancho);
+      return o;
+    });
+    out.trabajos = arr(out.trabajos).filter((w) => w && typeof w === 'object').map((w) => {
+      const o = Object.assign({}, TV, w);
+      ['id', 'codigo', 'buscar', 'unidad', 'ambito'].forEach((k) => { o[k] = str(o[k]); });
+      o.zonas = arr(o.zonas).map(str).filter(Boolean); o.quitar = o.quitar === true;
+      o.medidas = arr(o.medidas).filter((m) => m && typeof m === 'object').map((m) => ({ zona: str(m.zona), comentario: str(m.comentario), uds: numOk(m.uds), largo: numOk(m.largo), ancho: numOk(m.ancho), alto: numOk(m.alto) }));
+      return o;
+    });
+    out.opciones = arr(out.opciones).map(str).filter(Boolean);
+    out.accion = str(out.accion); out.mensaje = str(out.mensaje);
+    out.pregunta = out.pregunta ? str(out.pregunta) : null;
     (out.zonas || []).forEach((z) => {
       ['largo', 'ancho', 'superficie', 'perimetro', 'altura', 'remonte', 'pendiente', 'prof_min', 'prof_max', 'agua_fria', 'agua_fria_caliente', 'puntos_luz', 'tomas'].forEach((k) => { z[k] = N(z[k]); });
       (z.huecos || []).forEach((h) => { h.ancho = N(h.ancho); h.alto = N(h.alto); if (!h.uds) h.uds = 1; });
@@ -147,7 +187,7 @@
     if (out.pregunta === '') out.pregunta = null;
     return out;
   }
-  const api = { CONV_SCHEMA, convSystem, buildConvUser, normaliza };
+  const api = { CONV_SCHEMA, convSystem, buildConvUser, normaliza, extraeJSON };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ConvAI = api;
 })(typeof self !== 'undefined' ? self : this);

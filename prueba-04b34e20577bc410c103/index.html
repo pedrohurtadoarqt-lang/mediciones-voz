@@ -3641,7 +3641,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     paredes: (z) => {
       if (!z.perimetro) return [];
       const out = [Object.assign(L('Perímetro por altura', 1, z.perimetro, null, z.altura || null), { dePlanta: 'perimetro', hPend: !z.altura })];
-      huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); });
+      if (z.altura) huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); }); // sin altura aún no se descuenta (saldría negativo)
       return out;
     },
     rodapie: (z) => {
@@ -5635,7 +5635,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     resume() {
       const n = this.toma.zonas.length;
-      this.ask(n ? 'Seguimos. Llevo ' + n + ' ' + plural(n, 'zona') + ' anotadas. Cuéntame.' : 'Cuéntame la obra: por dónde empezamos y qué hay que hacer.', this.chips());
+      this.ask(n ? 'Seguimos. Llevo ' + n + ' ' + plural(n, 'zona anotada', 'zonas anotadas') + '. Cuéntame.' : 'Cuéntame la obra: por dónde empezamos y qué hay que hacer.', this.chips());
     }
 
     /* ---- entrada ---- */
@@ -5729,15 +5729,22 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     /* ---- consulta ---- */
     consultar(text) {
-      const tk = ++this.tok;
+      const tk = ++this.tok, obraId = this.obra.id;
       this.io.note && this.io.note('Tomando nota…');
       const ctx = this.contexto(text);
-      const lim = new Promise((r) => setTimeout(() => r({ timeout: true }), 25000));
+      const t0 = Date.now();
+      const lim = new Promise((r) => setTimeout(() => r({ timeout: true }), 45000));
+      // Si tarda, que se note que sigue trabajando
+      const aviso = setTimeout(() => { if (tk === this.tok) this.io.note && this.io.note('Sigo con ello…'); }, 7000);
       return Promise.race([Promise.resolve().then(() => this.io.conversa(ctx)), lim]).then((res) => {
-        if (tk !== this.tok) return;
-        if (!res || res.timeout || !res.result) throw new Error((res && res.error) || 'sin respuesta');
+        clearTimeout(aviso);
+        if (tk !== this.tok || !this.obra || this.obra.id !== obraId) return;
+        if (res && res.timeout) throw new Error('la IA no ha contestado a tiempo');
+        if (!res || !res.result) throw new Error((res && res.error) || 'sin respuesta');
+        if (this.io.esAdmin && this.io.esAdmin()) this.io.note && this.io.note('(IA: ' + (res.modelo || '?') + ', ' + fmt((Date.now() - t0) / 1000, 1) + ' s' + (res.aviso_claude ? '; Claude: ' + String(res.aviso_claude).slice(0, 140) : '') + ')');
         return this.aplicar(res.result, text);
       }).catch((e) => {
+        clearTimeout(aviso);
         if (tk !== this.tok) return;
         this.ask('No he podido consultarlo ahora mismo (' + (e && e.message ? e.message : 'error') + '). Repítemelo, o si prefieres te pregunto yo paso a paso.', [{ label: 'Repetir', value: text }, { label: 'Medición guiada', value: 'modo guiado' }]);
       });
@@ -6996,7 +7003,8 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     ai: (ctx) => Cloud.ai(ctx),
     agent: (ctx) => Cloud.agent(ctx),
     conversa: (ctx) => Cloud.conversa(ctx),
-    historial: () => S.log.filter((m) => !/^(Tomando nota|Pensando|Lo consulto)/.test(m.text || '')).slice(-10).map((m) => ({ who: m.who === 'user' ? 'user' : 'app', text: String(m.text || '').slice(0, 400) })),
+    esAdmin: () => !!(window.Cloud && Cloud.isAdmin),
+    historial: () => S.log.filter((m) => !/^(Tomando nota|Sigo con ello|Pensando|Lo consulto|\(IA:)/.test(m.text || '')).slice(-10).map((m) => ({ who: m.who === 'user' ? 'user' : 'app', text: String(m.text || '').slice(0, 400) })),
     history: () => S.log.filter((m) => !m.svg).slice(-6),
     flash: (k) => { const p = dialog.active(); if (p && p.lineas.length) S.lastLineId = p.lineas[p.lineas.length - 1].id; render(); const t = $('.total'); if (t) { t.classList.add('flash-' + k); setTimeout(() => t.classList.remove('flash-' + k), 900); } },
     filterEst: (e) => { S.filterEst = e; },

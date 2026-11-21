@@ -417,7 +417,7 @@
     paredes: (z) => {
       if (!z.perimetro) return [];
       const out = [Object.assign(L('Perímetro por altura', 1, z.perimetro, null, z.altura || null), { dePlanta: 'perimetro', hPend: !z.altura })];
-      huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); });
+      if (z.altura) huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); }); // sin altura aún no se descuenta (saldría negativo)
       return out;
     },
     rodapie: (z) => {

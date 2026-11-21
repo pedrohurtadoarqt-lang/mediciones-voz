@@ -72,7 +72,6 @@ let ultimoErrorClaude = '';
 // ---------- Modo conversación ----------
 const CONV = (globalThis as any).ConvAI;
 const CONV_SYSTEM = CONV.convSystem((globalThis as any).MEDICIONA_TRABAJOS || []);
-const ESQUEMA_CONV_CLAUDE = paraClaude(CONV.CONV_SCHEMA);
 function saneaConversa(b: any) {
   return {
     obra_id: s(b?.obra_id, 60), frase: s(b?.frase, 600), zona: s(b?.zona, 80), esperando: s(b?.esperando, 300),
@@ -88,15 +87,18 @@ async function conversaClaude(ctx: any): Promise<{ out: any; tin: number; tout: 
   try {
     const r = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 3000,
+      max_tokens: 2500,
       thinking: { type: 'disabled' },
       system: [{ type: 'text', text: CONV_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      // Respuesta en JSON compacto (solo los campos con valor); sin esquema estricto, que era demasiado grande
       messages: [{ role: 'user', content: CONV.buildConvUser(ctx) }],
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA_CONV_CLAUDE } }
+      output_config: { effort: 'low' }
     } as any);
-    if (r.stop_reason === 'refusal' || r.stop_reason === 'max_tokens') { ultimoErrorClaude = 'stop_reason ' + r.stop_reason; return null; }
+    if (r.stop_reason === 'refusal') { ultimoErrorClaude = 'stop_reason ' + r.stop_reason; return null; }
     const txt = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-    return { out: CONV.normaliza(JSON.parse(txt)), tin: r.usage?.input_tokens || 0, tout: r.usage?.output_tokens || 0, modelo: CLAUDE_MODEL };
+    const out = CONV.normaliza(txt);
+    if (!out) { ultimoErrorClaude = 'respuesta no JSON: ' + txt.slice(0, 120); return null; }
+    return { out, tin: r.usage?.input_tokens || 0, tout: r.usage?.output_tokens || 0, modelo: CLAUDE_MODEL };
   } catch (e) {
     ultimoErrorClaude = e instanceof Anthropic.APIError ? e.status + ' ' + e.message : String(e);
     console.error('Claude (conversa) no disponible:', ultimoErrorClaude);
@@ -173,10 +175,11 @@ Deno.serve(async (req) => {
     if (!res) {
       // Reserva: Gemini con el mismo formato
       for (const m of MODELOS_AGENTE) {
-        const r = await llamar({ model: m, temperature: 0, messages: [{ role: 'system', content: CONV_SYSTEM }, { role: 'user', content: CONV.buildConvUser(cctx) }], response_format: { type: 'json_schema', json_schema: { name: 'toma', strict: true, schema: CONV.CONV_SCHEMA } } });
+        const r = await llamar({ model: m, temperature: 0, messages: [{ role: 'system', content: CONV_SYSTEM }, { role: 'user', content: CONV.buildConvUser(cctx) }], response_format: { type: 'json_object' } });
         if (!r.ok) continue;
         const j = await r.json().catch(() => null);
-        try { const out = CONV.normaliza(JSON.parse(j?.choices?.[0]?.message?.content)); if (out) { res = { out, tin: j.usage?.prompt_tokens || 0, tout: j.usage?.completion_tokens || 0, modelo: m }; break; } } catch { /* siguiente */ }
+        const out = CONV.normaliza(j?.choices?.[0]?.message?.content);
+        if (out) { res = { out, tin: j.usage?.prompt_tokens || 0, tout: j.usage?.completion_tokens || 0, modelo: m }; break; }
       }
     }
     if (!res) return new Response(JSON.stringify({ error: 'La IA no está disponible ahora mismo' }), { status: 502, headers: h });
@@ -188,7 +191,7 @@ Deno.serve(async (req) => {
     })();
     const ER = (globalThis as any).EdgeRuntime;
     if (ER && ER.waitUntil) ER.waitUntil(registro); else await registro;
-    return new Response(JSON.stringify({ result: c.out, modelo: c.modelo, ms, ...(esAdmin ? { aviso_claude: ultimoErrorClaude } : {}) }), { headers: h });
+    return new Response(JSON.stringify({ result: c.out, modelo: c.modelo, ms, ...(esAdmin && c.modelo !== CLAUDE_MODEL ? { aviso_claude: ultimoErrorClaude } : {}) }), { headers: h });
   }
   if (raw?.modo === 'agente') {
     const actx = saneaAgente(raw);
