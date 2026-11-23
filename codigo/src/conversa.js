@@ -291,6 +291,13 @@
         if (/pantalla/.test(n)) { this.io.trabajos && this.io.trabajos(true); return this.siguiente('Te los dejo en pantalla para que los marques.'); }
         return this.siguiente('');
       }
+      if (z && P.campo === 'med' && NEG.test(n)) {
+        this.snapshot(); this.faltan();
+        const f = (this._faltan || []).find((x) => x.z === z && (x.preg === P.preg || preguntaDe(x) === P.preg));
+        if (f && f.w) { g.resp = g.resp || {}; g.resp[f.w.id + '|' + z.id] = []; } // contestado: no hay
+        z.skip = Object.assign({}, z.skip, { ['med:' + P.preg]: true });
+        this.regenerar(); return this.siguiente('Vale, no hay.', { avanza: true });
+      }
       if (P.campo === 'mas' && NEG.test(n)) { this.snapshot(); g.cFin = true; return this.siguiente(); }
       if (z && P.campo === 'ele' && /(normativa|reglamento|minimo|lo normal)/.test(n)) return false; // lo resuelve la IA con segun_norma
       return false;
@@ -392,7 +399,7 @@
           // huecos de fachada sin medidas, ventanas sin alto…
           if (!falta && (z.huecos || []).some((h) => !h.an || !h.al) && /paredes|rodapie/.test(w.regla)) falta = 'las medidas de algún hueco';
           const k = z.nombre + '|' + falta;
-          if (falta && !vistos.has(k)) { vistos.add(k); out.push(z.nombre + ': ' + falta + ' (para ' + w.label.toLowerCase() + ')'); this._faltan.push({ z, falta, preg: w.regla === 'preguntar' && w.pide ? w.pide.replace('{zona}', art(z.nombre)) : null }); }
+          if (falta && !vistos.has(k)) { vistos.add(k); out.push(z.nombre + ': ' + falta + ' (para ' + w.label.toLowerCase() + ')'); this._faltan.push({ z, w, falta, preg: w.regla === 'preguntar' && w.pide ? w.pide.replace('{zona}', art(z.nombre)) : null }); }
         });
       });
       return out.slice(0, 8);
@@ -602,6 +609,7 @@
       const amb = (w && w.ambito) || tr.ambito || (zonas[0] && zonas[0].ambito) || ((this.toma.zonas.find((z) => z.id === this.g.cZona) || {}).ambito) || 'interior';
       if (w) return w;
       if (tr.codigo) { const wc = G.TRABAJOS.find((t) => t.c === tr.codigo && (!tr.ambito || t.ambito === tr.ambito)); if (wc) return wc; }
+      if (/(residu|escombr|contenedor)/.test(norm(tr.buscar || '') + ' ' + norm(tr.id || ''))) return G.TRABAJOS.find((t) => t.id === 'gen_residuos');
       if (tr.buscar) {
         const pal = (t) => norm(t.replace(/\(.*?\)/g, '')).split(' ').filter((x) => x.length > 3);
         const b = pal(tr.buscar);
@@ -728,6 +736,8 @@
     regenerar() {
       this.extender();
       const sel = G.seleccion(this.obra);
+      // Si hay demoliciones, siempre hay residuos
+      if (sel.gen_residuos && !sel.gen_residuos.on && G.trabajosPara(this.obra).some((w) => sel[w.id] && sel[w.id].on && /^(dem_|fon_dem|ele_dem)|demolic|levantad|desmont|picad/.test(w.id + ' ' + norm(w.label)))) sel.gen_residuos.on = true;
       (this.g.extra || []).forEach((x) => {
         const s = sel[x.id]; if (!s || !s.on || !x.c) return;
         G.TRABAJOS.filter((t) => t.c === x.c && sel[t.id] && sel[t.id].on).forEach((t) => { s.zonas = s.zonas.filter((z) => !sel[t.id].zonas.includes(z)); if (!s.zonas.length) s.on = false; });

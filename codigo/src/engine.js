@@ -782,10 +782,11 @@
       }
       const n = norm(text);
       // Modo conversación: lo atiende todo salvo exportar/compartir
-      if (this.conversa && this.conversa.activo && text) { const r = this.conversa.handle(text, n, input); if (r !== false) return; }
+      const enConversa = !!(this.conversa && this.conversa.activo);
+      if (enConversa && text) { const r = this.conversa.handle(text, n, input); if (r !== false) return; }
       else if (this.conversa && !(this.guia && this.guia.activo) && /^(modo conversacion|conversacion libre|te lo cuento|te cuento yo)\b/.test(n)) return this.conversa.start();
-      // Asistente guiado: mientras está en marcha atiende todas las respuestas
-      if (this.guia && (text || (input && input.act))) {
+      // Asistente guiado: mientras está en marcha atiende todas las respuestas (no en el modo conversación)
+      if (this.guia && !enConversa && (text || (input && input.act))) {
         if (this.guia.activo) return this.guia.handle(text, n, input);
         if (/^(medir otra zona|nueva zona|otra zona|asistente guiado|medicion guiada|empezar asistente|medir algo mas)\b/.test(n)) return this.guia.start();
         const mb = n.match(/^(?:borra|borrar|elimina|eliminar|quita|quitar)\s+(?:la |el )?(?:estancia|zona|fachada|cubierta|habitacion)\s+(.+)$/);

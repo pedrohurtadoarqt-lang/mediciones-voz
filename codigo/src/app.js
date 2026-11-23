@@ -1001,6 +1001,12 @@
     for (let i = 0; i < n; i++) { const v = Math.max(-1, Math.min(1, d[i])); dv.setInt16(44 + i * 2, v < 0 ? v * 32768 : v * 32767, true); }
     return new Blob([dv.buffer], { type: 'audio/wav' });
   }
+  /** Nombre de estancia dicho al principio de una nota («esta estancia es el baño en suite…»). */
+  function nombreDicho(t) {
+    const n = E.norm((t || '').slice(0, 160));
+    const m = n.match(/\b(salon comedor|salon|comedor|cocina|bano en suite|bano principal|bano|aseo|dormitorio principal|dormitorio(?: (?:numero |n )?(?:\d|uno|dos|tres|cuatro))?|habitacion(?: (?:numero |n )?(?:\d|uno|dos|tres|cuatro))?|pasillo|recibidor|entrada|terraza|balcon|galeria|lavadero|coladuria|despensa|vestidor|estudio|despacho|garaje|trastero|sotano|buhardilla|atico|escalera|patio|fachada(?: principal| posterior| trasera| lateral)?|cubierta|piscina|local)\b/);
+    return m ? E.estanciaName(m[1].replace(/\b(uno|dos|tres|cuatro)\b/, (x) => ({ uno: '1', dos: '2', tres: '3', cuatro: '4' })[x])) : '';
+  }
   function aBase64(blob) { return new Promise((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = ko; fr.readAsDataURL(blob); }); }
   async function transcribirSeg(n, dest) {
     const o = S.obra; if (!o || !o.visita) return;
@@ -1019,6 +1025,8 @@
         r = await Cloud.visita({ modo: 'transcribir', audio: await aBase64(wav), mime: 'audio/wav', obra_id: o.id });
       }
       sg.texto = (r && r.texto) || ''; sg.estado = 'ok';
+      // Nota de una estancia sin nombre: se toma el que se dice en el audio («ahora estamos en el baño en suite»)
+      if (dest && dest.startsWith('n:') && /^Estancia \d+$/.test(v.nombre || '') && n === 0) { const nom = nombreDicho(sg.texto); if (nom) v.nombre = nom; }
       v.texto = ''; // la transcripción completa se rehace con el trozo nuevo
     } catch (e) { sg.estado = 'error'; sg.error = String(e && e.message || e).slice(0, 120); }
     saveObra(); if (S.view === 'visita') render();
@@ -1026,7 +1034,7 @@
   function textoVisita(v) { return v.texto || (v.segs || []).filter(Boolean).map((x) => x.texto).filter(Boolean).join('\n\n'); }
   /** Todo lo grabado: por estancias, cada parte con su encabezado (la IA sabe de qué estancia es). */
   function textoCompleto(v) {
-    if (v.modo === 'estancias' && (v.notas || []).length) return v.notas.map((n) => '### Estancia: ' + n.nombre + '\n' + textoVisita(n)).filter((t) => !/\n$/.test(t)).join('\n\n');
+    if (v.modo === 'estancias' && (v.notas || []).length) return v.notas.map((n) => (/^Estancia \d+$/.test(n.nombre) ? '### Estancia (sin nombre: usa el que se dice en el audio)' : '### Estancia: ' + n.nombre) + '\n' + textoVisita(n)).filter((t) => !/\n$/.test(t)).join('\n\n');
     return textoVisita(v);
   }
   const notasListas = (v) => (v.notas || []).every((n) => (n.segs || []).filter(Boolean).every((x) => x.estado === 'ok'));
@@ -1632,11 +1640,11 @@
       case 'addl': editLineSheet(-1, true); break;
       case 'editl': editLineSheet(+el.dataset.i, false); break;
       case 'dell': { const p = dialog.active(); const i = +el.dataset.i; dialog.snapshot(); p.lineas.splice(i, 1); saveObra(); render(); toast('Línea ' + (i + 1) + ' borrada', true); break; }
-      case 'goto': S.obra.activa = el.dataset.uid; S.view = 'obra'; saveObra(); render(); { const p = dialog.active(); dialog.state = { mode: 'idle' }; say('Partida ' + p.r + '. Total ' + E.fmt(E.totalOf(p)) + ' ' + E.unitSpoken(p.u) + '. ' + E.dimsSpec(p).ask, dialog.idleChips()); } break;
+      case 'goto': if (dialog.conversa && dialog.conversa.activo) { S.obra.activa = el.dataset.uid; saveObra(); render(); break; } S.obra.activa = el.dataset.uid; S.view = 'obra'; saveObra(); render(); { const p = dialog.active(); dialog.state = { mode: 'idle' }; say('Partida ' + p.r + '. Total ' + E.fmt(E.totalOf(p)) + ' ' + E.unitSpoken(p.u) + '. ' + E.dimsSpec(p).ask, dialog.idleChips()); } break;
       case 'fest': S.filterEst = el.dataset.e; render(); break;
       case 'logodel': S.settings.logo = ''; await saveSettings(); render(); break;
       case 'guiada': if (dialog.conversa && dialog.conversa.activo) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; render(); dialog.conversa.aGuiado(); } else if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; dialog.guia.start(); render(); } break;
-      case 'trabajos': if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.guia.abrirTrabajos(); } break;
+      case 'trabajos': if (dialog.conversa && dialog.conversa.activo) { S.view = 'trabajos'; render(); break; } if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.guia.abrirTrabajos(); } break;
       case 'tw': { const sel = Guia.seleccion(S.obra); const s = sel[el.dataset.id]; if (s) { s.on = !s.on; s.todas = false; s.manual = true; if (s.on && !s.zonas.length) { const w = Guia.trabajosPara(S.obra).find((x) => x.id === el.dataset.id); s.zonas = Guia.zonasDe(S.obra, w).map((z) => z.id); } } saveObra(); render(); break; }
       case 'tz': { const s = Guia.seleccion(S.obra)[el.dataset.id]; const z = el.dataset.z; if (s) { s.todas = false; s.manual = true; s.zonas = s.zonas.includes(z) ? s.zonas.filter((x) => x !== z) : s.zonas.concat([z]); if (!s.zonas.length) s.on = false; } saveObra(); render(); break; }
       case 'tamb': S.tamb = el.dataset.v; render(); break;

@@ -531,9 +531,9 @@
   const REGLAS_OBRA = {
     residuos: (zs, w, obra) => {
       const g = obra.guia || {};
-      if (g.contenedores) return [L('Contenedores indicados en obra', g.contenedores)];
+      if (g.contenedores) return [L('Gestión de residuos: contenedores indicados en obra', g.contenedores)];
       const r = estimarResiduos(obra);
-      return [L(r.vol > 0 ? 'Estimación según las demoliciones: ' + fmt(r.vol) + ' m³ de escombro esponjado' : 'Mínimo: 1 contenedor', r.n)];
+      return [L(r.vol > 0 ? 'Gestión de residuos de las demoliciones: ' + fmt(r.vol) + ' m³ de escombro esponjado' : 'Gestión de residuos: mínimo 1 contenedor', r.n)];
     },
     sys: (zs, w, obra) => [L('Partida alzada: ' + fmt((obra.guia && obra.guia.sysPct) || 2, 1).replace(/,0$/, '') + ' % del presupuesto de ejecución material', 1)],
     ud_obra: () => [L('Vivienda', 1)],

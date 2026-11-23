@@ -105,7 +105,7 @@
       '- Un trabajo por cosa dicha: «picar las paredes» es UNA demolición del revestimiento (la que corresponda: yeso si luego va yeso, enfoscado si va enfoscado), no dos.',
       '- "medidas": SOLO cuando el usuario da una medida propia de ese trabajo que no sale de la zona: «picar 2 metros cuadrados de la pared del baño», «tres sumideros», «hay que reparar cuatro metros de pilar», «un tabique de 3,20 por 2,60». Cada medida con su "zona", un "comentario" corto y uds/largo/ancho/alto en metros (m2 de pared: largo y alto; suelo: largo y ancho; m: largo; ud: uds).',
       '- Patologías que se ven (pilares o vigas con armaduras oxidadas, humedades, grietas, desconchados): trabajos de reparación con sus medidas, como cualquier otro.',
-      '- La gestión de residuos y la seguridad y salud las pone la app sola. Si dice cuántos contenedores, "contenedores"; si dice el porcentaje de seguridad y salud, "seguridad_pct".',
+      '- La gestión de residuos (escombros, contenedores) y la seguridad y salud las pone la app sola: NUNCA las mandes como trabajos.  Si dice cuántos contenedores, "contenedores"; si dice el porcentaje de seguridad y salud, "seguridad_pct".',
       '',
       'CÓMO ENTENDER AL USUARIO:',
       '1. Va saltando de un sitio a otro y mezcla medidas y trabajos: anota todo lo que diga en la zona que corresponda, aunque venga en desorden. Si no dice la zona, es la última de la que se ha hablado (ver CONVERSACIÓN y ZONA EN CURSO).',
