@@ -301,3 +301,23 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .vmodo { margin: 0 0 10px; }
 .vrec .vnom { font-weight: 800; font-size: 20px; margin-bottom: 8px; }
 .vnota textarea { margin-top: 6px; }
+
+/* Capítulos desplegables */
+.capdesp { border-bottom: 1px solid var(--line); }
+.capdesp > summary { list-style: none; display: flex; gap: 8px; align-items: center; padding: 12px 2px; font-weight: 800; font-size: var(--fs-s); cursor: pointer; }
+.capdesp > summary::-webkit-details-marker { display: none; }
+.capdesp > summary::before { content: '▸'; color: var(--muted); width: 12px; transition: transform .15s; }
+.capdesp[open] > summary::before { transform: rotate(90deg); }
+.capdesp > summary .c { color: var(--accent); font-family: var(--mono); }
+.capdesp > summary .t { flex: 1; letter-spacing: .03em; }
+.capdesp > summary .n { color: var(--muted); font-weight: 600; font-size: 12px; }
+/* Fotos */
+.fotos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.foto { width: 64px; height: 64px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--card); padding: 0; display: grid; place-items: center; cursor: pointer; color: var(--muted); }
+.foto img { width: 100%; height: 100%; object-fit: cover; }
+.foto.add svg { width: 24px; height: 24px; }
+.fotobloque { margin: 10px 0 4px; }
+.visor { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+.visor img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; }
+.visor .hint { color: #ddd; }
+.toma-z .zbtns label { cursor: pointer; }

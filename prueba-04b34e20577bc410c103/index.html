@@ -320,6 +320,26 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .vmodo { margin: 0 0 10px; }
 .vrec .vnom { font-weight: 800; font-size: 20px; margin-bottom: 8px; }
 .vnota textarea { margin-top: 6px; }
+
+/* Capítulos desplegables */
+.capdesp { border-bottom: 1px solid var(--line); }
+.capdesp > summary { list-style: none; display: flex; gap: 8px; align-items: center; padding: 12px 2px; font-weight: 800; font-size: var(--fs-s); cursor: pointer; }
+.capdesp > summary::-webkit-details-marker { display: none; }
+.capdesp > summary::before { content: '▸'; color: var(--muted); width: 12px; transition: transform .15s; }
+.capdesp[open] > summary::before { transform: rotate(90deg); }
+.capdesp > summary .c { color: var(--accent); font-family: var(--mono); }
+.capdesp > summary .t { flex: 1; letter-spacing: .03em; }
+.capdesp > summary .n { color: var(--muted); font-weight: 600; font-size: 12px; }
+/* Fotos */
+.fotos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.foto { width: 64px; height: 64px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--card); padding: 0; display: grid; place-items: center; cursor: pointer; color: var(--muted); }
+.foto img { width: 100%; height: 100%; object-fit: cover; }
+.foto.add svg { width: 24px; height: 24px; }
+.fotobloque { margin: 10px 0 4px; }
+.visor { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+.visor img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; }
+.visor .hint { color: #ddd; }
+.toma-z .zbtns label { cursor: pointer; }
 </style>
 </head>
 <body>
@@ -7180,6 +7200,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ICON = {
+    camara: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
     pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0119 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>',
     del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>',
@@ -7198,16 +7219,16 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
    *  implementando la misma interfaz get/put/del/all.)
    * ============================================================ */
   const StorageAdapter = (() => {
-    const mem = { obras: new Map(), catalogos: new Map(), ajustes: new Map(), audios: new Map() };
+    const mem = { obras: new Map(), catalogos: new Map(), ajustes: new Map(), audios: new Map(), fotos: new Map() };
     let dbp = null;
     function open() {
       if (dbp) return dbp;
       dbp = new Promise((res) => {
         try {
-          const rq = indexedDB.open('mediciones-voz', 2);
+          const rq = indexedDB.open('mediciones-voz', 3);
           rq.onupgradeneeded = () => {
             const db = rq.result, hay = (n) => db.objectStoreNames.contains(n);
-            ['obras', 'catalogos', 'audios'].forEach((s) => { if (!hay(s)) db.createObjectStore(s, { keyPath: 'id' }); });
+            ['obras', 'catalogos', 'audios', 'fotos'].forEach((s) => { if (!hay(s)) db.createObjectStore(s, { keyPath: 'id' }); });
             if (!hay('ajustes')) db.createObjectStore('ajustes');
           };
           rq.onsuccess = () => res(rq.result);
@@ -7764,6 +7785,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         '<div class="total"><div class="lbl">Total</div><span class="big num">' + E.fmt(E.totalOf(p)) + '</span><span class="u">' + unitL(p.u) + '</span></div></div>' +
         (p.lineas.length ? '<div class="tablewrap"><table class="lines"><thead><tr><th>#</th><th>Estancia / comentario</th><th>Uds</th><th>Largo</th><th>Ancho</th><th>Alto</th><th>Parcial</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<p class="empty">Sin líneas todavía. ' + esc(spec.ask) + '</p>') +
+        '<div class="fotobloque"><span class="hint">Fotos de referencia</span>' + fotosHTML('p', p.uid, p.fotos) + '</div>' +
         '<div class="row"><button class="btn small" data-a="chg">Cambiar partida</button><button class="btn small" data-a="addl">Añadir línea a mano</button><button class="btn small" data-a="close">Cerrar partida</button><button class="btn small" data-a="resumen">Resumen de obra</button></div></section>';
     }
     return '<div class="ctx">' + est + amb + '</div>' + mon;
@@ -7791,14 +7813,18 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     zs.forEach((z) => { (grupos[z.ambito] = grupos[z.ambito] || []).push(z); });
     Object.keys(grupos).forEach((k) => {
       h += '<div class="chap"><span></span><span>' + esc(AL[k] || k) + '</span></div><div class="plist">';
-      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '<span></span>') + '<span class="zbtns"><button class="iconbtn zdel" data-a="zedit" data-z="' + z.id + '" aria-label="Editar ' + esc(z.nombre) + '">' + ICON.edit + '</button><button class="iconbtn zdel" data-a="zdel" data-z="' + z.id + '" aria-label="Eliminar ' + esc(z.nombre) + '">' + ICON.del + '</button></span></div>'; });
+      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '<span></span>') + '<span class="zbtns"><label class="iconbtn zdel" aria-label="Foto de ' + esc(z.nombre) + '">' + ICON.camara + '<input type="file" accept="image/*" multiple hidden class="fotoin" data-k="z" data-id="' + z.id + '"></label><button class="iconbtn zdel" data-a="zedit" data-z="' + z.id + '" aria-label="Editar ' + esc(z.nombre) + '">' + ICON.edit + '</button><button class="iconbtn zdel" data-a="zdel" data-z="' + z.id + '" aria-label="Eliminar ' + esc(z.nombre) + '">' + ICON.del + '</button></span></div>' + (z.fotos && z.fotos.length ? fotosHTML('z', z.id, z.fotos) : ''); });
       h += '</div>';
     });
     const ps = o.partidas.filter((x) => x.lineas.length);
     if (ps.length) {
-      h += '<div class="chap"><span></span><span>Estado de mediciones</span></div><div class="plist">';
-      ps.slice().sort((x, y) => (x.codigo || '').localeCompare(y.codigo || '')).forEach((p) => { h += '<button class="pitem" data-a="goto" data-uid="' + p.uid + '"><span class="c">' + esc(p.codigo || '') + '</span><span class="r">' + esc(p.r) + '<small>' + esc(p.ref) + ' · ' + p.lineas.length + ' líneas</small></span><span class="t num">' + E.fmt(E.totalOf(p)) + ' ' + unitL(p.u) + '</span></button>'; });
-      h += '</div>';
+      h += '<div class="chap"><span></span><span>Estado de mediciones</span></div>';
+      const capsT = E.obraChapters(o).map((c) => Object.assign({}, c, { partidas: c.partidas.filter((x) => x.lineas.length) })).filter((c) => c.partidas.length);
+      capsT.forEach((c) => {
+        let items = '';
+        c.partidas.forEach((p) => { items += '<button class="pitem" data-a="goto" data-uid="' + p.uid + '"><span class="c">' + esc(p.codigo || '') + '</span><span class="r">' + esc(p.r) + '<small>' + esc(p.ref) + ' · ' + p.lineas.length + ' líneas</small></span><span class="t num">' + E.fmt(E.totalOf(p)) + ' ' + unitL(p.u) + '</span></button>'; });
+        h += capituloHTML('t' + c.codigo, '<span class="c">' + c.codigo + '</span><span class="t">' + esc(c.titulo) + '</span><span class="n">' + c.partidas.length + '</span>', '<div class="plist">' + items + '</div>', c.partidas.some((p) => p.uid === o.activa) || capsT.length <= 2);
+      });
     }
     if (zs.length) h += '<div class="row"><button class="btn primary" data-a="trabajos">' + (ps.length ? 'Cambiar trabajos' : 'Elegir trabajos') + '</button>' + (ps.length ? '<button class="btn" data-a="resumen">Resumen y exportar</button>' : '') + '<button class="btn" data-a="guiada">Medir otra zona</button></div>';
     return h + '</section>';
@@ -7921,12 +7947,13 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     caps.forEach((c) => {
       const ps = c.partidas.filter((p) => !fe || p.lineas.some((l) => E.norm(l.est || '') === fe));
       if (!ps.length) return;
-      h += '<div class="chap"><span>' + c.codigo + '</span><span>' + esc(c.titulo) + '</span></div><div class="plist">';
+      const hh = h; h = '';
       ps.forEach((p) => {
         const tot = fe ? E.round2(p.lineas.filter((l) => E.norm(l.est || '') === fe).reduce((a, l) => a + E.parcial(l), 0)) : E.totalOf(p);
         h += '<button class="pitem' + (p.uid === o.activa ? ' on' : '') + '" data-a="goto" data-uid="' + p.uid + '"><span class="c">' + p.codigo + '</span><span class="r">' + esc(p.r) + '<small>' + esc(p.ref) + ' · ' + p.lineas.length + ' líneas</small></span><span class="t num">' + E.fmt(tot) + ' ' + unitL(p.u) + '</span></button>';
       });
-      h += '</div>';
+      const tot = ps.length + ' ' + (ps.length === 1 ? 'partida' : 'partidas');
+      h = hh + capituloHTML('r' + c.codigo, '<span class="c">' + c.codigo + '</span><span class="t">' + esc(c.titulo) + '</span><span class="n">' + tot + '</span>', '<div class="plist">' + h + '</div>', ps.some((p) => p.uid === o.activa) || caps.length <= 2);
     });
     h += '<div class="row"><button class="btn primary" data-a="pdf" data-id="' + o.id + '">Exportar PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Exportar Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">Exportar BC3</button><button class="btn primary" data-a="share" data-id="' + o.id + '">Compartir</button><button class="btn" data-a="sendmail" data-id="' + o.id + '">Enviar al correo</button><button class="btn" data-a="back2obra">Volver a medir</button></div>';
     return h;
@@ -8079,6 +8106,64 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     items.push(['catalogos', ICON.book, 'Bases de datos BC3'], ['ajustes', ICON.gear, 'Ajustes y plan'], ['ayuda', ICON.help, 'Cómo se usa (ayuda)']);
     sheet('<h2>Menú</h2><div class="menu-list">' + items.map(([a, i, l]) => '<button data-a="' + a + '"' + (a === 'pdf' || a === 'xlsx' || a === 'bc3' || a === 'sendmail' || a === 'share' ? ' data-id="' + (S.obra ? S.obra.id : '') + '"' : '') + '>' + i + esc(l) + '</button>').join('') + '</div>');
   }
+  /* ---- Fotos de partidas y zonas ----
+   * Cada foto: miniatura (va con la obra y sale en el PDF) + foto completa comprimida (en el móvil, se abre al tocar). */
+  function destinoFoto(k, id) {
+    if (!S.obra) return null;
+    if (k === 'p') return S.obra.partidas.find((x) => x.uid === id) || null;
+    if (k === 'z') return ((S.obra.toma && S.obra.toma.zonas) || []).find((x) => x.id === id) || null;
+    return null;
+  }
+  function reducir(img, max, q) {
+    const k = Math.min(1, max / Math.max(img.width, img.height)), w = Math.round(img.width * k), h = Math.round(img.height * k);
+    const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+    return { c, w, h, url: c.toDataURL('image/jpeg', q) };
+  }
+  function cargarImagen(file) {
+    return new Promise((ok, ko) => { const u = URL.createObjectURL(file), img = new Image(); img.onload = () => { ok(img); setTimeout(() => URL.revokeObjectURL(u), 1000); }; img.onerror = () => { URL.revokeObjectURL(u); ko(new Error('imagen no válida')); }; img.src = u; });
+  }
+  async function anadirFotos(k, id, files) {
+    const t = destinoFoto(k, id); if (!t) return;
+    t.fotos = t.fotos || [];
+    for (const f of [...files].slice(0, 12)) {
+      try {
+        const img = await cargarImagen(f);
+        const mini = reducir(img, 320, 0.7), grande = reducir(img, 1600, 0.82);
+        const blob = await new Promise((ok) => grande.c.toBlob(ok, 'image/jpeg', 0.82));
+        const fid = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+        await StorageAdapter.put('fotos', { id: fid, obra: S.obra.id, blob });
+        t.fotos.push({ id: fid, mini: mini.url, w: mini.w, h: mini.h, fecha: Date.now() });
+      } catch (e) { toast('No he podido añadir una foto.'); }
+    }
+    saveObra(); render(); toast(files.length === 1 ? 'Foto añadida' : 'Fotos añadidas');
+  }
+  function fotosHTML(k, id, fotos) {
+    return '<div class="fotos">' + (fotos || []).map((f) => '<button class="foto" data-a="verfoto" data-k="' + k + '" data-id="' + esc(id) + '" data-f="' + f.id + '" aria-label="Ver foto"><img src="' + f.mini + '" alt=""></button>').join('') +
+      '<label class="foto add" aria-label="Añadir foto">' + ICON.camara + '<input type="file" accept="image/*" multiple hidden class="fotoin" data-k="' + k + '" data-id="' + esc(id) + '"></label></div>';
+  }
+  async function verFoto(k, id, fid) {
+    const t = destinoFoto(k, id), f = t && (t.fotos || []).find((x) => x.id === fid); if (!f) return;
+    const a = await StorageAdapter.get('fotos', fid);
+    const src = a && a.blob ? URL.createObjectURL(a.blob) : f.mini;
+    const d = document.createElement('div'); d.className = 'visor'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Foto');
+    d.innerHTML = '<img src="' + src + '" alt="">' + (a ? '' : '<p class="hint">Esta foto se hizo en otro dispositivo: aquí solo está la miniatura.</p>') +
+      '<div class="row"><button class="btn" data-v="cerrar">Cerrar</button><button class="btn danger" data-v="borrar">Borrar foto</button></div>';
+    const cerrar = () => { d.remove(); if (src.startsWith('blob:')) URL.revokeObjectURL(src); };
+    d.addEventListener('click', (e) => {
+      const v = e.target.dataset && e.target.dataset.v;
+      if (v === 'borrar') { t.fotos = t.fotos.filter((x) => x.id !== fid); StorageAdapter.del('fotos', fid); saveObra(); render(); cerrar(); }
+      else if (v === 'cerrar' || e.target === d) cerrar();
+    });
+    document.body.appendChild(d);
+  }
+  /** Capítulos desplegables: cerrados salvo el de la partida activa o los que se han abierto. */
+  function capituloHTML(clave, cabecera, cuerpo, abierto) {
+    S.capAbiertos = S.capAbiertos || {};
+    const open = clave in S.capAbiertos ? S.capAbiertos[clave] : abierto;
+    return '<details class="capdesp"' + (open ? ' open' : '') + ' data-cap="' + esc(clave) + '"><summary>' + cabecera + '</summary>' + cuerpo + '</details>';
+  }
+  document.addEventListener('toggle', (e) => { const d = e.target; if (d && d.classList && d.classList.contains('capdesp')) { S.capAbiertos = S.capAbiertos || {}; S.capAbiertos[d.dataset.cap] = d.open; } }, true);
+
   /* ---- Nota de audio de la visita ----
    * Graba por trozos de 3 minutos (cada uno es un archivo completo), los guarda en el móvil
    * y los va transcribiendo mientras se sigue grabando. Al terminar se revisa el texto
@@ -8826,6 +8911,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         const zsel = $('#tnz') && $('#tnz').value ? [$('#tnz').value] : null;
         Guia.anadirPropia(S.obra, desc.charAt(0).toUpperCase() + desc.slice(1), $('#tnu').value, a, zsel); saveObra(); render(); toast('Partida creada: ' + desc); break;
       }
+      case 'verfoto': verFoto(el.dataset.k, el.dataset.id, el.dataset.f); break;
       case 'zedit': { const z = ((S.obra.toma && S.obra.toma.zonas) || []).find((x) => x.id === el.dataset.z); if (z) editZonaSheet(z); break; }
       case 'zdel': {
         const z = ((S.obra.toma && S.obra.toma.zonas) || []).find((x) => x.id === el.dataset.z); if (!z) break;
@@ -8868,6 +8954,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     if (ev.target.id === 'chktono') { S.settings.tono = ev.target.checked; VoiceAdapter.setPitchQ(ev.target.checked); saveSettings(); if (ev.target.checked) VoiceAdapter.speak('¿Se nota que te pregunto?').then(() => VoiceAdapter.earcon()); }
     if (ev.target.id === 'chkbreve') { S.settings.breve = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
+    if (ev.target.classList && ev.target.classList.contains('fotoin') && ev.target.files && ev.target.files.length) { anadirFotos(ev.target.dataset.k, ev.target.dataset.id, ev.target.files); ev.target.value = ''; }
     if (ev.target.id === 'vtxt' && S.obra && S.obra.visita) { S.obra.visita.texto = ev.target.value; saveObra(); }
     if (ev.target.dataset && ev.target.dataset.nota && S.obra && S.obra.visita) { const n = (S.obra.visita.notas || []).find((x) => x.id === ev.target.dataset.nota); if (n) { n.texto = ev.target.value; saveObra(); } }
     if (ev.target.id === 'ctxt' && S.obra && S.obra.visita && S.obra.visita.corr) { S.obra.visita.corr.texto = ev.target.value; saveObra(); }
@@ -9135,6 +9222,19 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
         right('Total ' + E.unitLabel(p.u) + ' ......:', X.par, y + 0.8); right(E.fmt(E.totalOf(p)), X.tot, y + 0.8);
         y += 5;
+        // Fotos de referencia en miniatura
+        const fotos = (p.fotos || []).filter((f) => f.mini);
+        if (fotos.length) {
+          const fh = 24; let fx = X.res;
+          if (y + fh + 2 > BOTTOM) newPage();
+          fotos.forEach((f) => {
+            const fw = Math.min(40, fh * ((f.w || 4) / (f.h || 3)));
+            if (fx + fw > R) { fx = X.res; y += fh + 2; if (y + fh > BOTTOM) newPage(); }
+            try { doc.addImage(f.mini, 'JPEG', fx, y - 2, fw, fh); } catch (e) { /* imagen no válida */ }
+            fx += fw + 2;
+          });
+          y += fh + 3;
+        }
         doc.setDrawColor(203, 213, 225); doc.line(M, y - 1.5, R, y - 1.5);
         y += 3.5;
       });
