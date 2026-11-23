@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
   await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Prueba 2'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   for (const t of ['vivienda', 'salón 4 por 3', '2,60', 'una puerta de 0,82 por 2,03', 'no', 'baño', '2 por 1,8', 'la misma', 'iguales que el salón', 'no', 'pasillo', '3 por 1', '2,6', 'ninguna']) await say(t);
-  await pg.click('.zdel >> nth=2'); await pg.click('.sheet button:text-is("Eliminar")'); await pg.waitForTimeout(200);
+  await pg.click('[data-a="zdel"] >> nth=2'); await pg.click('.sheet button:text-is("Eliminar")'); await pg.waitForTimeout(200);
   console.log('zonas tras borrar:', await pg.$$eval('.toma-z .r', (x) => x.map((e) => e.firstChild.textContent)));
   await pg.click('#btnDock'); await pg.waitForTimeout(200); await pg.screenshot({ path: 'test/g2_min.png' });
   await pg.click('#btnDock'); await pg.waitForTimeout(100);
