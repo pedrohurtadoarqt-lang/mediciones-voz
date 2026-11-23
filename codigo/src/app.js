@@ -212,7 +212,7 @@
       if (mode === 'native' && listening) { try { rec && rec.abort(); } catch (e) {} listening = false; }
       speaking = true; lastSaid = text; state();
       const partes = trozos(text);
-      const proms = partes.map((t, i) => pedirVoz(t, i ? 9000 : 4500)); // se piden a la vez
+      const proms = partes.map((t, i) => pedirVoz(t, i ? 12000 : 7000)); // se piden a la vez
       for (let i = 0; i < partes.length; i++) {
         const r = await proms[i];
         if (my !== speakId) return true; // interrumpido
@@ -615,7 +615,7 @@
     zs.forEach((z) => { (grupos[z.ambito] = grupos[z.ambito] || []).push(z); });
     Object.keys(grupos).forEach((k) => {
       h += '<div class="chap"><span></span><span>' + esc(AL[k] || k) + '</span></div><div class="plist">';
-      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '<span></span>') + '<button class="iconbtn zdel" data-a="zdel" data-z="' + z.id + '" aria-label="Eliminar ' + esc(z.nombre) + '">' + ICON.del + '</button></div>'; });
+      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '<span></span>') + '<span class="zbtns"><button class="iconbtn zdel" data-a="zedit" data-z="' + z.id + '" aria-label="Editar ' + esc(z.nombre) + '">' + ICON.edit + '</button><button class="iconbtn zdel" data-a="zdel" data-z="' + z.id + '" aria-label="Eliminar ' + esc(z.nombre) + '">' + ICON.del + '</button></span></div>'; });
       h += '</div>';
     });
     const ps = o.partidas.filter((x) => x.lineas.length);
@@ -1005,6 +1005,43 @@
         '<b>Diálogo:</b> «repite», «cancela», «ayuda»'].map((x) => '<div>' + x + '</div>').join('') +
       '</div><button class="btn" data-a="closesheet">Cerrar</button>');
   }
+  /** Corregir a mano una estancia o zona: medidas (como se dirían), altura y huecos. */
+  function editZonaSheet(z) {
+    const f = (v) => (v == null ? '' : E.fmt(v));
+    const medidas = z.rect ? f(z.rect[0]) + ' por ' + f(z.rect[1]) : (z.tramos || []).length ? z.tramos.map((t) => f(t.l) + (t.giro ? ' ' + t.giro : '')).join(', ') : z.area != null ? 'superficie ' + f(z.area) + ' y perímetro ' + f(z.perimetro) : '';
+    const huecos = (z.huecos || []).map((x) => (x.uds || 1) + ' ' + (x.bal ? 'balconera' : x.tipo) + (x.uds > 1 ? 's' : '') + ' de ' + f(x.an) + ' por ' + f(x.al)).join(' y ');
+    const conPlanta = /^(interior|cubierta|piscina)$/.test(z.ambito);
+    sheet('<h2>' + esc(z.nombre) + '</h2><form id="fzona" style="display:flex;flex-direction:column;gap:10px">' +
+      '<div class="field"><label for="zn">Nombre</label><input id="zn" value="' + esc(z.nombre) + '"></div>' +
+      (conPlanta ? '<div class="field"><label for="zm">Medidas (como las dirías)</label><input id="zm" value="' + esc(medidas) + '" placeholder="4 por 3 · o 2 derecha, 1 izquierda, 1 derecha…"></div>' : '') +
+      (z.ambito === 'interior' ? '<div class="field"><label for="za">Altura</label><input id="za" inputmode="decimal" value="' + f(z.altura) + '"></div>' +
+        '<div class="field"><label for="zh">Puertas y ventanas</label><input id="zh" value="' + esc(huecos) + '" placeholder="1 puerta de 0,80 por 2,03 y 1 ventana de 1,20 por 1,20 · o «ninguna»"></div>' : '') +
+      (z.ambito === 'piscina' ? '<div class="field"><label for="zp">Profundidad (menor y mayor)</label><input id="zp" value="' + (z.prof ? f(z.pmin) + (z.pmin !== z.pmax ? ' y ' + f(z.pmax) : '') : '') + '"></div>' : '') +
+      (z.ambito === 'fachada' ? '<div class="grid2"><div class="field"><label for="zfa">Ancho</label><input id="zfa" inputmode="decimal" value="' + f(z.ancho) + '"></div><div class="field"><label for="zfl">Alto</label><input id="zfl" inputmode="decimal" value="' + f(z.alto) + '"></div></div>' : '') +
+      '<p class="hint">Al guardar se recalculan todas las mediciones de esta zona.</p>' +
+      '<div class="row"><button class="btn primary" type="submit">Guardar</button><button class="btn" type="button" data-a="closesheet">Cancelar</button></div></form>');
+    $('#fzona').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const C = dialog.conversa, num = (id) => { const el = $('#' + id); if (!el || !el.value.trim()) return null; const v = parseFloat(el.value.replace(',', '.')); return isNaN(v) ? null : v; };
+      if (C) C.snapshot(); else dialog.snapshot();
+      const nom = $('#zn').value.trim(); if (nom && nom !== z.nombre) z.nombre = nom;
+      const zm = $('#zm');
+      if (zm && zm.value.trim() && C) {
+        const w = Guia.parseWalk(zm.value);
+        if (w && w.rect) C.planta(z, { largo: w.rect[0], ancho: w.rect[1], tramos: [] }, []);
+        else if (w && w.tramos) C.planta(z, { tramos: w.tramos.map((t) => ({ largo: t.l, giro: t.giro, angulo: t.ang })) }, []);
+        else if (w && w.directo) C.planta(z, { superficie: w.directo.area, perimetro: w.directo.perimetro, tramos: [] }, []);
+        else return toast('No entiendo las medidas. Escribe «4 por 3» o las paredes con sus giros.');
+      }
+      const al = num('za'); if (al) z.altura = al >= 5 ? al / 100 : al;
+      const zh = $('#zh');
+      if (zh) { const t = zh.value.trim(); if (!t || /^(no|ninguna|ninguno|sin)/i.test(t)) z.huecos = []; else { const hs = Guia.parseHuecos(t); if (hs.length) z.huecos = hs.map((x) => ({ tipo: x.tipo, uds: x.uds || 1, an: x.an, al: x.al, bal: !!x.bal })); } z.huecosOk = true; }
+      const zp = $('#zp'); if (zp && zp.value.trim()) { const v = Guia.numeros(zp.value).map((x) => (x >= 5 ? x / 100 : x)); if (v.length) { z.pmin = Math.min(...v); z.pmax = Math.max(...v); z.prof = Math.round((z.pmin + z.pmax) * 50) / 100; } }
+      const fa = num('zfa'), fl = num('zfl'); if (fa) z.ancho = fa; if (fl) z.alto = fl;
+      if (C && C.activo) C.regenerar(); else if (S.obra.partidas.some((p) => p.guia)) Guia.generar(S.obra, catFor(S.obra));
+      saveObra(); closeSheet(); render(); toast('Guardado: ' + z.nombre);
+    });
+  }
   function editLineSheet(i, isNew) {
     const p = dialog.active(); if (!p) return;
     const l = isNew ? { est: S.obra.estActiva || '', com: '', uds: 1, l: null, a: null, h: null } : p.lineas[i];
@@ -1349,6 +1386,7 @@
         const zsel = $('#tnz') && $('#tnz').value ? [$('#tnz').value] : null;
         Guia.anadirPropia(S.obra, desc.charAt(0).toUpperCase() + desc.slice(1), $('#tnu').value, a, zsel); saveObra(); render(); toast('Partida creada: ' + desc); break;
       }
+      case 'zedit': { const z = ((S.obra.toma && S.obra.toma.zonas) || []).find((x) => x.id === el.dataset.z); if (z) editZonaSheet(z); break; }
       case 'zdel': {
         const z = ((S.obra.toma && S.obra.toma.zonas) || []).find((x) => x.id === el.dataset.z); if (!z) break;
         confirmSheet('¿Eliminar «' + z.nombre + '» y todo lo medido en ella?', 'Eliminar', () => { dialog.snapshot(); Guia.borrarZona(S.obra, z.id); if (S.obra.partidas.some((p) => p.guia)) Guia.generar(S.obra, catFor(S.obra)); saveObra(); render(); toast('Eliminado: ' + z.nombre, true); });

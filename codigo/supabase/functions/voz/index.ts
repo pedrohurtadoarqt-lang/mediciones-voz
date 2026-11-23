@@ -15,6 +15,7 @@ const VOCES = ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'O
 const ESTILO = Deno.env.get('TTS_ESTILO') || '';
 let modelos: string[] | null = null;
 let ultimoError = '';
+const sinIdioma = new Set<string>();
 
 /** Modelos de voz disponibles, el preferido primero. */
 async function modelosTTS(): Promise<string[]> {
@@ -30,7 +31,7 @@ async function modelosTTS(): Promise<string[]> {
     }
   } catch (e) { ultimoError = 'lista de modelos: ' + String(e); }
   // Preferencia: flash (rápido) antes que pro; los no «preview» antes
-  const peso = (n: string) => (/flash/.test(n) ? 0 : 10) + (/preview/.test(n) ? 1 : 0) + (/lite/.test(n) ? -1 : 0);
+  const peso = (n: string) => (/flash/.test(n) ? 0 : 10) + (/preview/.test(n) ? 1 : 0) + (/lite/.test(n) ? 0.5 : 0);
   lista.sort((a, b) => peso(a) - peso(b) || b.localeCompare(a));
   modelos = [...new Set([fijo, ...lista, 'gemini-2.5-flash-preview-tts'].filter(Boolean) as string[])];
   return modelos;
@@ -43,10 +44,16 @@ async function sintetiza(texto: string, voz: string) {
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
       body: JSON.stringify({
         contents: [{ parts: [{ text: ESTILO + texto }] }],
-        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voz } } } }
+        // Español de España: el idioma va en su campo (si se pide en el texto, lo lee en voz alta)
+        generationConfig: { responseModalities: ['AUDIO'], speechConfig: Object.assign(sinIdioma.has(m) ? {} : { languageCode: 'es-ES' }, { voiceConfig: { prebuiltVoiceConfig: { voiceName: voz } } }) }
       })
     });
-    if (!r.ok) { ultimoError = m + ': ' + r.status + ' ' + (await r.text()).slice(0, 200); continue; }
+    if (!r.ok) {
+      const t = (await r.text()).slice(0, 200);
+      ultimoError = m + ': ' + r.status + ' ' + t;
+      if (r.status === 400 && /language/i.test(t) && !sinIdioma.has(m)) { sinIdioma.add(m); return sintetiza(texto, voz); } // modelo sin campo de idioma
+      continue; // 429 (cupo agotado) u otro error: siguiente modelo, que tiene su propio cupo
+    }
     const j = await r.json().catch(() => null);
     const part = (j?.candidates?.[0]?.content?.parts || []).find((p: any) => p.inlineData?.data);
     if (!part) { ultimoError = m + ': sin audio'; continue; }
