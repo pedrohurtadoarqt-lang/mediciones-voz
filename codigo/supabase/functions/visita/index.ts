@@ -62,6 +62,7 @@ function usuarioVisita(ctx: any) {
     'TOMA ACTUAL (ref | ámbito | nombre | datos):\n' + (zs || '(nada todavía)'),
     'INSTRUCCIONES PARA ESTA VISITA: devuelve en "zonas" TODAS las estancias y zonas que se mencionan, cada una con todos sus datos (planta, altura, huecos, fontanería, electricidad…), y en "trabajos" TODOS los trabajos con sus zonas. ' +
     'Si algo se corrige más adelante en la grabación («no, perdón…», «me he equivocado, eran…»), quédate solo con la versión final. Si la toma actual ya tiene una zona, usa su ref. ' +
+    'Si la transcripción viene por apartados «### Estancia: NOMBRE», todo lo dicho en cada apartado es de esa estancia (usa ese nombre) salvo que en el audio se diga claramente otra; un mismo trabajo dicho en varios apartados va en cada una de esas estancias. ' +
     'Si hay varias personas («Técnico:», «Otra persona:»), quien manda es el técnico: anota lo que él dice; lo que pida o comente otra persona, solo si el técnico lo acepta o lo repite («vale, eso también», «sí, lo ponemos»). Las medidas que dé otra persona, solo si el técnico no las contradice. ' +
     'Si un trabajo se dice para «toda la casa» o «todo», pon "zonas" vacío. Deja "pregunta" vacía: la app preguntará después lo que falte. En "mensaje", una frase con lo que NO has podido entender, si hay algo.'
   ].join('\n\n');

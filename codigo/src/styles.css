@@ -298,3 +298,6 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .vtxt { width: 100%; font: inherit; font-size: 15px; line-height: 1.45; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: inherit; margin: 8px 0; }
 #startbar #btnGrabar { margin-top: 8px; width: 100%; }
 .recdot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--rec); margin-right: 8px; }
+.vmodo { margin: 0 0 10px; }
+.vrec .vnom { font-weight: 800; font-size: 20px; margin-bottom: 8px; }
+.vnota textarea { margin-top: 6px; }

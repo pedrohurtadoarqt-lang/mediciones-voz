@@ -24,6 +24,7 @@ const { chromium } = require('playwright');
   await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Visita grabada'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   await pg.click('#btnGrabar'); await pg.waitForTimeout(300);
   await pg.screenshot({ path: 'test/v_inicio.png' });
+  await pg.click('[data-a="vmodo"][data-m="continua"]'); await pg.waitForTimeout(200);
   await pg.click('[data-a="vgrabar"]'); await pg.waitForTimeout(3500);
   await pg.screenshot({ path: 'test/v_grabando.png' });
   await pg.click('[data-a="vparar"]'); await pg.waitForTimeout(1500);
