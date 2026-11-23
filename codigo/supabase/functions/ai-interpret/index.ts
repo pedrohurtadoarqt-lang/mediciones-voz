@@ -74,7 +74,7 @@ const CONV = (globalThis as any).ConvAI;
 const CONV_SYSTEM = CONV.convSystem((globalThis as any).MEDICIONA_TRABAJOS || []);
 function saneaConversa(b: any) {
   return {
-    obra_id: s(b?.obra_id, 60), frase: s(b?.frase, 600), zona: s(b?.zona, 80), esperando: s(b?.esperando, 300),
+    obra_id: s(b?.obra_id, 60), frase: s(b?.frase, 600), zona: s(b?.zona, 80), esperando: s(b?.esperando, 300), guiado: b?.guiado === true,
     zonas: (Array.isArray(b?.zonas) ? b.zonas.slice(0, 60) : []).map((z: any) => ({ ref: s(z?.ref, 20), ambito: s(z?.ambito, 20), nombre: s(z?.nombre, 60), datos: s(z?.datos, 400) })),
     trabajos: (Array.isArray(b?.trabajos) ? b.trabajos.slice(0, 80) : []).map((w: any) => ({ id: s(w?.id, 60), codigo: s(w?.codigo, 40), label: s(w?.label, 200), zonas: (Array.isArray(w?.zonas) ? w.zonas.slice(0, 30) : []).map((x: unknown) => s(x, 60)) })),
     faltan: (Array.isArray(b?.faltan) ? b.faltan.slice(0, 10) : []).map((x: unknown) => s(x, 200)),

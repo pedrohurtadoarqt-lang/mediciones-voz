@@ -32,3 +32,12 @@ Cuenta iniciada y conexión. Sin IA, la obra nueva empieza con el asistente guia
 
 ## Voz natural
 Función `voz` (Gemini, texto a voz): con cuenta y conexión la app habla con una voz natural (8 voces a elegir en Ajustes). Si tarda más de 4,5 s o falla, usa la voz del móvil. El servidor elige solo el modelo de voz disponible (o `TTS_MODELO`); el estilo se puede cambiar con `TTS_ESTILO`.
+
+## Versión 3: guiado con IA (por defecto)
+La app vuelve a preguntar paso a paso, pero cada respuesta la interpreta la IA:
+- **Agenda** (`agenda()` en `src/conversa.js`): el siguiente dato que falta, calculado de la toma. Por zona: interior → medidas, altura, huecos (y medidas de huecos), trabajos; fachada → ancho y alto, ventanas, trabajos; cubierta → tipo, planta o faldones, trabajos; piscina → medidas, profundidad, trabajos; fontanería → aparatos; electricidad → puntos. Después, las mediciones propias de trabajos («¿cuántos sumideros?») y «¿qué más medimos?».
+- **Respuestas libres**: lo que se diga de más (otra estancia, trabajos, patologías) se anota igualmente; la agenda se salta lo que ya sabe. El foco sigue en la estancia en curso salvo que el usuario cambie de sitio («vamos a…», «pasamos a…»).
+- **Atajos sin IA** para respuestas simples a la pregunta en curso: altura o profundidad con un número, «4 por 3», «ninguna», «nada», «lo elijo en pantalla», «saltar», «genera las mediciones», «una vivienda».
+- **Nunca se atasca**: si una pregunta se repite sin que la respuesta aporte nada, la reformula; a la tercera la deja pendiente y sigue. «Atrás» deshace lo último y vuelve a preguntar.
+- **Terminar**: «genera las mediciones» → pregunta lo imprescindible que falte → genera.
+- «Te lo cuento yo» pasa al modo libre (versión 2); «pregúntame tú» vuelve al guiado.

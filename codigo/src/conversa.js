@@ -38,15 +38,18 @@
     }
 
     /* ---- inicio ---- */
+    get guiado() { return !this.g.cLibre; }
     start(pre) {
       this.obra.modo = 'conversa';
       if (!this.obra.ambito) this.obra.ambito = 'conversa';
-      this.g.fin = true; // el asistente guiado queda parado
+      this.g.fin = true; // el asistente guiado clásico queda parado
       this.save();
+      if (this.guiado) return this.siguiente(pre);
       this.ask((pre ? pre + ' ' : '') + 'Cuéntame la obra a tu manera: por dónde empezamos, las medidas y qué hay que hacer. Yo voy tomando nota y te pregunto lo que falte.',
-        [{ label: 'Prefiero que me preguntes tú', value: 'modo guiado' }]);
+        [{ label: 'Prefiero que me preguntes tú', value: 'preguntame tu' }]);
     }
     resume() {
+      if (this.guiado) return this.siguiente(this.toma.zonas.length ? 'Seguimos.' : '');
       const n = this.toma.zonas.length;
       this.ask(n ? 'Seguimos. Llevo ' + n + ' ' + plural(n, 'zona anotada', 'zonas anotadas') + '. Cuéntame.' : 'Cuéntame la obra: por dónde empezamos y qué hay que hacer.', this.chips());
     }
@@ -58,7 +61,10 @@
       if (/^(para|parar|stop|basta|calla|callate|silencio|espera|pausa|para de escuchar|deja de escuchar)$/.test(n)) { this.tok++; this.io.pause && this.io.pause(); return; }
       if (/^(repite|repitelo|que has dicho|como dices)$/.test(n) && this.ultima) return this.ask(this.ultima.text, this.ultima.chips);
       if (/^(deshaz|deshacer|deshaz eso|anula|anula eso|atras|vuelve atras|borra lo ultimo|quita lo ultimo)$/.test(n)) return this.deshacer();
-      if (/^(modo guiado|medicion guiada|preguntame tu|prefiero que me preguntes tu|asistente guiado)\b/.test(n)) return this.aGuiado();
+      if (/^(preguntame tu|prefiero que me preguntes tu|pregunta tu|hazme las preguntas)\b/.test(n)) { this.g.cLibre = false; this.save(); return this.siguiente('Vale, te pregunto yo.'); }
+      if (/^(te lo cuento yo|te cuento yo|dejame contartelo|modo libre|conversacion libre)\b/.test(n)) { this.g.cLibre = true; this.save(); return this.ask('Vale, cuéntamelo a tu manera; te pregunto solo lo que falte.', this.chips()); }
+      if (/^(modo guiado clasico|asistente clasico|sin ia)\b/.test(n)) return this.aGuiado();
+      if (this.guiado && this.atajo(text, n) !== false) return;
       if (/^(elegir trabajos|elige trabajos|ver trabajos|pantalla de trabajos|ver los trabajos)\b/.test(n) && this.toma.zonas.length) { this.io.trabajos && this.io.trabajos(true); return this.ask('Aquí tienes los trabajos anotados. Puedes marcar o desmarcar los que quieras y seguir hablando.', this.chips()); }
       if (this.esConsulta(n)) return this.responderConsulta(text, n);
       // Exportar, compartir, correo: los atiende el motor
@@ -67,6 +73,179 @@
         return this.ask('Para la conversación libre necesito la IA: entra en tu cuenta y comprueba la conexión. Mientras tanto puedo preguntarte yo paso a paso.', [{ label: 'Medición guiada', value: 'modo guiado' }]);
       }
       return this.consultar(text);
+    }
+
+    /* ============ MODO GUIADO CON IA ============
+     * La app pregunta paso a paso (como el asistente guiado), pero cada respuesta
+     * la interpreta la IA: lo que el usuario diga de más o en desorden se anota
+     * igualmente, y la siguiente pregunta se salta lo que ya se sabe.
+     */
+    /** Siguiente dato que hace falta, por orden: la zona en curso primero. */
+    agenda() {
+      const zs = this.toma.zonas, g = this.g;
+      if (g.cFin) return { campo: 'fin' };
+      if (!zs.length) return { campo: 'inicio' };
+      const cur = zs.find((z) => z.id === (g.cFoco || g.cZona));
+      const orden = (cur ? [cur] : []).concat(zs.filter((z) => z !== cur));
+      const sk = (z, c) => z.skip && z.skip[c];
+      for (const z of orden) {
+        const a = z.ambito;
+        const p = (campo) => ({ campo, z });
+        if (a === 'interior') {
+          if (z.area == null && !sk(z, 'planta')) return p('planta');
+          if (!z.altura && !sk(z, 'altura')) return p('altura');
+          if (!z.huecosOk && !sk(z, 'huecos')) return p('huecos');
+          if ((z.huecos || []).some((h) => !h.an || !h.al) && !sk(z, 'huecosMed')) return p('huecosMed');
+          if (!z.trabajosOk && !sk(z, 'trabajos')) return p('trabajos');
+        } else if (a === 'fachada') {
+          if ((!z.ancho || !z.alto) && !sk(z, 'fachada')) return p('fachada');
+          if (!z.huecosOk && !sk(z, 'ventanas')) return p('ventanas');
+          if (!z.trabajosOk && !sk(z, 'trabajos')) return p('trabajos');
+        } else if (a === 'cubierta') {
+          if (!z.tipo && !sk(z, 'cubTipo')) return p('cubTipo');
+          if (z.tipo === 'inclinada' ? !(z.faldones || []).length && !sk(z, 'faldones') : z.area == null && !sk(z, 'planta')) return p(z.tipo === 'inclinada' ? 'faldones' : 'planta');
+          if (!z.trabajosOk && !sk(z, 'trabajos')) return p('trabajos');
+        } else if (a === 'piscina') {
+          if (z.area == null && !sk(z, 'planta')) return p('planta');
+          if (!z.prof && !sk(z, 'prof')) return p('prof');
+          if (!z.trabajosOk && !sk(z, 'trabajos')) return p('trabajos');
+        } else if (a === 'fontaneria') {
+          if (!z.fOk && !sk(z, 'fon')) return p('fon');
+        } else if (a === 'electricidad') {
+          if (!z.eOk && !sk(z, 'ele')) return p('ele');
+        }
+        // Medidas propias de los trabajos anotados en la zona («¿cuántos sumideros?»)
+        this.faltan();
+        const f = (this._faltan || []).find((x) => x.z === z && x.preg && !sk(z, 'med:' + x.preg));
+        if (f) return { campo: 'med', z, preg: f.preg };
+      }
+      return { campo: 'mas' };
+    }
+    textoPaso(a) {
+      const z = a.z, A = z ? art(z.nombre) : '', breve = this.io.breve && this.io.breve();
+      const de = z ? (A.startsWith('el ') ? 'del ' + A.slice(3) : 'de ' + A) : '';
+      switch (a.campo) {
+        case 'inicio': return breve ? '¿Qué medimos?' : '¿Qué vamos a medir? Dime por dónde empezamos: una estancia, la fachada, la cubierta, una piscina… y cuéntame lo que veas.';
+        case 'planta': return z.ambito === 'piscina' ? '¿Qué medidas interiores tiene ' + A + '? Largo por ancho.' : breve ? '¿Medidas ' + de + '?' : '¿Qué medidas tiene ' + A + '? Largo por ancho, o pared a pared con los giros.';
+        case 'altura': return '¿Qué altura tiene ' + A + '?';
+        case 'huecos': return breve ? '¿Puertas y ventanas?' : '¿Qué puertas y ventanas tiene ' + A + ', con sus medidas?';
+        case 'huecosMed': { const h = (z.huecos || []).find((x) => !x.an || !x.al); return '¿Qué medidas tiene la ' + (h.bal ? 'balconera' : h.tipo) + ' ' + de + '?'; }
+        case 'trabajos': return breve ? '¿Qué se hace en ' + A + '?' : '¿Qué hay que hacer en ' + A + '?';
+        case 'fachada': return '¿Qué ancho y qué alto tiene ' + A + '?';
+        case 'ventanas': return '¿Qué ventanas tiene ' + A + '? Dime cuántas de cada tipo y sus medidas, o «ninguna».';
+        case 'cubTipo': return '¿' + cap(A) + ' es plana o inclinada?';
+        case 'faldones': return 'Dime los faldones ' + de + ': ancho por largo de cada uno, medidos en planta.';
+        case 'prof': return '¿Qué profundidad tiene ' + A + '? Si varía, la menor y la mayor.';
+        case 'fon': return '¿Qué aparatos lleva ' + A + '? Inodoro, lavabo, ducha o bañera, fregadero, lavadora…';
+        case 'ele': return '¿Cuántos puntos de luz y enchufes lleva ' + A + '? O dime «según normativa».';
+        case 'med': return a.preg;
+        case 'mas': return breve ? '¿Algo más, o generamos las mediciones?' : '¿Qué más medimos? Otra estancia, la fachada, la cubierta, las instalaciones… o dime «genera las mediciones».';
+        default: return '';
+      }
+    }
+    chipsPaso(a) {
+      const C = (xs) => xs.map((x) => (typeof x === 'string' ? { label: x, value: x } : x));
+      switch (a.campo) {
+        case 'inicio': return C(['Salón', 'Cocina', 'Baño', 'Fachada', 'Cubierta', 'Piscina']);
+        case 'huecos': case 'ventanas': return C([{ label: 'Ninguna', value: 'ninguna' }]);
+        case 'trabajos': return C([{ label: 'Nada', value: 'nada' }, { label: 'Lo elijo en pantalla', value: 'lo elijo en pantalla' }]);
+        case 'cubTipo': return C(['Plana', 'Inclinada']);
+        case 'ele': return C([{ label: 'Según normativa', value: 'según normativa' }]);
+        case 'mas': return C(['Otra estancia', 'Instalaciones', 'Fachada', { label: 'Generar mediciones', value: 'genera las mediciones' }]);
+        default: return [];
+      }
+    }
+    /** Pregunta lo siguiente que falta (o genera, si se ha pedido terminar). */
+    siguiente(pre, opt) {
+      const g = this.g;
+      const avanza = !!(opt && opt.avanza); // la respuesta aportó datos (no cuenta como fallo aunque se repita la pregunta)
+      let a = this.agenda();
+      if (a.campo === 'fin') {
+        this.faltan();
+        const f = this._faltan && this._faltan[0];
+        if (f) a = { campo: 'med', z: f.z, preg: preguntaDe(f) };
+        else return this.terminar(pre);
+      }
+      const k = a.campo + '|' + (a.z ? a.z.id : '');
+      const repe = g.cPaso && g.cPaso.k === k && !avanza;
+      g.cFails = repe ? (g.cFails || 0) + 1 : 0;
+      let q = this.textoPaso(a);
+      const chips = this.chipsPaso(a);
+      if (repe && g.cFails >= 1 && a.z) {
+        q = (g.cFails === 1 ? 'No me ha quedado claro. ' : 'Sigo sin tenerlo. ') + q;
+        chips.push({ label: 'Saltar', value: 'saltar' });
+        if (g.cFails >= 3) { // nunca atascarse: se salta y se sigue
+          a.z.skip = Object.assign({}, a.z.skip, { [a.campo === 'med' ? 'med:' + a.preg : a.campo]: true });
+          g.cPaso = null; this.save();
+          return this.siguiente((pre ? pre + ' ' : '') + 'Lo dejo pendiente y seguimos.');
+        }
+      }
+      g.cPaso = { k, campo: a.campo, zid: a.z ? a.z.id : '', texto: q, preg: a.preg || '' };
+      if (a.z) { g.cZona = a.z.id; g.cFoco = a.z.id; }
+      this.save();
+      const t = (pre ? pre + ' ' : '') + q;
+      return this.ask(t, chips.concat(this.toma.zonas.length && a.campo !== 'mas' ? [{ label: 'Generar mediciones', value: 'genera las mediciones' }] : []), { voz: this.vozCorta ? this.vozCorta(t) : t });
+    }
+    terminar(pre) {
+      const g = this.g;
+      g.cFin = false; g.cPaso = null;
+      this.regenerar();
+      const n = this.obra.partidas.length;
+      return this.ask((pre ? pre + ' ' : '') + 'Mediciones generadas: ' + n + ' ' + plural(n, 'partida') + '. Revísalas en pantalla, exporta el PDF o dime qué más medimos.',
+        [{ label: 'Exportar PDF', value: 'exporta el pdf' }, { label: 'Compartir archivos', value: 'compartir los archivos' }, { label: 'Ver trabajos', value: 'ver trabajos' }, { label: 'Medir algo más', value: 'medir algo mas' }]);
+    }
+    /** Respuestas simples a la pregunta en curso: sin esperar a la IA. */
+    atajo(text, n) {
+      const g = this.g, P = g.cPaso, z = P && P.zid ? this.toma.zonas.find((x) => x.id === P.zid) : null;
+      const corta = n.split(' ').length <= 6;
+      const NEG = /^(no|ninguna|ninguno|nada|no hay|no tiene|no lleva|sin huecos|ni puertas ni ventanas|nada mas|ninguna mas)\b/;
+      if (/^(saltar|salta|siguiente|pasa|no lo se|no se|luego te lo digo|despues)$/.test(n) && P) {
+        if (z) z.skip = Object.assign({}, z.skip, { [P.campo === 'med' ? 'med:' + P.preg : P.campo]: true });
+        g.cPaso = null; this.save(); return this.siguiente('Vale, lo dejo pendiente.');
+      }
+      if (/^(genera|generar|terminar|termina|terminamos|ya esta|eso es todo|saca las mediciones|vamos a sacar|acabamos|finaliza)\b/.test(n) && corta) { this.snapshot(); g.cFin = true; return this.siguiente(); }
+      if (/^(medir algo mas|medir otra|otra estancia|seguimos midiendo)$/.test(n)) { g.cFin = false; g.cPaso = { k: 'nueva', campo: 'nueva', texto: '¿Qué estancia o zona medimos ahora?' }; this.save(); return this.ask('¿Qué estancia o zona medimos ahora?', this.chipsPaso({ campo: 'inicio' })); }
+      if (P && P.campo === 'inicio' && /^(una |la |un |el )?(vivienda|piso|casa|reforma( integral)?|chalet|apartamento|toda la casa|todo el piso)$/.test(n)) {
+        this.g.cTipo = 'vivienda'; g.cPaso = { k: 'nueva', campo: 'nueva', texto: '¿Por qué estancia empezamos?' }; this.save();
+        return this.ask('Perfecto, una vivienda. ¿Por qué estancia empezamos?', this.chipsPaso({ campo: 'inicio' }));
+      }
+      if (!P || !corta) return false;
+      const nums = (G.numeros ? G.numeros(text) : []);
+      if (z && (P.campo === 'altura' || P.campo === 'prof') && nums.length === 1 && !/[a-z]{4,}/.test(n.replace(/\b(metros?|de|alto|altura|son|es|tiene|pues|unos|unas|y|medio|con|centimetros|profundidad)\b/g, '').replace(/\b(uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien)\b/g, ''))) {
+        this.snapshot();
+        let v = nums[0]; if (v >= 5) v = round2(v / 100);
+        if (P.campo === 'altura') { if (!(v > 1.5 && v < 15)) return false; z.altura = v; this.regenerar(); return this.siguiente(z.nombre + ': altura ' + fmt(v) + '.', { avanza: true }); }
+        z.pmin = z.pmax = z.prof = v; this.regenerar(); return this.siguiente('Profundidad ' + fmt(v) + '.', { avanza: true });
+      }
+      if (z && P.campo === 'planta') {
+        const w = G.parseWalk(text);
+        if (w && w.rect && !/[a-z]{4,}/.test(n.replace(/\b(por|x|metros?|de|con|mide|son|es|y|medio|rectangular|cuadrad[oa])\b/g, '').replace(/\b(uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\b/g, ''))) {
+          this.snapshot(); const c = []; this.planta(z, { largo: w.rect[0], ancho: w.rect[1], tramos: [] }, c); this.regenerar();
+          if (this.sketch && this.sketch.planta && this.io.sketch) this.io.sketch(plantaSVG(this.sketch.planta), 'Planta ' + this.sketch.nombre);
+          return this.siguiente(z.nombre + ': ' + c.join(', ') + '.', { avanza: true });
+        }
+      }
+      if (z && /^(huecos|ventanas)$/.test(P.campo) && NEG.test(n)) { this.snapshot(); z.huecosOk = true; if (z.ambito === 'interior') z.huecos = []; else z.ventanas = []; this.save(); return this.siguiente('Sin huecos.'); }
+      if (z && P.campo === 'trabajos' && (NEG.test(n) || /pantalla|luego lo elijo|despues lo elijo/.test(n))) {
+        this.snapshot(); z.trabajosOk = true; this.save();
+        if (/pantalla/.test(n)) { this.io.trabajos && this.io.trabajos(true); return this.siguiente('Te los dejo en pantalla para que los marques.'); }
+        return this.siguiente('');
+      }
+      if (P.campo === 'mas' && NEG.test(n)) { this.snapshot(); g.cFin = true; return this.siguiente(); }
+      if (z && P.campo === 'ele' && /(normativa|reglamento|minimo|lo normal)/.test(n)) return false; // lo resuelve la IA con segun_norma
+      return false;
+    }
+    /** Tras aplicar la respuesta: lo preguntado queda contestado si la respuesta lo cubre. */
+    marcarPaso(out, text) {
+      const g = this.g, P = g.cPaso; if (!P || !P.zid) return;
+      const z = this.toma.zonas.find((x) => x.id === P.zid); if (!z) return;
+      const n = norm(text || ''), toca = (out.zonas || []).some((x) => x.ref === z.id || norm(x.nombre) === norm(z.nombre));
+      const NEG = /^(no|ninguna|ninguno|nada|no hay|no tiene|no lleva)\b/.test(n);
+      if (P.campo === 'huecos' || P.campo === 'ventanas') { if ((out.zonas || []).some((x) => (x.ref === z.id || norm(x.nombre) === norm(z.nombre)) && ((x.huecos || []).length || x.huecos_modo === 'reemplazar')) || NEG) z.huecosOk = true; }
+      if (P.campo === 'trabajos') { if ((out.trabajos || []).length || NEG) z.trabajosOk = true; }
+      if (P.campo === 'fon' && (toca || (out.trabajos || []).length || NEG)) z.fOk = true;
+      if (P.campo === 'ele' && (toca || NEG)) z.eOk = true;
+      if (P.campo === 'med' && NEG) z.skip = Object.assign({}, z.skip, { ['med:' + P.preg]: true });
     }
 
     /* ---- preguntas sobre lo anotado (sin IA) ---- */
@@ -174,7 +353,7 @@
         obra_id: this.obra.id, frase: text.slice(0, 600),
         zona: g.cZona ? ((this.toma.zonas.find((z) => z.id === g.cZona) || {}).nombre || '') : '',
         zonas: this.toma.zonas.map((z) => ({ ref: z.id, ambito: z.ambito, nombre: z.nombre, datos: this.datosZona(z) })),
-        trabajos, faltan: this.faltan(), esperando: g.cPregunta || '', historial: log, candidatas
+        trabajos, faltan: this.faltan(), esperando: this.guiado && g.cPaso ? g.cPaso.texto + (g.cPaso.zid ? ' [zona: ' + ((this.toma.zonas.find((z) => z.id === g.cPaso.zid) || {}).nombre || '') + ']' : '') : (g.cPregunta || ''), guiado: this.guiado, historial: log, candidatas
       };
     }
 
@@ -184,18 +363,19 @@
       this.io.note && this.io.note('Tomando nota…');
       const ctx = this.contexto(text);
       const t0 = Date.now();
-      const lim = new Promise((r) => setTimeout(() => r({ timeout: true }), 45000));
+      let tLim = null;
+      const lim = new Promise((r) => { tLim = setTimeout(() => r({ timeout: true }), 45000); });
       // Si tarda, que se note que sigue trabajando
       const aviso = setTimeout(() => { if (tk === this.tok) this.io.note && this.io.note('Sigo con ello…'); }, 7000);
       return Promise.race([Promise.resolve().then(() => this.io.conversa(ctx)), lim]).then((res) => {
-        clearTimeout(aviso);
+        clearTimeout(aviso); clearTimeout(tLim);
         if (tk !== this.tok || !this.obra || this.obra.id !== obraId) return;
         if (res && res.timeout) throw new Error('la IA no ha contestado a tiempo');
         if (!res || !res.result) throw new Error((res && res.error) || 'sin respuesta');
         if (this.io.esAdmin && this.io.esAdmin()) this.io.note && this.io.note('(IA: ' + (res.modelo || '?') + ', ' + fmt((Date.now() - t0) / 1000, 1) + ' s' + (res.aviso_claude ? '; Claude: ' + String(res.aviso_claude).slice(0, 140) : '') + ')');
         return this.aplicar(res.result, text);
       }).catch((e) => {
-        clearTimeout(aviso);
+        clearTimeout(aviso); clearTimeout(tLim);
         if (tk !== this.tok) return;
         this.ask('No he podido consultarlo ahora mismo (' + (e && e.message ? e.message : 'error') + '). Repítemelo, o si prefieres te pregunto yo paso a paso.', [{ label: 'Repetir', value: text }, { label: 'Medición guiada', value: 'modo guiado' }]);
       });
@@ -204,7 +384,7 @@
     /* ---- aplicar la respuesta ---- */
     snapshot() {
       const g = this.g;
-      this.undo.push(JSON.stringify({ toma: this.toma, sel: g.sel || {}, resp: g.resp || {}, extra: g.extra || [], plantas: this.obra.plantas || {}, cont: g.contenedores, contOk: g.contenedoresOk, sys: g.sysPct, est: this.obra.estancias || [], estAct: this.obra.estActiva || '' }));
+      this.undo.push(JSON.stringify({ toma: this.toma, sel: g.sel || {}, resp: g.resp || {}, extra: g.extra || [], plantas: this.obra.plantas || {}, cont: g.contenedores, contOk: g.contenedoresOk, sys: g.sysPct, est: this.obra.estancias || [], estAct: this.obra.estActiva || '', paso: g.cPaso || null, fin: !!g.cFin }));
       if (this.undo.length > 30) this.undo.shift();
     }
     deshacer() {
@@ -212,7 +392,9 @@
       if (!s) return this.ask('No hay nada que deshacer.', this.chips());
       const o = JSON.parse(s), g = this.g;
       this.obra.toma = o.toma; g.sel = o.sel; g.resp = o.resp; g.extra = o.extra; this.obra.plantas = o.plantas; g.contenedores = o.cont; g.contenedoresOk = o.contOk; g.sysPct = o.sys; this.obra.estancias = o.est; this.obra.estActiva = o.estAct;
+      if (o.paso !== undefined) { g.cPaso = o.paso; g.cFin = o.fin; }
       this.regenerar();
+      if (this.guiado) { g.cPaso = null; return this.siguiente('Vale, lo quito.'); }
       this.ask('Deshecho: he quitado lo último que anoté.', this.chips());
     }
     zonaPara(zr) {
@@ -312,6 +494,7 @@
         ['mampara', 'bide', 'lavadora', 'lavavajillas'].forEach((k) => { const v = SN(zr[k]); if (v !== undefined) f[k] = v; });
         const ap = [f.tipo === 'bano' && 'lavabo', f.inodoro && 'inodoro' + (f.inodoro === 'suspendido' ? ' suspendido' : ''), f.ducha && (f.ducha === 'banera' ? 'bañera' : 'plato de ducha'), f.mampara && 'mampara', f.bide && 'bidé', f.tipo === 'cocina' && 'fregadero', f.lavadora && 'lavadora', f.lavavajillas && 'lavavajillas'].filter(Boolean);
         c.push('fontanería' + (ap.length ? ': ' + ap.join(', ') : ''));
+        if (ap.length || f.af || f.afc) z.fOk = true;
       }
       if (amb === 'electricidad') {
         const e = z.e || (z.e = {});
@@ -323,6 +506,7 @@
         }
         if (ok(zr.puntos_luz)) e.luz = Math.round(zr.puntos_luz); if (ok(zr.tomas)) e.tomas = Math.round(zr.tomas);
         if (SN(zr.horno)) e.c3 = 1;
+        if (e.luz != null || e.tomas != null) z.eOk = true;
         c.push('electricidad' + (e.luz != null ? ': ' + e.luz + ' ' + plural(e.luz, 'punto') + ' de luz' : '') + (e.tomas != null ? ', ' + e.tomas + ' ' + plural(e.tomas, 'toma') : ''));
       }
       this.g.cZona = z.id;
@@ -439,7 +623,7 @@
       out = out || {};
       const g = this.g;
       if (out.accion === 'deshacer') return this.deshacer();
-      if (out.accion === 'guiado') return this.aGuiado();
+      if (out.accion === 'guiado') { g.cLibre = false; return this.siguiente('Vale, te pregunto yo.'); }
       if (out.accion === 'pausa') { this.io.pause && this.io.pause(); return; }
       const hay = (out.zonas || []).length || (out.trabajos || []).length || out.contenedores || out.seguridad_pct;
       if (hay) this.snapshot();
@@ -501,6 +685,7 @@
       // Si preguntaba algo y la IA no ha contestado, contesta la app con lo anotado
       if (!hay && !msg && !(out.pregunta || '').trim() && /^(y )?(como|cuanto|cuantos|cuantas|que|cuales|donde|dime)\b/.test(this.textoN)) return this.responderConsulta(text, this.textoN);
       let preg = (out.pregunta || '').trim();
+      if (out.accion === 'generar' && this.guiado) { g.cFin = true; return this.siguiente(txt); }
       if (out.accion === 'generar') {
         const f = this.faltan();
         if (!preg && f.length) preg = preguntaDe(this._faltan[0]);
@@ -512,6 +697,15 @@
         }
       }
       g.cPregunta = preg || '';
+      if (this.guiado && out.accion !== 'generar') {
+        this.marcarPaso(out, text);
+        // El foco sigue en la zona que se estaba midiendo, salvo que el usuario cambie de sitio
+        const P = g.cPaso, cambiaSitio = /^(vamos|pasamos|ahora|seguimos|empezamos|nos vamos|vamonos)\b/.test(this.textoN) || (P && /^(inicio|nueva|mas)$/.test(P.campo));
+        if (cambiaSitio && g.cZona) g.cFoco = g.cZona;
+        // La IA solo pregunta si algo es ambiguo; si no, pregunta la app lo siguiente
+        if (preg && !hay) return this.ask((txt && txt !== 'Vale.' ? txt + ' ' : '') + preg, this.chips(out.opciones));
+        return this.siguiente(txt && !/^(vale|anotado)\.?$/i.test(txt) ? txt : '', { avanza: !!hay });
+      }
       this.save();
       if (preg) return this.ask((txt ? txt + ' ' : '') + preg, this.chips(out.opciones), { voz: vozDe((txt ? txt + ' ' : '') + preg) });
       if (!txt) txt = hay ? 'Anotado.' : 'Vale.';

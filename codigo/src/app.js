@@ -882,9 +882,9 @@
     h += sec('pasos', '1. Empezar en 4 pasos', '<ol class="msteps">' +
       '<li>En <b>Mis obras</b>, pulsa <b>Nueva obra</b> y ponle un nombre.</li>' +
       '<li>Pulsa <b>Empezar a medir</b>. La primera vez el móvil te pedirá permiso para el micrófono: dale a <b>Permitir</b>.</li>' +
-      '<li><b>Cuéntale la obra</b> como se la contarías a tu encargado, en el orden que quieras: ' + say('empezamos por el salón, que mide cuatro por tres y medio y dos sesenta de alto') + ' ' + say('aquí hay que quitar el gres, poner porcelánico y pintar') + '. La app toma nota, repite lo que ha anotado y solo te pregunta lo que le falte.</li>' +
-      '<li>Cuando acabes, di ' + say('genera las mediciones') + '. Te preguntará los datos que falten y tendrás el estado de mediciones listo para exportar.</li></ol>' +
-      '<p class="mtip">Si prefieres que la app te pregunte paso a paso, di ' + say('prefiero que me preguntes tú') + '. Para la conversación libre hace falta tener la cuenta iniciada y conexión; sin ella, la app te pregunta paso a paso.</p>' +
+      '<li><b>La app te pregunta paso a paso</b> (medidas, altura, puertas y ventanas, qué hay que hacer…) y tú <b>contestas con tus palabras</b>. Puedes decir más de lo que te pregunta o adelantar cosas: ' + say('dos sesenta, y por cierto la cocina mide tres por dos cuarenta') + '. Lo guarda todo y no te vuelve a preguntar lo que ya sabe.</li>' +
+      '<li>Cuando acabes, di ' + say('genera las mediciones') + '. Te preguntará lo que falte y tendrás el estado de mediciones listo para exportar.</li></ol>' +
+      '<p class="mtip">Para corregir: ' + say('atrás') + ' o ' + say('no, eran dos cincuenta') + '. Para saltar una pregunta: ' + say('saltar') + '. Si prefieres contarlo todo tú sin preguntas, di ' + say('te lo cuento yo') + '. Con la cuenta iniciada y conexión la app entiende respuestas libres; sin ella, pregunta paso a paso con respuestas más cortas.</p>' +
       '<p class="mtip">No hace falta pulsar nada mientras hablas: el micrófono se abre solo cuando la app termina de hablar.</p>', true);
     h += sec('botones', '2. Para qué sirve cada botón',
       '<h4>Arriba</h4>' +

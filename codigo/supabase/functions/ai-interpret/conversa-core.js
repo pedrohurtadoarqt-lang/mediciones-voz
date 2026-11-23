@@ -139,6 +139,7 @@
       'TRABAJOS ANOTADOS (id | trabajo | zonas):\n' + (ws || '(ninguno)'),
       ctx.faltan && ctx.faltan.length ? 'FALTA PARA MEDIR:\n- ' + ctx.faltan.join('\n- ') : 'FALTA PARA MEDIR: nada',
       ctx.esperando ? 'LA APP ACABA DE PREGUNTAR: ' + ctx.esperando : '',
+      ctx.guiado ? 'MODO GUIADO: la app va preguntando paso a paso. Lo normal es que la frase conteste a esa pregunta: anótalo en esa zona (si dice que no hay puertas ni ventanas, "huecos_modo": "reemplazar" con "huecos" vacío). Pero anota TAMBIÉN todo lo demás que diga, aunque sea de otra zona o de más adelante. Deja "pregunta" vacía (la app pregunta lo siguiente) salvo que algo sea ambiguo de verdad.' : '',
       ctx.historial && ctx.historial.length ? 'CONVERSACIÓN RECIENTE:\n' + ctx.historial.map((m) => (m.who === 'user' ? 'Usuario: ' : 'App: ') + m.text).join('\n') : '',
       c ? 'PARTIDAS CANDIDATAS DE LA BASE (código | unidad | resumen):\n' + c : ''
     ].filter(Boolean).join('\n\n');
