@@ -94,6 +94,8 @@
       '- "zonas": nombres de las zonas donde se hace (vacío = en todas las de su ámbito, p. ej. «pintar todo el piso»). "ambito" solo si no hay id.',
       '- "quitar": true si dice que ese trabajo no se hace o lo descarta.',
       '- CAMBIOS DE IDEA: si cambia un trabajo ya anotado por otro («mejor que sea…», «en lugar de…», «no hace falta que sea con arlita, de hormigón normal», «me lo he pensado mejor»), manda el anterior con "quitar": true (con su id de TRABAJOS ANOTADOS) y el nuevo. Nunca dejes los dos.',
+      '- No inventes trabajos: anota solo lo que el usuario ha dicho. Si te pide «anota los trabajos que te he dicho», búscalos en la CONVERSACIÓN y anota los que falten en TRABAJOS ANOTADOS, sin añadir otros. «El suelo» sin más NO es tarima: si no dice de qué es, es el pavimento existente (baldosa).',
+      '- «Base para embaldosar», «recrecido», «nivelación de mortero» = sol_base (no un autonivelante ni una solera de hormigón, salvo que lo diga). «Enfoscado maestreado para alicatar» = rev_enf_alic.',
       '- Un trabajo por cosa dicha: «picar las paredes» es UNA demolición del revestimiento (la que corresponda: yeso si luego va yeso, enfoscado si va enfoscado), no dos.',
       '- "medidas": SOLO cuando el usuario da una medida propia de ese trabajo que no sale de la zona: «picar 2 metros cuadrados de la pared del baño», «tres sumideros», «hay que reparar cuatro metros de pilar», «un tabique de 3,20 por 2,60». Cada medida con su "zona", un "comentario" corto y uds/largo/ancho/alto en metros (m2 de pared: largo y alto; suelo: largo y ancho; m: largo; ud: uds).',
       '- Patologías que se ven (pilares o vigas con armaduras oxidadas, humedades, grietas, desconchados): trabajos de reparación con sus medidas, como cualquier otro.',

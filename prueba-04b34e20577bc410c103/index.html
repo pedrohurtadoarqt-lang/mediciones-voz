@@ -3538,7 +3538,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     T('interior', 'Revestimientos', 'rev_enfosc', 'Enfoscado de mortero', 'm2', 'RPE005b', 'paredes'),
     T('interior', 'Revestimientos', 'rev_yeso', 'Guarnecido de yeso en paredes', 'm2', 'RPG010f', 'paredes'),
     T('interior', 'Revestimientos', 'rev_yeso_t', 'Guarnecido de yeso en techos', 'm2', 'RPG010', 'techo'),
+    T('interior', 'Revestimientos', 'rev_enf_alic', 'Enfoscado maestreado para alicatar', 'm2', 'RPE012', 'paredes'),
     T('interior', 'Revestimientos', 'rev_alic', 'Alicatado', 'm2', 'RAG012b', 'paredes', { zonas: /bano|aseo|cocina/ }),
+    T('interior', 'Solados', 'sol_base', 'Base de mortero para nivelar y embaldosar (recrecido)', 'm2', 'RSB010', 'suelo'),
     T('interior', 'Solados', 'sol_gres', 'Solado de gres porcelánico', 'm2', 'RSG010h', 'suelo'),
     T('interior', 'Solados', 'sol_piedra', 'Solado de piedra natural', 'm2', 'RSP010r', 'suelo'),
     T('interior', 'Solados', 'sol_rodapie', 'Rodapié de gres porcelánico', 'm', 'RSG020', 'rodapie'),
@@ -5771,7 +5773,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       if (a.z) { g.cZona = a.z.id; g.cFoco = a.z.id; }
       this.save();
       const t = (pre ? pre + ' ' : '') + q;
-      return this.ask(t, chips.concat(this.toma.zonas.length && a.campo !== 'mas' ? [{ label: 'Generar mediciones', value: 'genera las mediciones' }] : []), { voz: this.vozCorta ? this.vozCorta(t) : t });
+      const vp = opt && opt.vozPre != null ? opt.vozPre : pre;
+      return this.ask(t, chips.concat(this.toma.zonas.length && a.campo !== 'mas' ? [{ label: 'Generar mediciones', value: 'genera las mediciones' }] : []), { voz: (vp ? vp + ' ' : '') + q });
     }
     terminar(pre) {
       const g = this.g;
@@ -6036,8 +6039,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (h && /(altura|alto|techo)/.test(this.textoN || '') && nh.length === 1 && !near(h, nh[0])) h = nh[0];
         if (h) { z.altura = h; c.push('altura ' + fmt(h)); }
         const hs = (zr.huecos || []).map((x) => ({ tipo: x.tipo === 'ventana' ? 'ventana' : 'puerta', bal: x.tipo === 'balconera', uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) || (x.tipo === 'puerta' ? 2.03 : null) }));
-        if (hs.length || zr.huecos_modo === 'reemplazar') {
+        const niega = /\b(no hay|no tiene|ninguna|ninguno|sin (puertas|ventanas|huecos)|ni puertas|ni ventanas)\b/.test(this.textoN || '');
+        if (hs.length || (zr.huecos_modo === 'reemplazar' && niega)) {
           z.huecos = zr.huecos_modo === 'reemplazar' ? hs : (z.huecos || []).concat(hs);
+          z.huecosOk = true;
           const np = hs.filter((x) => x.tipo === 'puerta' && !x.bal).reduce((a, x) => a + x.uds, 0), nv = hs.filter((x) => x.tipo === 'ventana').reduce((a, x) => a + x.uds, 0), nb = hs.filter((x) => x.bal).reduce((a, x) => a + x.uds, 0);
           const t = [np && np + ' ' + plural(np, 'puerta'), nv && nv + ' ' + plural(nv, 'ventana'), nb && nb + ' ' + plural(nb, 'balconera')].filter(Boolean).join(' y ');
           if (t) c.push(t + (hs.some((x) => !x.an || !x.al) ? ' (me falta alguna medida)' : ''));
@@ -6052,7 +6057,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (an) z.ancho = an; if (al) z.alto = al;
         if (an || al) c.push((z.ancho ? fmt(z.ancho) : '?') + ' por ' + (z.alto ? fmt(z.alto) : '?'));
         const vs = (zr.huecos || []).filter((x) => x.tipo !== 'puerta').map((x) => ({ uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) })).filter((v) => v.an && v.al);
-        if (vs.length || zr.huecos_modo === 'reemplazar') { z.ventanas = zr.huecos_modo === 'reemplazar' ? vs : (z.ventanas || []).concat(vs); z.descontar = true; const nv = vs.reduce((a, v) => a + v.uds, 0); if (nv) c.push(nv + ' ' + plural(nv, 'ventana')); }
+        if (vs.length || zr.huecos_modo === 'reemplazar') { z.ventanas = zr.huecos_modo === 'reemplazar' ? vs : (z.ventanas || []).concat(vs); z.descontar = true; z.huecosOk = true; const nv = vs.reduce((a, v) => a + v.uds, 0); if (nv) c.push(nv + ' ' + plural(nv, 'ventana')); }
       }
       if (amb === 'cubierta') {
         if (zr.cub_tipo) z.tipo = zr.cub_tipo;
@@ -6107,6 +6112,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       if (!w && tr.id) w = (this.g.extra || []).find((x) => x.id === tr.id);
       const amb = (w && w.ambito) || tr.ambito || (zonas[0] && zonas[0].ambito) || ((this.toma.zonas.find((z) => z.id === this.g.cZona) || {}).ambito) || 'interior';
       if (w) return w;
+      if (tr.codigo) { const wc = G.TRABAJOS.find((t) => t.c === tr.codigo && (!tr.ambito || t.ambito === tr.ambito)); if (wc) return wc; }
       let d = tr.codigo && cat ? cat.byCode.get(tr.codigo) : null;
       if (!d && tr.buscar && cat && cat.index) {
         const res = cat.index.search(tr.buscar).filter((r) => !tr.unidad || r.doc.u === tr.unidad);
@@ -6180,6 +6186,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         porZona.forEach((ls, zid) => { g.resp[w.id + '|' + zid] = ls; if (!ids.includes(zid)) ids.push(zid); });
       }
       const s = sel[w.id] || (g.sel[w.id] = { on: true, zonas: [] });
+      if (!s.on) { s.zonas = []; s.todas = false; } // recién marcado: no hereda las zonas por defecto
       s.on = true;
       if (!ids.length && !meds.length) { s.todas = true; s.zonas = G.zonasDe(this.obra, w).map((z) => z.id); }
       else s.zonas = [...new Set((s.todas ? [] : s.zonas).concat(ids))].filter((id) => zs.some((z) => z.id === id)), s.todas = false;
@@ -6201,6 +6208,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     regenerar() {
       this.extender();
+      const sel = G.seleccion(this.obra);
+      (this.g.extra || []).forEach((x) => {
+        const s = sel[x.id]; if (!s || !s.on || !x.c) return;
+        G.TRABAJOS.filter((t) => t.c === x.c && sel[t.id] && sel[t.id].on).forEach((t) => { s.zonas = s.zonas.filter((z) => !sel[t.id].zonas.includes(z)); if (!s.zonas.length) s.on = false; });
+      });
       let r = { partidas: 0, preguntas: [] };
       try { r = G.generar(this.obra, this.dlg.cat); } catch (e) { r = { partidas: 0, preguntas: [] }; }
       this.save();
@@ -6229,6 +6241,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           const rf = this.trabajoFontaneria(tr); if (rf) { if (rf.txt) fon.add(rf.txt); return; }
           const r = this.aplicarTrabajo(tr); if (!r) return;
           (r.quitado ? quitados : puestos).push(r.w.label.replace(/\s*\(.*?\)\s*$/, '').toLowerCase());
+          if (!r.quitado) (r.zonas || []).forEach((z) => { z.trabajosOk = true; });
         } catch (e) { /* trabajo mal formado */ }
       });
       if (ok(out.contenedores)) { g.contenedores = Math.round(out.contenedores); g.contenedoresOk = true; frases.push(g.contenedores + ' ' + plural(g.contenedores, 'contenedor', 'contenedores') + ' de residuos.'); }
@@ -6242,7 +6255,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         const todos = G.trabajosPara(this.obra);
         nuevos.forEach((idN) => {
           const wn = todos.find((w) => w.id === idN); if (!wn) return;
-          const tipo = (w) => norm(w.label).split(' ')[0].slice(0, 5); // «solera…», «solado…», «demolición…»
+          // Familia del trabajo: soleras, bases y recrecidos son intercambiables; si no, la primera palabra
+          const tipo = (w) => { const l = norm(w.label); return /^(solera|base|recrecido|nivelac|autonivel|mortero de nivel)/.test(l) ? 'base' : /^(enfoscado|guarnecido|revoco|enlucido)/.test(l) ? 'revest' : l.split(' ')[0].slice(0, 5); };
           todos.filter((w) => w.id !== idN && antes.has(w.id) && recientes.includes(w.id) && w.ambito === wn.ambito && w.u === wn.u && w.regla === wn.regla && tipo(w) === tipo(wn) && sel2[w.id].zonas.some((z) => sel2[idN].zonas.includes(z))).forEach((w) => {
             sel2[w.id].zonas = sel2[w.id].zonas.filter((z) => !sel2[idN].zonas.includes(z)); sel2[w.id].todas = false;
             if (!sel2[w.id].zonas.length) sel2[w.id].on = false;
@@ -6291,7 +6305,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (cambiaSitio && g.cZona) g.cFoco = g.cZona;
         // La IA solo pregunta si algo es ambiguo; si no, pregunta la app lo siguiente
         if (preg && !hay) return this.ask((txt && txt !== 'Vale.' ? txt + ' ' : '') + preg, this.chips(out.opciones));
-        return this.siguiente(txt && !/^(vale|anotado)\.?$/i.test(txt) ? txt : '', { avanza: !!hay });
+        const pre = txt && !/^(vale|anotado)\.?$/i.test(txt) ? txt : '';
+        return this.siguiente(pre, { avanza: !!hay, vozPre: pre ? vozDe(pre) : '' });
       }
       this.save();
       if (preg) return this.ask((txt ? txt + ' ' : '') + preg, this.chips(out.opciones), { voz: vozDe((txt ? txt + ' ' : '') + preg) });
@@ -7156,7 +7171,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
             o.connect(g).connect(c.destination); o.start(t + d); o.stop(t + d + 0.11);
           });
         } catch (e) {}
-        setTimeout(resolve, 300);
+        setTimeout(() => { soltarAudio(); setTimeout(resolve, 120); }, 300);
       });
     }
     function unlock() {
@@ -7169,39 +7184,67 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     // Voz natural en la nube: si responde rápido se usa; si no, la voz del móvil
     let cloudTTS = null, fuente = null;
     const cacheVoz = new Map();
-    function playPCM(b64, rate, my) {
-      return new Promise((resolve) => {
-        const c = audioCtx(); if (!c) return resolve(false);
+    /** Suelta el audio del navegador (en Android, si sigue activo, el micro no se abre). */
+    function soltarAudio() { try { if (actx && actx.state === 'running' && !fuente) actx.suspend(); } catch (e) {} }
+    function b64bytes(b64) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+    async function bufferDe(r) {
+      const c = audioCtx(); if (!c) return null;
+      if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} }
+      const u = b64bytes(r.audio);
+      // WAV (lo que devuelven los modelos actuales) o PCM de 16 bits sin cabecera
+      if (u[0] === 82 && u[1] === 73 && u[2] === 70 && u[3] === 70) return await new Promise((ok) => { try { c.decodeAudioData(u.buffer.slice(0), ok, () => ok(null)); } catch (e) { ok(null); } });
+      const n = u.length >> 1, buf = c.createBuffer(1, n, r.rate || 24000), ch = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) { let v = u[2 * i] | (u[2 * i + 1] << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
+      return buf;
+    }
+    async function playBuffer(r, my) {
+      const c = audioCtx(); if (!c) return false;
+      const buf = await bufferDe(r); if (!buf || my !== speakId) return !!buf;
+      return await new Promise((resolve) => {
         try {
-          const bin = atob(b64), n = bin.length >> 1, buf = c.createBuffer(1, n, rate || 24000), ch = buf.getChannelData(0);
-          for (let i = 0; i < n; i++) { let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
           const src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination);
           fuente = src;
-          const fin = () => { if (fuente === src) fuente = null; resolve(true); };
+          let hecho = false; const fin = () => { if (hecho) return; hecho = true; if (fuente === src) fuente = null; resolve(true); };
           src.onended = fin;
           setTimeout(fin, buf.duration * 1000 + 1500); // por si no llega el aviso de fin
-          if (my !== speakId) return resolve(true);
           src.start();
         } catch (e) { resolve(false); }
       });
+    }
+    /** Trozos para empezar a hablar antes: la primera frase y el resto. */
+    function trozos(t) {
+      const fr = (t.match(/[^.!?]+[.!?]*/g) || [t]).map((x) => x.trim()).filter(Boolean);
+      if (fr.length <= 1) return [t];
+      let a = fr.shift(); while (fr.length && a.length < 30) a += ' ' + fr.shift();
+      return fr.length ? [a, fr.join(' ')] : [a];
+    }
+    function pedirVoz(t, ms) {
+      if (cacheVoz.has(t)) return Promise.resolve(cacheVoz.get(t));
+      return Promise.race([Promise.resolve().then(() => cloudTTS(t)).then((r) => { if (r && r.audio) { cacheVoz.set(t, r); if (cacheVoz.size > 40) cacheVoz.delete(cacheVoz.keys().next().value); } return r; }).catch(() => null), new Promise((res) => setTimeout(() => res(null), ms))]);
     }
     async function speakCloud(text) {
       const my = ++speakId;
       if (mode === 'native' && listening) { try { rec && rec.abort(); } catch (e) {} listening = false; }
       speaking = true; lastSaid = text; state();
-      let r = cacheVoz.get(text) || null;
-      if (!r) {
-        try { r = await Promise.race([cloudTTS(text), new Promise((res) => setTimeout(() => res(null), 4500))]); } catch (e) { r = null; }
-        if (r && r.audio) { cacheVoz.set(text, r); if (cacheVoz.size > 40) cacheVoz.delete(cacheVoz.keys().next().value); }
+      const partes = trozos(text);
+      const proms = partes.map((t, i) => pedirVoz(t, i ? 9000 : 4500)); // se piden a la vez
+      for (let i = 0; i < partes.length; i++) {
+        const r = await proms[i];
+        if (my !== speakId) return true; // interrumpido
+        if (!r || !r.audio || !(await playBuffer(r, my))) {
+          if (i === 0) { speaking = false; state(); return false; }
+          speaking = false; await speakLocal(partes.slice(i).join(' ')); return true;
+        }
+        if (my !== speakId) return true;
       }
-      if (my !== speakId) return true; // interrumpido mientras se generaba
-      if (!r || !r.audio) { speaking = false; state(); return false; }
-      const ok = await playPCM(r.audio, r.rate, my);
+      soltarAudio();
+      await new Promise((r) => setTimeout(r, 150));
       lastStop = Date.now();
       if (my === speakId) { speaking = false; state(); }
-      return ok;
+      return true;
     }
     async function speak(text) {
+      if (text) text = text.replace(/(\d+),00\b/g, '$1').replace(/«|»/g, '');
       if (text && cloudTTS && navigator.onLine !== false) { if (await speakCloud(text)) return; }
       return speakLocal(text);
     }
@@ -7276,7 +7319,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       try {
         rec = new SR(); rec.lang = 'es-ES'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
         gotFinal = false; lastPartial = '';
-        rec.onstart = () => { micState = 'granted'; listening = true; needTap = false; retried = false; state(); };
+        rec.onstart = () => { micState = 'granted'; listening = true; needTap = false; retried = false; autoRestarts = 0; state(); };
         rec.onresult = (e) => {
           if (speaking) return;
           let fin = '', inter = '';
@@ -7294,6 +7337,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
             micState = 'denied';
           }
           if (code === 'aborted') return;
+          if (code === 'audio-capture' && !fromTap && autoRestarts < 3) { autoRestarts++; soltarAudio(); setTimeout(() => { if (!speaking && !listening) listen(false); }, 500); return; }
           cb.onError(code);
         };
         rec.onend = () => {
@@ -7304,7 +7348,9 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         rec.start(); listening = true; state();
       } catch (e) {
         listening = false;
-        if (!fromTap) needTap = true;
+        // El reconocedor anterior aún no había terminado: se reintenta antes de pedir un toque
+        if (!fromTap && autoRestarts < 3) { autoRestarts++; setTimeout(() => { if (!speaking && !listening) listen(false); }, 400); }
+        else if (!fromTap) needTap = true;
         state();
       }
     }

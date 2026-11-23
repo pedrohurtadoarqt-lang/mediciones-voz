@@ -184,7 +184,8 @@
       if (a.z) { g.cZona = a.z.id; g.cFoco = a.z.id; }
       this.save();
       const t = (pre ? pre + ' ' : '') + q;
-      return this.ask(t, chips.concat(this.toma.zonas.length && a.campo !== 'mas' ? [{ label: 'Generar mediciones', value: 'genera las mediciones' }] : []), { voz: this.vozCorta ? this.vozCorta(t) : t });
+      const vp = opt && opt.vozPre != null ? opt.vozPre : pre;
+      return this.ask(t, chips.concat(this.toma.zonas.length && a.campo !== 'mas' ? [{ label: 'Generar mediciones', value: 'genera las mediciones' }] : []), { voz: (vp ? vp + ' ' : '') + q });
     }
     terminar(pre) {
       const g = this.g;
@@ -449,8 +450,10 @@
         if (h && /(altura|alto|techo)/.test(this.textoN || '') && nh.length === 1 && !near(h, nh[0])) h = nh[0];
         if (h) { z.altura = h; c.push('altura ' + fmt(h)); }
         const hs = (zr.huecos || []).map((x) => ({ tipo: x.tipo === 'ventana' ? 'ventana' : 'puerta', bal: x.tipo === 'balconera', uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) || (x.tipo === 'puerta' ? 2.03 : null) }));
-        if (hs.length || zr.huecos_modo === 'reemplazar') {
+        const niega = /\b(no hay|no tiene|ninguna|ninguno|sin (puertas|ventanas|huecos)|ni puertas|ni ventanas)\b/.test(this.textoN || '');
+        if (hs.length || (zr.huecos_modo === 'reemplazar' && niega)) {
           z.huecos = zr.huecos_modo === 'reemplazar' ? hs : (z.huecos || []).concat(hs);
+          z.huecosOk = true;
           const np = hs.filter((x) => x.tipo === 'puerta' && !x.bal).reduce((a, x) => a + x.uds, 0), nv = hs.filter((x) => x.tipo === 'ventana').reduce((a, x) => a + x.uds, 0), nb = hs.filter((x) => x.bal).reduce((a, x) => a + x.uds, 0);
           const t = [np && np + ' ' + plural(np, 'puerta'), nv && nv + ' ' + plural(nv, 'ventana'), nb && nb + ' ' + plural(nb, 'balconera')].filter(Boolean).join(' y ');
           if (t) c.push(t + (hs.some((x) => !x.an || !x.al) ? ' (me falta alguna medida)' : ''));
@@ -465,7 +468,7 @@
         if (an) z.ancho = an; if (al) z.alto = al;
         if (an || al) c.push((z.ancho ? fmt(z.ancho) : '?') + ' por ' + (z.alto ? fmt(z.alto) : '?'));
         const vs = (zr.huecos || []).filter((x) => x.tipo !== 'puerta').map((x) => ({ uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) })).filter((v) => v.an && v.al);
-        if (vs.length || zr.huecos_modo === 'reemplazar') { z.ventanas = zr.huecos_modo === 'reemplazar' ? vs : (z.ventanas || []).concat(vs); z.descontar = true; const nv = vs.reduce((a, v) => a + v.uds, 0); if (nv) c.push(nv + ' ' + plural(nv, 'ventana')); }
+        if (vs.length || zr.huecos_modo === 'reemplazar') { z.ventanas = zr.huecos_modo === 'reemplazar' ? vs : (z.ventanas || []).concat(vs); z.descontar = true; z.huecosOk = true; const nv = vs.reduce((a, v) => a + v.uds, 0); if (nv) c.push(nv + ' ' + plural(nv, 'ventana')); }
       }
       if (amb === 'cubierta') {
         if (zr.cub_tipo) z.tipo = zr.cub_tipo;
@@ -520,6 +523,7 @@
       if (!w && tr.id) w = (this.g.extra || []).find((x) => x.id === tr.id);
       const amb = (w && w.ambito) || tr.ambito || (zonas[0] && zonas[0].ambito) || ((this.toma.zonas.find((z) => z.id === this.g.cZona) || {}).ambito) || 'interior';
       if (w) return w;
+      if (tr.codigo) { const wc = G.TRABAJOS.find((t) => t.c === tr.codigo && (!tr.ambito || t.ambito === tr.ambito)); if (wc) return wc; }
       let d = tr.codigo && cat ? cat.byCode.get(tr.codigo) : null;
       if (!d && tr.buscar && cat && cat.index) {
         const res = cat.index.search(tr.buscar).filter((r) => !tr.unidad || r.doc.u === tr.unidad);
@@ -593,6 +597,7 @@
         porZona.forEach((ls, zid) => { g.resp[w.id + '|' + zid] = ls; if (!ids.includes(zid)) ids.push(zid); });
       }
       const s = sel[w.id] || (g.sel[w.id] = { on: true, zonas: [] });
+      if (!s.on) { s.zonas = []; s.todas = false; } // recién marcado: no hereda las zonas por defecto
       s.on = true;
       if (!ids.length && !meds.length) { s.todas = true; s.zonas = G.zonasDe(this.obra, w).map((z) => z.id); }
       else s.zonas = [...new Set((s.todas ? [] : s.zonas).concat(ids))].filter((id) => zs.some((z) => z.id === id)), s.todas = false;
@@ -614,6 +619,11 @@
     }
     regenerar() {
       this.extender();
+      const sel = G.seleccion(this.obra);
+      (this.g.extra || []).forEach((x) => {
+        const s = sel[x.id]; if (!s || !s.on || !x.c) return;
+        G.TRABAJOS.filter((t) => t.c === x.c && sel[t.id] && sel[t.id].on).forEach((t) => { s.zonas = s.zonas.filter((z) => !sel[t.id].zonas.includes(z)); if (!s.zonas.length) s.on = false; });
+      });
       let r = { partidas: 0, preguntas: [] };
       try { r = G.generar(this.obra, this.dlg.cat); } catch (e) { r = { partidas: 0, preguntas: [] }; }
       this.save();
@@ -642,6 +652,7 @@
           const rf = this.trabajoFontaneria(tr); if (rf) { if (rf.txt) fon.add(rf.txt); return; }
           const r = this.aplicarTrabajo(tr); if (!r) return;
           (r.quitado ? quitados : puestos).push(r.w.label.replace(/\s*\(.*?\)\s*$/, '').toLowerCase());
+          if (!r.quitado) (r.zonas || []).forEach((z) => { z.trabajosOk = true; });
         } catch (e) { /* trabajo mal formado */ }
       });
       if (ok(out.contenedores)) { g.contenedores = Math.round(out.contenedores); g.contenedoresOk = true; frases.push(g.contenedores + ' ' + plural(g.contenedores, 'contenedor', 'contenedores') + ' de residuos.'); }
@@ -655,7 +666,8 @@
         const todos = G.trabajosPara(this.obra);
         nuevos.forEach((idN) => {
           const wn = todos.find((w) => w.id === idN); if (!wn) return;
-          const tipo = (w) => norm(w.label).split(' ')[0].slice(0, 5); // «solera…», «solado…», «demolición…»
+          // Familia del trabajo: soleras, bases y recrecidos son intercambiables; si no, la primera palabra
+          const tipo = (w) => { const l = norm(w.label); return /^(solera|base|recrecido|nivelac|autonivel|mortero de nivel)/.test(l) ? 'base' : /^(enfoscado|guarnecido|revoco|enlucido)/.test(l) ? 'revest' : l.split(' ')[0].slice(0, 5); };
           todos.filter((w) => w.id !== idN && antes.has(w.id) && recientes.includes(w.id) && w.ambito === wn.ambito && w.u === wn.u && w.regla === wn.regla && tipo(w) === tipo(wn) && sel2[w.id].zonas.some((z) => sel2[idN].zonas.includes(z))).forEach((w) => {
             sel2[w.id].zonas = sel2[w.id].zonas.filter((z) => !sel2[idN].zonas.includes(z)); sel2[w.id].todas = false;
             if (!sel2[w.id].zonas.length) sel2[w.id].on = false;
@@ -704,7 +716,8 @@
         if (cambiaSitio && g.cZona) g.cFoco = g.cZona;
         // La IA solo pregunta si algo es ambiguo; si no, pregunta la app lo siguiente
         if (preg && !hay) return this.ask((txt && txt !== 'Vale.' ? txt + ' ' : '') + preg, this.chips(out.opciones));
-        return this.siguiente(txt && !/^(vale|anotado)\.?$/i.test(txt) ? txt : '', { avanza: !!hay });
+        const pre = txt && !/^(vale|anotado)\.?$/i.test(txt) ? txt : '';
+        return this.siguiente(pre, { avanza: !!hay, vozPre: pre ? vozDe(pre) : '' });
       }
       this.save();
       if (preg) return this.ask((txt ? txt + ' ' : '') + preg, this.chips(out.opciones), { voz: vozDe((txt ? txt + ' ' : '') + preg) });

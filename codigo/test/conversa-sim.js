@@ -13,7 +13,7 @@ const completa = (r) => Object.assign({ zonas: [], trabajos: [], contenedores: n
 const guion = require(require('path').resolve(process.argv[2]));
 const out = []; const log = []; let i = 0; const ctxs = [];
 const io = {
-  say: (t, ch) => { log.push({ who: 'app', text: t }); out.push('  APP: ' + t + (ch && ch.length ? '\n       [' + ch.map((c) => c.label).join(' | ') + ']' : '')); },
+  say: (t, ch, o) => { log.push({ who: 'app', text: t }); if (process.env.VOZ && o && o.voz && o.voz !== t) out.push('  VOZ: ' + o.voz); out.push('  APP: ' + t + (ch && ch.length ? '\n       [' + ch.map((c) => c.label).join(' | ') + ']' : '')); },
   user: (t) => { log.push({ who: 'user', text: t }); out.push('USER: ' + t); }, note() {}, save() {}, render() {}, getCatalog: () => cat, exportPdf() {}, sketch() {}, trabajos() {},
   aiReady: () => true, historial: () => log.slice(-10),
   conversa: async (ctx) => { ctxs.push(ctx); const r = guion[i - 1] && guion[i - 1][1]; return { result: completa(r || {}) }; }

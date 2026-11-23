@@ -156,7 +156,7 @@
             o.connect(g).connect(c.destination); o.start(t + d); o.stop(t + d + 0.11);
           });
         } catch (e) {}
-        setTimeout(resolve, 300);
+        setTimeout(() => { soltarAudio(); setTimeout(resolve, 120); }, 300);
       });
     }
     function unlock() {
@@ -169,39 +169,67 @@
     // Voz natural en la nube: si responde rápido se usa; si no, la voz del móvil
     let cloudTTS = null, fuente = null;
     const cacheVoz = new Map();
-    function playPCM(b64, rate, my) {
-      return new Promise((resolve) => {
-        const c = audioCtx(); if (!c) return resolve(false);
+    /** Suelta el audio del navegador (en Android, si sigue activo, el micro no se abre). */
+    function soltarAudio() { try { if (actx && actx.state === 'running' && !fuente) actx.suspend(); } catch (e) {} }
+    function b64bytes(b64) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+    async function bufferDe(r) {
+      const c = audioCtx(); if (!c) return null;
+      if (c.state === 'suspended') { try { await c.resume(); } catch (e) {} }
+      const u = b64bytes(r.audio);
+      // WAV (lo que devuelven los modelos actuales) o PCM de 16 bits sin cabecera
+      if (u[0] === 82 && u[1] === 73 && u[2] === 70 && u[3] === 70) return await new Promise((ok) => { try { c.decodeAudioData(u.buffer.slice(0), ok, () => ok(null)); } catch (e) { ok(null); } });
+      const n = u.length >> 1, buf = c.createBuffer(1, n, r.rate || 24000), ch = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) { let v = u[2 * i] | (u[2 * i + 1] << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
+      return buf;
+    }
+    async function playBuffer(r, my) {
+      const c = audioCtx(); if (!c) return false;
+      const buf = await bufferDe(r); if (!buf || my !== speakId) return !!buf;
+      return await new Promise((resolve) => {
         try {
-          const bin = atob(b64), n = bin.length >> 1, buf = c.createBuffer(1, n, rate || 24000), ch = buf.getChannelData(0);
-          for (let i = 0; i < n; i++) { let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
           const src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination);
           fuente = src;
-          const fin = () => { if (fuente === src) fuente = null; resolve(true); };
+          let hecho = false; const fin = () => { if (hecho) return; hecho = true; if (fuente === src) fuente = null; resolve(true); };
           src.onended = fin;
           setTimeout(fin, buf.duration * 1000 + 1500); // por si no llega el aviso de fin
-          if (my !== speakId) return resolve(true);
           src.start();
         } catch (e) { resolve(false); }
       });
+    }
+    /** Trozos para empezar a hablar antes: la primera frase y el resto. */
+    function trozos(t) {
+      const fr = (t.match(/[^.!?]+[.!?]*/g) || [t]).map((x) => x.trim()).filter(Boolean);
+      if (fr.length <= 1) return [t];
+      let a = fr.shift(); while (fr.length && a.length < 30) a += ' ' + fr.shift();
+      return fr.length ? [a, fr.join(' ')] : [a];
+    }
+    function pedirVoz(t, ms) {
+      if (cacheVoz.has(t)) return Promise.resolve(cacheVoz.get(t));
+      return Promise.race([Promise.resolve().then(() => cloudTTS(t)).then((r) => { if (r && r.audio) { cacheVoz.set(t, r); if (cacheVoz.size > 40) cacheVoz.delete(cacheVoz.keys().next().value); } return r; }).catch(() => null), new Promise((res) => setTimeout(() => res(null), ms))]);
     }
     async function speakCloud(text) {
       const my = ++speakId;
       if (mode === 'native' && listening) { try { rec && rec.abort(); } catch (e) {} listening = false; }
       speaking = true; lastSaid = text; state();
-      let r = cacheVoz.get(text) || null;
-      if (!r) {
-        try { r = await Promise.race([cloudTTS(text), new Promise((res) => setTimeout(() => res(null), 4500))]); } catch (e) { r = null; }
-        if (r && r.audio) { cacheVoz.set(text, r); if (cacheVoz.size > 40) cacheVoz.delete(cacheVoz.keys().next().value); }
+      const partes = trozos(text);
+      const proms = partes.map((t, i) => pedirVoz(t, i ? 9000 : 4500)); // se piden a la vez
+      for (let i = 0; i < partes.length; i++) {
+        const r = await proms[i];
+        if (my !== speakId) return true; // interrumpido
+        if (!r || !r.audio || !(await playBuffer(r, my))) {
+          if (i === 0) { speaking = false; state(); return false; }
+          speaking = false; await speakLocal(partes.slice(i).join(' ')); return true;
+        }
+        if (my !== speakId) return true;
       }
-      if (my !== speakId) return true; // interrumpido mientras se generaba
-      if (!r || !r.audio) { speaking = false; state(); return false; }
-      const ok = await playPCM(r.audio, r.rate, my);
+      soltarAudio();
+      await new Promise((r) => setTimeout(r, 150));
       lastStop = Date.now();
       if (my === speakId) { speaking = false; state(); }
-      return ok;
+      return true;
     }
     async function speak(text) {
+      if (text) text = text.replace(/(\d+),00\b/g, '$1').replace(/«|»/g, '');
       if (text && cloudTTS && navigator.onLine !== false) { if (await speakCloud(text)) return; }
       return speakLocal(text);
     }
@@ -276,7 +304,7 @@
       try {
         rec = new SR(); rec.lang = 'es-ES'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
         gotFinal = false; lastPartial = '';
-        rec.onstart = () => { micState = 'granted'; listening = true; needTap = false; retried = false; state(); };
+        rec.onstart = () => { micState = 'granted'; listening = true; needTap = false; retried = false; autoRestarts = 0; state(); };
         rec.onresult = (e) => {
           if (speaking) return;
           let fin = '', inter = '';
@@ -294,6 +322,7 @@
             micState = 'denied';
           }
           if (code === 'aborted') return;
+          if (code === 'audio-capture' && !fromTap && autoRestarts < 3) { autoRestarts++; soltarAudio(); setTimeout(() => { if (!speaking && !listening) listen(false); }, 500); return; }
           cb.onError(code);
         };
         rec.onend = () => {
@@ -304,7 +333,9 @@
         rec.start(); listening = true; state();
       } catch (e) {
         listening = false;
-        if (!fromTap) needTap = true;
+        // El reconocedor anterior aún no había terminado: se reintenta antes de pedir un toque
+        if (!fromTap && autoRestarts < 3) { autoRestarts++; setTimeout(() => { if (!speaking && !listening) listen(false); }, 400); }
+        else if (!fromTap) needTap = true;
         state();
       }
     }

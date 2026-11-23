@@ -11,7 +11,8 @@ import { cors } from '../_shared/cors.ts';
 const KEY = Deno.env.get('GEMINI_API_KEY') || '';
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const VOCES = ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'Orus'];
-const ESTILO = Deno.env.get('TTS_ESTILO') || 'Say in Spanish from Spain (Castilian accent), in a natural, warm and brisk conversational tone, like a colleague on a building site: ';
+// Sin instrucciones de estilo en el texto: el modelo las leía en voz alta (en inglés)
+const ESTILO = Deno.env.get('TTS_ESTILO') || '';
 let modelos: string[] | null = null;
 let ultimoError = '';
 
@@ -75,8 +76,8 @@ Deno.serve(async (req) => {
   if (!r) return new Response(JSON.stringify({ error: 'La voz natural no está disponible', detalle: ultimoError }), { status: 502, headers: h });
   const ms = Date.now() - t0;
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const registro = admin.from('ia_uso').insert({ user_id: user.id, modelo: r.modelo, tokens_entrada: r.tin, tokens_salida: r.tout, ms, intent: 'voz' });
+  const registro = (async () => { await admin.from('ia_uso').insert({ user_id: user.id, modelo: r.modelo, tokens_entrada: r.tin, tokens_salida: r.tout, ms, intent: 'voz' }); })();
   const ER = (globalThis as any).EdgeRuntime;
   if (ER && ER.waitUntil) ER.waitUntil(registro); else await registro;
-  return new Response(JSON.stringify({ audio: r.audio, rate: r.rate, modelo: r.modelo, ms }), { headers: h });
+  return new Response(JSON.stringify({ audio: r.audio, rate: r.rate, mime: r.mime, modelo: r.modelo, ms }), { headers: h });
 });
