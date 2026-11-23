@@ -403,8 +403,7 @@
   }
   async function loadCatalog(id) {
     if (S.catsPrepared.has(id)) return S.catsPrepared.get(id);
-    let c = await StorageAdapter.get('catalogos', id);
-    if (!c && id === 'palma48') c = baseCatalog();
+    let c = id === 'palma48' ? baseCatalog() : await StorageAdapter.get('catalogos', id); // la base propia, siempre la de esta versión
     if (!c) return null;
     const p = E.prepareCatalog(c.data);
     p.id = id; p.nombre = c.nombre;
@@ -706,7 +705,7 @@
       else t = 'Toca el micro para hablar';
       st.textContent = t;
     }
-    const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || !vozVista(); const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir midiendo' : 'Empezar a medir'; }
+    const sb = $('#startbar'); if (sb) { sb.hidden = !!S.session || !vozVista(); const bt = $('#btnStartTxt'); if (bt) bt.textContent = S.ended ? 'Seguir midiendo' : 'Empezar a medir'; const bg = $('#btnGrabar'); if (bg) bg.lastChild.textContent = S.obra && S.obra.visita && S.obra.visita.procesada ? 'Corregir con una nota de audio' : 'Grabar nota de la visita'; }
     $('#btnHands').setAttribute('aria-pressed', S.settings.hands);
     $('#dock').classList.toggle('min', !!S.settings.dockMin);
     const bd = $('#btnDock'); if (bd) { bd.setAttribute('aria-pressed', !!S.settings.dockMin); bd.setAttribute('aria-label', S.settings.dockMin ? 'Mostrar conversación' : 'Ocultar conversación'); bd.querySelector('.t').textContent = S.settings.dockMin ? 'Mostrar' : 'Ocultar'; }
@@ -912,27 +911,32 @@
    * Graba por trozos de 3 minutos (cada uno es un archivo completo), los guarda en el móvil
    * y los va transcribiendo mientras se sigue grabando. Al terminar se revisa el texto
    * y la IA lo convierte en la toma de datos y los trabajos; después la app pregunta lo que falte. */
-  const Grab = { rec: null, stream: null, mime: '', segN: 0, t0: 0, acum: 0, timer: null, cortar: null, pausado: false };
+  const Grab = { rec: null, stream: null, mime: '', segN: 0, t0: 0, acum: 0, timer: null, cortar: null, pausado: false, dest: 'v' };
+  /** Dónde van los trozos: la visita ('v') o la nota de corrección ('c'). */
+  function dstDe(o, dest) { const v = visitaDe(o); return (dest || Grab.dest) === 'c' ? (v.corr || (v.corr = { segs: [], segundos: 0, texto: '' })) : v; }
+  const claveAudio = (o, dest, n) => o.id + '_' + (dest === 'c' ? 'c' : '') + n;
   const SEG_MS = 180000;
   function visitaDe(o) { return o.visita || (o.visita = { segs: [], segundos: 0, texto: '' }); }
-  async function grabarInicio() {
+  async function grabarInicio(dest) {
+    Grab.dest = dest === 'c' ? 'c' : 'v';
+    if (Grab.dest === 'c' && S.obra.visita && S.obra.visita.corr && S.obra.visita.corr.aplicada) S.obra.visita.corr = null; // cada corrección es una nota nueva
     if (!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return toast('Este navegador no puede grabar audio. Prueba con Chrome o Safari actualizados.');
     sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); S.session = false;
     try { Grab.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
     catch (e) { return toast('No tengo permiso para el micrófono. Actívalo en los ajustes del navegador.'); }
     Grab.mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find((m) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || '';
-    const v = visitaDe(S.obra); Grab.segN = (v.segs || []).length; Grab.acum = 0; Grab.t0 = Date.now(); Grab.pausado = false;
+    const v = dstDe(S.obra); Grab.segN = (v.segs || []).length; Grab.acum = 0; Grab.t0 = Date.now(); Grab.pausado = false;
     nuevoSegmento(); keepAwake();
     Grab.timer = setInterval(() => { const e = $('#vtime'); if (e) e.textContent = mmss(tiempoGrab()); }, 500);
     S.view = 'visita'; render();
   }
   const mmss = (sg) => Math.floor(sg / 60) + ':' + String(Math.floor(sg % 60)).padStart(2, '0');
-  function tiempoGrab() { return (Grab.acum + (Grab.pausado || !Grab.rec ? 0 : Date.now() - Grab.t0)) / 1000 + ((S.obra && S.obra.visita && S.obra.visita.segundos) || 0); }
+  function tiempoGrab() { return (Grab.acum + (Grab.pausado || !Grab.rec ? 0 : Date.now() - Grab.t0)) / 1000 + ((S.obra && dstDe(S.obra).segundos) || 0); }
   function nuevoSegmento() {
     const r = new MediaRecorder(Grab.stream, Object.assign({ audioBitsPerSecond: 32000 }, Grab.mime ? { mimeType: Grab.mime } : {}));
-    const chunks = [], n = Grab.segN++, t0 = Date.now();
+    const chunks = [], n = Grab.segN++, t0 = Date.now(), dest = Grab.dest;
     r.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    r.onstop = () => guardarSegmento(n, new Blob(chunks, { type: (r.mimeType || Grab.mime || 'audio/webm').split(';')[0] }), Date.now() - t0);
+    r.onstop = () => guardarSegmento(n, new Blob(chunks, { type: (r.mimeType || Grab.mime || 'audio/webm').split(';')[0] }), Date.now() - t0, dest);
     r.start(1000);
     Grab.rec = r;
     clearTimeout(Grab.cortar);
@@ -948,18 +952,18 @@
     const r = Grab.rec; if (!r) return;
     clearTimeout(Grab.cortar); clearInterval(Grab.timer);
     if (!Grab.pausado) Grab.acum += Date.now() - Grab.t0;
-    const v = visitaDe(S.obra); v.segundos = (v.segundos || 0) + Grab.acum / 1000;
+    const v = dstDe(S.obra); v.segundos = (v.segundos || 0) + Grab.acum / 1000;
     Grab.rec = null; try { r.stop(); } catch (e) {}
     setTimeout(() => { try { Grab.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} Grab.stream = null; }, 300);
     releaseAwake(); saveObra(); render();
   }
-  async function guardarSegmento(n, blob, ms) {
+  async function guardarSegmento(n, blob, ms, dest) {
     const o = S.obra; if (!o || blob.size < 3000) return; // trozo vacío
-    const v = visitaDe(o);
+    const v = dstDe(o, dest);
     v.segs[n] = { n, estado: 'pendiente', texto: '', ms };
-    await StorageAdapter.put('audios', { id: o.id + '_' + n, obra: o.id, n, mime: blob.type, blob });
+    await StorageAdapter.put('audios', { id: claveAudio(o, dest, n), obra: o.id, n, mime: blob.type, blob });
     saveObra(); if (S.view === 'visita') render();
-    transcribirSeg(n);
+    transcribirSeg(n, dest);
   }
   /** Convierte un trozo de audio a WAV de 16 kHz mono (por si el servidor no acepta el formato del móvil). */
   async function aWav(blob) {
@@ -976,13 +980,14 @@
     return new Blob([dv.buffer], { type: 'audio/wav' });
   }
   function aBase64(blob) { return new Promise((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = ko; fr.readAsDataURL(blob); }); }
-  async function transcribirSeg(n) {
-    const o = S.obra, v = o && o.visita, sg = v && v.segs[n]; if (!sg) return;
+  async function transcribirSeg(n, dest) {
+    const o = S.obra; if (!o || !o.visita) return;
+    const v = dstDe(o, dest), sg = v && v.segs[n]; if (!sg) return;
     if (!(window.Cloud && Cloud.user)) { sg.estado = 'sin cuenta'; saveObra(); if (S.view === 'visita') render(); return; }
     if (navigator.onLine === false) { sg.estado = 'sin conexión'; saveObra(); if (S.view === 'visita') render(); return; }
     sg.estado = 'transcribiendo'; if (S.view === 'visita') render();
     try {
-      const a = await StorageAdapter.get('audios', o.id + '_' + n);
+      const a = await StorageAdapter.get('audios', claveAudio(o, dest, n));
       if (!a || !a.blob) throw new Error('no encuentro el audio');
       let r;
       try { r = await Cloud.visita({ modo: 'transcribir', audio: await aBase64(a.blob), mime: a.mime || 'audio/webm', obra_id: o.id }); }
@@ -997,6 +1002,23 @@
     saveObra(); if (S.view === 'visita') render();
   }
   function textoVisita(v) { return v.texto || (v.segs || []).filter(Boolean).map((x) => x.texto).filter(Boolean).join('\n\n'); }
+  /** Nota de corrección: solo los cambios sobre lo ya medido. */
+  async function aplicarCorreccionAudio() {
+    const o = S.obra, c = o.visita && o.visita.corr; if (!c) return;
+    const ta = $('#ctxt'); if (ta) c.texto = ta.value;
+    const txt = textoVisita(c).trim();
+    if (!txt) return toast('No hay texto de corrección.');
+    if (!(window.Cloud && Cloud.user)) return toast('Entra en tu cuenta para aplicar la corrección.');
+    S.vProcesando = true; render();
+    try {
+      const C = dialog.conversa, ctx = C.contexto('');
+      const r = await Cloud.visita({ modo: 'procesar', correccion: true, transcripcion: txt, zonas: ctx.zonas, trabajos: ctx.trabajos.map((w) => ({ id: w.id, label: w.label, zonas: w.zonas })), obra_id: o.id });
+      if (!r || !r.result) throw new Error((r && r.error) || 'sin respuesta');
+      c.aplicada = Date.now(); S.vProcesando = false; saveObra();
+      S.view = 'obra'; render();
+      C.aplicarCorreccion(r.result, txt);
+    } catch (e) { S.vProcesando = false; render(); toast('No he podido aplicar la corrección: ' + (e.message || e)); }
+  }
   async function procesarVisita() {
     const o = S.obra, v = o.visita; if (!v) return;
     const ta = $('#vtxt'); if (ta) v.texto = ta.value;
@@ -1033,13 +1055,29 @@
     if (segs.length) {
       const ok = segs.filter((x) => x.estado === 'ok').length, malos = segs.filter((x) => /error|sin /.test(x.estado));
       h += '<div class="card"><b>Transcripción</b> <span class="hint">· ' + mmss(v.segundos || 0) + ' grabados · ' + ok + ' de ' + segs.length + ' trozos listos</span>';
-      malos.forEach((x) => { h += '<p class="hint">Trozo ' + (x.n + 1) + ': ' + esc(x.estado) + (x.error ? ' (' + esc(x.error) + ')' : '') + ' <button class="btn small" data-a="vretry" data-n="' + x.n + '">Reintentar</button></p>'; });
-      if (Grab.rec) h += segs.slice(-3).map((x) => '<p class="vseg">' + (x.estado === 'ok' ? esc(x.texto || '(sin voz)') : '<i>' + esc(x.estado) + '…</i>') + '</p>').join('');
+      malos.forEach((x) => { h += '<p class="hint">Trozo ' + (x.n + 1) + ': ' + esc(x.estado) + (x.error ? ' (' + esc(x.error) + ')' : '') + ' <button class="btn small" data-a="vretry" data-d="v" data-n="' + x.n + '">Reintentar</button></p>'; });
+      if (Grab.rec && Grab.dest === 'v') h += segs.slice(-3).map((x) => '<p class="vseg">' + (x.estado === 'ok' ? esc(x.texto || '(sin voz)') : '<i>' + esc(x.estado) + '…</i>') + '</p>').join('');
       else {
         const listo = ok === segs.length;
         h += (listo ? '<p class="hint">Revisa el texto y corrige lo que esté mal antes de procesarlo.</p><textarea id="vtxt" rows="14" class="vtxt">' + esc(textoVisita(v)) + '</textarea>' : '<p class="hint">Transcribiendo… puedes esperar aquí.</p>') +
           '<div class="row" style="flex-wrap:wrap"><button class="btn primary" data-a="vprocesar"' + (listo && !S.vProcesando ? '' : ' disabled') + '>' + (S.vProcesando ? 'Procesando…' : v.procesada ? 'Volver a procesar' : 'Procesar la visita') + '</button>' +
-          '<button class="btn" data-a="vgrabar">Seguir grabando</button><button class="btn danger" data-a="vborrar">Borrar grabación</button></div>';
+          (v.procesada ? '' : '<button class="btn" data-a="vgrabar">Seguir grabando</button>') + '<button class="btn danger" data-a="vborrar">Borrar grabación</button></div>';
+      }
+      h += '</div>';
+    }
+    // Corrección tras revisar las mediciones
+    if (v.procesada && !(Grab.rec && Grab.dest === 'v')) {
+      const c = v.corr, cs = ((c && c.segs) || []).filter(Boolean);
+      h += '<div class="card"><b>Corregir las mediciones con otra nota</b>';
+      if (!c || c.aplicada || !cs.length) {
+        h += '<p class="hint">Revisa las mediciones y graba lo que haya que cambiar: «quita la pintura del techo de la coladuría», «la cocina mide 3,20 por 3», «añade un rodapié en la cocina».</p>' +
+          (Grab.rec ? '' : '<button class="btn primary" data-a="vcorr" style="width:100%">● Grabar corrección</button>') + (c && c.aplicada ? '<p class="hint">Última corrección aplicada.</p>' : '');
+      } else {
+        const okc = cs.filter((x) => x.estado === 'ok').length, listo = okc === cs.length;
+        cs.filter((x) => /error|sin /.test(x.estado)).forEach((x) => { h += '<p class="hint">Trozo ' + (x.n + 1) + ': ' + esc(x.estado) + ' <button class="btn small" data-a="vretry" data-d="c" data-n="' + x.n + '">Reintentar</button></p>'; });
+        if (Grab.rec && Grab.dest === 'c') h += cs.slice(-2).map((x) => '<p class="vseg">' + (x.estado === 'ok' ? esc(x.texto || '(sin voz)') : '<i>' + esc(x.estado) + '…</i>') + '</p>').join('');
+        else h += (listo ? '<textarea id="ctxt" rows="6" class="vtxt">' + esc(textoVisita(c)) + '</textarea>' : '<p class="hint">Transcribiendo la corrección…</p>') +
+          '<div class="row" style="flex-wrap:wrap"><button class="btn primary" data-a="vcorrapl"' + (listo && !S.vProcesando ? '' : ' disabled') + '>' + (S.vProcesando ? 'Aplicando…' : 'Aplicar correcciones') + '</button><button class="btn" data-a="vcorr">Seguir grabando</button><button class="btn danger" data-a="vcorrborrar">Descartar</button></div>';
       }
       h += '</div>';
     }
@@ -1064,7 +1102,8 @@
       '<li>En la obra, pulsa <b>Grabar nota de la visita</b> y luego <b>Empezar a grabar</b>.</li>' +
       '<li>Recorre la obra contándola estancia por estancia, como se la contarías a tu encargado. Tienes en pantalla la lista de lo que conviene decir en cada estancia para que no se te olvide nada.</li>' +
       '<li>Pulsa <b>Terminar</b>. La app pasa el audio a texto (lo va haciendo mientras grabas) y te lo enseña: <b>corrige lo que esté mal</b> directamente en el texto.</li>' +
-      '<li>Pulsa <b>Procesar la visita</b>: la app ordena las estancias, medidas y trabajos, genera las mediciones y te pregunta solo lo que falte.</li></ol>' +
+      '<li>Pulsa <b>Procesar la visita</b>: la app ordena las estancias, medidas y trabajos, genera las mediciones y te pregunta solo lo que falte.</li>' +
+      '<li>Revisa las mediciones. Si hay que cambiar algo, pulsa <b>Corregir con una nota de audio</b> y dilo: ' + say('quita la pintura del techo de la coladuría') + ', ' + say('la cocina mide tres veinte por tres') + ', ' + say('añade un rodapié en la cocina') + '. Solo se cambia lo que dices.</li></ol>' +
       '<p class="mtip">Si habla más gente (el cliente, un operario…), la app distingue quién dicta las medidas y solo anota lo que tú confirmas. Hace falta la cuenta iniciada y conexión para procesarla; el audio se guarda en el móvil mientras tanto.</p>');
     h += sec('botones', '2. Para qué sirve cada botón',
       '<h4>Arriba</h4>' +
@@ -1494,10 +1533,13 @@
       case 'menu-obra': case 'back2obra': closeSheet(); S.view = 'obra'; render(); break;
       case 'resumen': closeSheet(); S.view = 'resumen'; render(); break;
       case 'visita': closeSheet(); S.view = 'visita'; render(); break;
-      case 'vgrabar': grabarInicio(); break;
+      case 'vgrabar': grabarInicio('v'); break;
+      case 'vcorr': grabarInicio('c'); break;
+      case 'vcorrapl': aplicarCorreccionAudio(); break;
+      case 'vcorrborrar': { const c = S.obra.visita && S.obra.visita.corr; if (c) for (const sg of c.segs || []) if (sg) StorageAdapter.del('audios', claveAudio(S.obra, 'c', sg.n)); S.obra.visita.corr = null; saveObra(); render(); break; }
       case 'vpausa': grabarPausa(); break;
       case 'vparar': grabarFin(); break;
-      case 'vretry': transcribirSeg(+el.dataset.n); break;
+      case 'vretry': transcribirSeg(+el.dataset.n, el.dataset.d); break;
       case 'vprocesar': procesarVisita(); break;
       case 'vborrar': confirmSheet('¿Borrar la grabación y su transcripción? Lo ya medido en la obra no se toca.', 'Borrar', async () => { const v = S.obra.visita; if (v) for (const sg of v.segs || []) await StorageAdapter.del('audios', S.obra.id + '_' + sg.n); S.obra.visita = null; saveObra(); render(); }); break;
       case 'catalogos': closeSheet(); S.view = 'catalogos'; render(); break;
@@ -1585,6 +1627,7 @@
     if (ev.target.id === 'chkbreve') { S.settings.breve = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkconfirm') { S.settings.confirm = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'vtxt' && S.obra && S.obra.visita) { S.obra.visita.texto = ev.target.value; saveObra(); }
+    if (ev.target.id === 'ctxt' && S.obra && S.obra.visita && S.obra.visita.corr) { S.obra.visita.corr.texto = ev.target.value; saveObra(); }
     if (ev.target.id === 'chkvozn') { S.settings.vozNatural = ev.target.checked; saveSettings(); configurarVoz(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'selvozn') { S.settings.vozNombre = ev.target.value; saveSettings(); configurarVoz(); VoiceAdapter.speak('Hola, así suena esta voz. ¿Seguimos midiendo?'); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }

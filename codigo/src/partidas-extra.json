@@ -229,5 +229,12 @@
   "ch": "D0201",
   "r": "Excavación para vaso de piscina, con medios mecánicos",
   "t": "Excavación a cielo abierto para formación del vaso de piscina, en cualquier tipo de terreno excepto roca, con medios mecánicos, incluso refino de taludes y fondo, retirada de los materiales excavados y carga a camión, sin incluir transporte a vertedero autorizado."
+ },
+ {
+  "c": "IFX090",
+  "u": "ud",
+  "ch": "D1702",
+  "r": "Equipo descalcificador de agua para vivienda",
+  "t": "Suministro e instalación de equipo descalcificador de agua para vivienda, de resinas de intercambio iónico con regeneración automática por volumen, con depósito de sal, válvula de bypass y conexiones a la red de agua fría, incluso desagüe a la red de saneamiento. Totalmente montado, conexionado y probado."
  }
 ]

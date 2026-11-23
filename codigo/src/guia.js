@@ -353,6 +353,9 @@
     T('cubierta', 'Solados', 'cub_sol', 'Solado de cubierta', 'm2', 'RSG010j', 'cub_sup', { tipos: 'plana' }),
     T('cubierta', 'Solados', 'cub_teja', 'Cobertura de teja', 'm2', 'QTT210m', 'cub_sup', { tipos: 'inclinada' }),
     // ---- Fontanería (se marcan solos con lo respondido) ----
+    T('fontaneria', 'Fontanería', 'fon_dem', 'Desmontaje de la instalación de fontanería existente', 'ud', 'DIF105', 'ud_zona'),
+    T('fontaneria', 'Fontanería', 'fon_termo', 'Termo eléctrico', 'ud', 'ICA010', 'ud_zona'),
+    T('fontaneria', 'Fontanería', 'fon_descal', 'Equipo descalcificador', 'ud', 'IFX090', 'ud_zona'),
     T('fontaneria', 'Fontanería', 'fon_inst', 'Instalación interior de fontanería de la estancia', 'ud', null, 'fon_inst', { auto: true }),
     T('fontaneria', 'Fontanería', 'fon_af', 'Puntos de agua fría', 'ud', 'IFP010', 'fon_af', { auto: true }),
     T('fontaneria', 'Fontanería', 'fon_afc', 'Puntos de agua fría y caliente', 'ud', 'IFP020', 'fon_afc', { auto: true }),
@@ -390,6 +393,7 @@
     // ---- Generales de toda obra (se marcan solas) ----
     T('obra', 'Gestión de residuos', 'gen_residuos', 'Contenedores para residuos de obra (4,2 m³)', 'ud', 'GRA010', 'residuos', { auto: true }),
     T('obra', 'Seguridad y salud', 'gen_sys', 'Seguridad y salud (partida alzada, % del presupuesto)', 'ud', 'YSS010', 'sys', { auto: true }),
+    T('electricidad', 'Electricidad', 'ele_dem', 'Desmontaje de la instalación eléctrica existente', 'ud', 'DIE060', 'ud_zona'),
     T('electricidad', 'Electricidad', 'ele_cuadro', 'Cuadro eléctrico de vivienda', 'ud', 'IEI110', 'ele_cuadro', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_luz', 'Puntos de luz', 'ud', 'D1902.0080', 'ele_luz', { auto: true }),
     T('electricidad', 'Electricidad', 'ele_t16', 'Tomas de corriente de 16 A', 'ud', 'IEM060', 'ele_t16', { auto: true }),
@@ -536,7 +540,7 @@
     puertas_paso: (zs, w, obra) => puertasPaso(zs, obra).map((x) => Object.assign(L('Puertas de ' + fmt(x.an) + ' × ' + fmt(x.al) + ' (' + x.est.join(', ') + ')', x.n), w.nuevas ? { _c: x.an <= 0.76 ? 'LPM010' : 'LPM010b' } : {})),
     sup_total: (zs) => zs.filter((z) => z.area).map((z) => Object.assign(L('Superficie reformada', 1, z.area), { est: z.nombre, dePlanta: 'superficie' }))
   };
-  const CODIGO_INST = (z) => { const t = norm(z.nombre), f = (z.f && z.f.tipo) || ''; if (/aseo/.test(t)) return 'IFI010b'; if (f === 'cocina' || /cocina/.test(t)) return 'IFI010d'; if (f === 'lavadero' || /lavadero|galeria|lavanderia/.test(t)) return 'IFI010c'; return 'IFI010'; };
+  const CODIGO_INST = (z) => { const t = norm(z.nombre), f = (z.f && z.f.tipo) || ''; if (/aseo/.test(t)) return 'IFI010b'; if (f === 'cocina' || /cocina/.test(t)) return 'IFI010d'; if (f === 'lavadero' || /lavadero|galeria|lavanderia|coladuria|colada/.test(t)) return 'IFI010c'; return 'IFI010'; };
 
   const REGLA_LABEL = {
     suelo: 'Superficie del suelo', techo: 'Superficie del techo', paredes: 'Perímetro × altura − huecos', rodapie: 'Perímetro − puertas', perimetro: 'Perímetro',
@@ -636,6 +640,14 @@
     return g.sel;
   }
 
+  /** Capítulo de la base donde va una partida nueva («Saneamiento» → «RED DE SANEAMIENTO»…), para no repetir capítulos. */
+  const CAP_BASE = { 'aparatos sanitarios': 'fontaner', 'fontaneria': 'fontaner', 'saneamiento': 'saneamiento', 'demoliciones': 'demolic', 'seguridad y salud': 'seguridad', 'gestion de residuos': 'demolic', 'electricidad': 'electric', 'pintura': 'pintura', 'solados': 'solado', 'revestimientos': 'revoco', 'albanileria': 'albanil', 'carpinteria interior': 'carpinter', 'otras partidas': '' };
+  function capituloBase(cat, capitulo) {
+    const k = CAP_BASE[norm(capitulo || '')] ?? norm(capitulo || '').split(' ')[0];
+    if (!k || !cat || !cat.byCode) return {};
+    for (const d of cat.byCode.values()) if (d.chapTitle && norm(d.chapTitle).includes(k)) return { chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder };
+    return {};
+  }
   /** Busca la partida en la base; si no está, otra equivalente; si tampoco, una partida nueva. */
   function resolverDoc(cat, w, code) {
     if (w.propia && !code) return null;
@@ -666,7 +678,7 @@
       let p = obra.partidas.find((x) => x.ref === ref);
       if (!p) {
         p = d ? { ref: d.c, u: d.u, r: d.r, t: d.t, chap: d.chap, chapTitle: d.chapTitle, chapOrder: d.chapOrder, subTitle: d.subTitle }
-          : { ref, propia: true, u: w.u, r: w.label, t: w.label, chap: 'G-' + norm(w.capitulo).replace(/\W+/g, ''), chapTitle: w.capitulo.toUpperCase(), chapOrder: 900 + CAP_ORDEN.indexOf(w.capitulo), subTitle: '' };
+          : Object.assign({ ref, propia: true, u: w.u, r: w.label, t: w.label, chap: 'G-' + norm(w.capitulo).replace(/\W+/g, ''), chapTitle: w.capitulo.toUpperCase(), chapOrder: 900 + CAP_ORDEN.indexOf(w.capitulo), subTitle: '' }, capituloBase(cat, w.capitulo));
         Object.assign(p, { uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), lineas: [], creada: Date.now() + obra.partidas.length, guia: true });
         p.orient = /^(paredes|fachada|fachada_bruta)$/.test(w.regla) ? 'V' : /^(suelo|techo|cub_sup|cub_imper|sup_total|pis_vaso)$/.test(w.regla) ? 'H' : orientOf(p);
         obra.partidas.push(p);

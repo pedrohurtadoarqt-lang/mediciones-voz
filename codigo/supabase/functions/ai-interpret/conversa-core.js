@@ -30,9 +30,10 @@
       inodoro: { type: 'string', enum: ['', 'normal', 'suspendido', 'reducido', 'no'] },
       ducha: { type: 'string', enum: ['', 'plato', 'banera', 'no'] },
       mampara: SN, bide: SN, lavadora: SN, lavavajillas: SN,
-      cuadro: SN, puntos_luz: NUM, tomas: NUM, segun_norma: SN, horno: SN
+      cuadro: SN, puntos_luz: NUM, tomas: NUM, segun_norma: SN, horno: SN,
+      equipos: { type: 'array', items: { type: 'string' } }
     },
-    required: ['ref', 'ambito', 'nombre', 'borrar', 'largo', 'ancho', 'superficie', 'perimetro', 'tramos', 'altura', 'huecos_modo', 'huecos', 'cub_tipo', 'remonte', 'pendiente', 'faldones', 'prof_min', 'prof_max', 'fon_tipo', 'agua_fria', 'agua_fria_caliente', 'inodoro', 'ducha', 'mampara', 'bide', 'lavadora', 'lavavajillas', 'cuadro', 'puntos_luz', 'tomas', 'segun_norma', 'horno'],
+    required: ['ref', 'ambito', 'nombre', 'borrar', 'largo', 'ancho', 'superficie', 'perimetro', 'tramos', 'altura', 'huecos_modo', 'huecos', 'cub_tipo', 'remonte', 'pendiente', 'faldones', 'prof_min', 'prof_max', 'fon_tipo', 'agua_fria', 'agua_fria_caliente', 'inodoro', 'ducha', 'mampara', 'bide', 'lavadora', 'lavavajillas', 'cuadro', 'puntos_luz', 'tomas', 'segun_norma', 'horno', 'equipos'],
     additionalProperties: false
   };
   const TRABAJO = {
@@ -84,7 +85,9 @@
       '- Cubierta: "cub_tipo" plana o inclinada; "remonte" de la impermeabilización (m); inclinada: "faldones" (ancho × largo en planta) y "pendiente" en %.',
       '- Piscina: "prof_min" y "prof_max" (si solo hay una profundidad, la misma en las dos).',
       '- Fontanería: "fon_tipo", "agua_fria" (puntos solo de fría), "agua_fria_caliente" (puntos de fría y caliente), "inodoro", "ducha" (plato o bañera), "mampara", "bide", "lavadora", "lavavajillas" ("si"/"no"/"").',
-      '- Electricidad: "cuadro" nuevo, "puntos_luz", "tomas", "segun_norma" ("si" si pide los mínimos del reglamento), "horno" (toma de 25 A en cocina).',
+      '- Electricidad: "cuadro" nuevo, "puntos_luz", "tomas", "segun_norma" ("si" si pide los mínimos del reglamento o «lo que mande la normativa»), "horno" (toma de 25 A en cocina), "equipos": lista de los aparatos eléctricos que nombre (horno, placa, microondas, nevera, termo, lavadora, lavavajillas, campana…); la app pone sus tomas.',
+      '- Termo eléctrico y descalcificador llevan además fontanería: trabajos fon_termo y fon_descal en la estancia.',
+      '- «Cambiar la instalación de fontanería / electricidad y hacerla nueva»: fon_dem / ele_dem (desmontaje de la existente) además de anotar la instalación nueva en la zona de fontanería / electricidad.',
       '- "borrar": true si pide quitar esa zona entera.',
       '- SANITARIOS Y PUNTOS DE AGUA (inodoro, lavabo, plato de ducha, bañera, mampara, bidé, fregadero, lavadora, lavavajillas, tomas de agua) NO van en "trabajos": anótalos en una zona de ámbito fontaneria con el nombre de su estancia; la app pone sola la instalación, los aparatos y los desagües. Igual con la electricidad (zona electricidad).',
       '',
@@ -123,7 +126,7 @@
       '',
       'FORMATO DE LA RESPUESTA: SOLO un objeto JSON, sin texto antes ni después y sin ```. Pon ÚNICAMENTE los campos que tengan valor (omite los vacíos, null, "" y []). Ejemplo:',
       '{"zonas":[{"ambito":"interior","nombre":"Dormitorio","largo":3,"ancho":3,"huecos_modo":"anadir","huecos":[{"tipo":"ventana","uds":1,"ancho":1.2,"alto":1.2},{"tipo":"puerta","uds":1,"ancho":0.8,"alto":2}]}],"trabajos":[{"id":"dem_gres","zonas":["Dormitorio"]},{"buscar":"Recrecido de mortero para nivelación de suelo","unidad":"m2","ambito":"interior","zonas":["Dormitorio"]}],"pregunta":"¿Qué altura tiene el dormitorio?"}',
-      'Campos posibles: zonas[] (ref, ambito, nombre, borrar, largo, ancho, superficie, perimetro, tramos[{largo,giro,angulo}], altura, huecos_modo, huecos[{tipo,uds,ancho,alto}], cub_tipo, remonte, pendiente, faldones[{nombre,largo,ancho}], prof_min, prof_max, fon_tipo, agua_fria, agua_fria_caliente, inodoro, ducha, mampara, bide, lavadora, lavavajillas, cuadro, puntos_luz, tomas, segun_norma, horno); trabajos[] (id, codigo, buscar, unidad, ambito, zonas[], quitar, medidas[{zona,comentario,uds,largo,ancho,alto}]); contenedores; seguridad_pct; accion; mensaje; pregunta; opciones[].',
+      'Campos posibles: zonas[] (ref, ambito, nombre, borrar, largo, ancho, superficie, perimetro, tramos[{largo,giro,angulo}], altura, huecos_modo, huecos[{tipo,uds,ancho,alto}], cub_tipo, remonte, pendiente, faldones[{nombre,largo,ancho}], prof_min, prof_max, fon_tipo, agua_fria, agua_fria_caliente, inodoro, ducha, mampara, bide, lavadora, lavavajillas, cuadro, puntos_luz, tomas, segun_norma, horno, equipos[]); trabajos[] (id, codigo, buscar, unidad, ambito, zonas[], quitar, medidas[{zona,comentario,uds,largo,ancho,alto}]); contenedores; seguridad_pct; accion; mensaje; pregunta; opciones[].',
       'Números con punto decimal (1.2), en metros. "giro": "izquierda"/"derecha"/"". "tipo" de hueco: puerta, ventana o balconera. Valores si/no: "si" o "no".',
       '',
       'CATÁLOGO DE TRABAJOS (id | ámbito | trabajo | unidad | cómo se mide):',
@@ -157,7 +160,7 @@
     if (a < 0 || b <= a) return null;
     try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
   }
-  const ZV = { ref: '', ambito: 'interior', nombre: '', borrar: false, largo: null, ancho: null, superficie: null, perimetro: null, tramos: [], altura: null, huecos_modo: '', huecos: [], cub_tipo: '', remonte: null, pendiente: null, faldones: [], prof_min: null, prof_max: null, fon_tipo: '', agua_fria: null, agua_fria_caliente: null, inodoro: '', ducha: '', mampara: '', bide: '', lavadora: '', lavavajillas: '', cuadro: '', puntos_luz: null, tomas: null, segun_norma: '', horno: '' };
+  const ZV = { equipos: [], ref: '', ambito: 'interior', nombre: '', borrar: false, largo: null, ancho: null, superficie: null, perimetro: null, tramos: [], altura: null, huecos_modo: '', huecos: [], cub_tipo: '', remonte: null, pendiente: null, faldones: [], prof_min: null, prof_max: null, fon_tipo: '', agua_fria: null, agua_fria_caliente: null, inodoro: '', ducha: '', mampara: '', bide: '', lavadora: '', lavavajillas: '', cuadro: '', puntos_luz: null, tomas: null, segun_norma: '', horno: '' };
   const TV = { id: '', codigo: '', buscar: '', unidad: '', ambito: '', zonas: [], quitar: false, medidas: [] };
   const numOk = (v) => { if (typeof v === 'string') v = parseFloat(v.replace(',', '.')); return typeof v === 'number' && isFinite(v) ? v : null; };
   const arr = (v) => (Array.isArray(v) ? v : []);
@@ -175,6 +178,7 @@
       o.borrar = o.borrar === true;
       o.tramos = arr(o.tramos).map((t) => ({ largo: numOk(t && t.largo), giro: str(t && t.giro), angulo: numOk(t && t.angulo) || 90 })).filter((t) => t.largo);
       o.huecos = arr(o.huecos).map((h) => ({ tipo: str(h && h.tipo) || 'ventana', uds: numOk(h && h.uds) || 1, ancho: numOk(h && h.ancho), alto: numOk(h && h.alto) }));
+      o.equipos = arr(o.equipos).map(str).filter(Boolean);
       o.faldones = arr(o.faldones).map((f) => ({ nombre: str(f && f.nombre), largo: numOk(f && f.largo), ancho: numOk(f && f.ancho) })).filter((f) => f.largo && f.ancho);
       return o;
     });

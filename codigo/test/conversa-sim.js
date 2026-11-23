@@ -22,7 +22,11 @@ const d = new E.Dialog(io);
 const obra = { id: 't', titulo: 'Prueba', partidas: [], estancias: [] };
 d.setObra(obra);
 (async () => {
-  for (const [frase] of guion) { i++; d.handle(frase); await new Promise((r) => setTimeout(r, 5)); }
+  if (guion.visita) { // nota de audio: se aplica la respuesta completa de una vez
+    const r = d.conversa.aplicarVisita(completa(guion.respuesta), guion.transcripcion);
+    d.conversa.siguiente('Procesada: ' + r.zonas + ' zonas, ' + r.trabajos + ' trabajos, ' + r.partidas + ' partidas.');
+  }
+  for (const [frase] of (guion.visita ? [] : guion)) { i++; d.handle(frase); await new Promise((r) => setTimeout(r, 5)); }
   console.log(out.join('\n'));
   if (process.env.CTX) console.log('\n=== ÚLTIMO CONTEXTO ===\n' + require('../src/conversa-ai.js').buildConvUser(ctxs[ctxs.length - 1]));
   console.log('\n=== TOMA ===\n' + obra.toma.zonas.map((z) => z.id + ' ' + z.ambito + ' ' + z.nombre + ' · ' + d.conversa.datosZona(z)).join('\n'));

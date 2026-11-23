@@ -204,6 +204,12 @@
       const zs = this.toma.zonas.filter((z) => z.ambito === 'interior').length;
       return { zonas: nz, estancias: zs, trabajos: nt, partidas: this.obra.partidas.length, mensaje: (out.mensaje || '').trim() };
     }
+    /** Nota de corrección grabada tras revisar las mediciones: se aplican solo los cambios. */
+    aplicarCorreccion(out, texto) {
+      this.textoLargo = true;
+      try { this.obra.modo = 'conversa'; this.g.cLibre = false; this.g.cFin = false; this.g.cPaso = null; return this.aplicar(out, texto); }
+      finally { this.textoLargo = false; }
+    }
     /** Pregunta lo siguiente que falta (o genera, si se ha pedido terminar). */
     siguiente(pre, opt) {
       const g = this.g;
@@ -465,7 +471,7 @@
     }
     planta(z, zr, cambios) {
       let tr = (zr.tramos || []).map((t) => ({ l: metros(t.largo), giro: t.giro || '', ang: ok(t.angulo) ? t.angulo : 90 })).filter((t) => t.l);
-      if (tr.length >= 2 && this.textoOrig) { try { const w = G.parseWalk(this.textoOrig); if (w && w.tramos && w.tramos.length >= 3) tr = w.tramos.map((t) => ({ l: t.l, giro: t.giro || '', ang: t.ang || 90 })); } catch (e) { /* se queda la de la IA */ } }
+      if (tr.length >= 2 && this.textoOrig && !this.textoLargo) { try { const w = G.parseWalk(this.textoOrig); if (w && w.tramos && w.tramos.length >= 3) tr = w.tramos.map((t) => ({ l: t.l, giro: t.giro || '', ang: t.ang || 90 })); } catch (e) { /* se queda la de la IA */ } }
       let L = metros(zr.largo, 200), A = metros(zr.ancho, 200);
       // La IA no debe calcular: si da superficie y perímetro de un rectángulo dicho con dos números, se usan esos números
       const nums = this.nums || [];
@@ -501,7 +507,7 @@
         let h = metros(zr.altura, 15);
         // «la altura son dos veinte»: si la frase habla de altura y trae un solo número, manda ese número
         const nh = (this.nums || []).filter((v) => v > 0.5 && v < 15);
-        if (h && /(altura|alto|techo)/.test(this.textoN || '') && nh.length === 1 && !near(h, nh[0])) h = nh[0];
+        if (h && !this.textoLargo && /(altura|alto|techo)/.test(this.textoN || '') && nh.length === 1 && !near(h, nh[0])) h = nh[0];
         if (h) { z.altura = h; c.push('altura ' + fmt(h)); }
         const hs = (zr.huecos || []).map((x) => ({ tipo: x.tipo === 'ventana' ? 'ventana' : 'puerta', bal: x.tipo === 'balconera', uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) || (x.tipo === 'puerta' ? 2.03 : null) }));
         const niega = /\b(no hay|no tiene|ninguna|ninguno|sin (puertas|ventanas|huecos)|ni puertas|ni ventanas)\b/.test(this.textoN || '');
@@ -544,7 +550,7 @@
       if (amb === 'fontaneria') {
         const f = z.f || (z.f = {});
         if (zr.fon_tipo) f.tipo = zr.fon_tipo === 'otra' ? 'otra' : zr.fon_tipo;
-        else if (!f.tipo) f.tipo = /bano|aseo/.test(norm(z.nombre)) ? 'bano' : /cocina/.test(norm(z.nombre)) ? 'cocina' : /lavadero|galeria/.test(norm(z.nombre)) ? 'lavadero' : 'otra';
+        else if (!f.tipo) f.tipo = /bano|aseo/.test(norm(z.nombre)) ? 'bano' : /cocina/.test(norm(z.nombre)) ? 'cocina' : /lavadero|galeria|coladuria|colada|lavanderia/.test(norm(z.nombre)) ? 'lavadero' : 'otra';
         if (ok(zr.agua_fria)) f.af = Math.round(zr.agua_fria); if (ok(zr.agua_fria_caliente)) f.afc = Math.round(zr.agua_fria_caliente);
         if (zr.inodoro) f.inodoro = zr.inodoro === 'no' ? null : zr.inodoro;
         if (zr.ducha) f.ducha = zr.ducha === 'no' ? null : zr.ducha;
@@ -561,8 +567,26 @@
           const r = G.rebt(z.nombre, area || 10);
           if (r) { e.luz = r.luz; e.tomas = r.tomas; if (r.c3) e.c3 = r.c3; e.norma = true; }
         }
-        if (ok(zr.puntos_luz)) e.luz = Math.round(zr.puntos_luz); if (ok(zr.tomas)) e.tomas = Math.round(zr.tomas);
+        if (e.norma && e.tomasBase == null) e.tomasBase = e.tomas;
+        if (SN(zr.segun_norma)) e.tomasBase = e.tomas;
+        if (ok(zr.puntos_luz)) e.luz = Math.round(zr.puntos_luz); if (ok(zr.tomas)) { e.tomas = Math.round(zr.tomas); e.tomasBase = e.tomas; }
         if (SN(zr.horno)) e.c3 = 1;
+        // Equipos: horno/placa → toma de 25 A; termo, lavadora, lavavajillas → circuito propio; microondas, nevera… → una toma más cada uno
+        const eq = (zr.equipos || []).map((x) => norm(x)).filter(Boolean);
+        if (eq.length) {
+          e.equipos = [...new Set((e.equipos || []).concat(eq))];
+          const c4 = new Set(e.c4 || []); let mas = 0;
+          e.equipos.forEach((x) => {
+            if (/horno|placa|vitro|induccion|cocina|fogon/.test(x)) e.c3 = 1;
+            else if (/termo|calentador|acumulador/.test(x)) c4.add('termo');
+            else if (/lavadora|lavavajillas|secadora/.test(x)) c4.add(x.match(/lavadora|lavavajillas|secadora/)[0]);
+            else mas++;
+          });
+          e.c4 = [...c4];
+          if (e.tomasBase == null) e.tomasBase = e.tomas || 0;
+          e.tomas = e.tomasBase + mas;
+          c.push('equipos: ' + e.equipos.join(', '));
+        }
         if (e.luz != null || e.tomas != null) z.eOk = true;
         c.push('electricidad' + (e.luz != null ? ': ' + e.luz + ' ' + plural(e.luz, 'punto') + ' de luz' : '') + (e.tomas != null ? ', ' + e.tomas + ' ' + plural(e.tomas, 'toma') : ''));
       }
@@ -636,10 +660,14 @@
     }
     aplicarTrabajo(tr) {
       const zs = this.toma.zonas;
-      const zonas = (tr.zonas || []).map((nm) => zs.find((z) => norm(z.nombre) === norm(nm)) || zs.find((z) => norm(z.nombre).includes(norm(nm)) || norm(nm).includes(norm(z.nombre)))).filter(Boolean);
+      let zonas = (tr.zonas || []).map((nm) => zs.find((z) => norm(z.nombre) === norm(nm)) || zs.find((z) => norm(z.nombre).includes(norm(nm)) || norm(nm).includes(norm(z.nombre)))).filter(Boolean);
       let w = this.trabajoPara(tr, zonas);
       if (!w) return null;
       const g = this.g; g.sel = g.sel || {};
+      // Trabajo de instalaciones dicho sobre una estancia: va a la fontanería/electricidad de esa estancia
+      if (/^(fontaneria|electricidad)$/.test(w.ambito) && zonas.some((z) => z.ambito !== w.ambito)) {
+        zonas = zonas.map((z) => (z.ambito === w.ambito ? z : zs.find((x) => x.ambito === w.ambito && norm(x.nombre) === norm(z.nombre)) || this.aplicarZona({ ref: '', ambito: w.ambito, nombre: z.nombre, tramos: [], huecos: [], faldones: [], equipos: [] }).z));
+      }
       const delAmbito = (zz) => zz.filter((z) => z.ambito === w.ambito);
       const sel = G.seleccion(this.obra);
       if (tr.quitar) {
@@ -712,13 +740,16 @@
     aplicar(out, text) {
       out = out || {};
       const g = this.g;
-      if (out.accion === 'deshacer') return this.deshacer();
+      if (out.accion === 'deshacer') {
+        if (/\b(deshac|deshaz|atras|anula|borra|quita|elimina|equivocad|no era|no es)/.test(norm(text || ''))) return this.deshacer();
+        out.accion = ''; // ruido o frase sin sentido: no se deshace nada
+      }
       if (out.accion === 'guiado') { g.cLibre = false; return this.siguiente('Vale, te pregunto yo.'); }
       if (out.accion === 'pausa') { this.io.pause && this.io.pause(); return; }
       const hay = (out.zonas || []).length || (out.trabajos || []).length || out.contenedores || out.seguridad_pct;
       if (hay) this.snapshot();
       this.textoN = norm(text || ''); this.textoOrig = text || ''; this.textoRef = /(igual|mismo|misma|como el|como la|que el|que la)\b/.test(this.textoN);
-      try { this.nums = G.numeros ? G.numeros(text || '') : []; } catch (e) { this.nums = []; }
+      try { this.nums = this.textoLargo ? [] : G.numeros ? G.numeros(text || '') : []; } catch (e) { this.nums = []; }
       const antes = new Set(Object.entries(G.seleccion(this.obra)).filter(([, v]) => v.on).map(([k]) => k));
       const frases = [];
       this.sketch = null;
@@ -727,7 +758,7 @@
       // «Anoto baño.» sobra si en la misma respuesta se dicen datos del baño
       hechas.forEach((r) => { if (/^Anoto /.test(r.txt) && hechas.some((o) => o !== r && norm(o.z.nombre) === norm(r.z.nombre) && !/^Anoto /.test(o.txt))) return; frases.push(r.txt); });
       const puestos = [], quitados = [], fon = new Set();
-      const pideQuitar = /\b(quita|quitar|quitalo|quitala|elimina|eliminar|borra|borrar|no se hace|no hace falta|no hay que|sin|descarta|fuera|cambia|cambiar|en lugar|en vez|mejor|sustituye|no es|no son|no lleva|tampoco)\b/.test(this.textoN);
+      const pideQuitar = this.textoLargo || /\b(quita|quitar|quitalo|quitala|elimina|eliminar|borra|borrar|no se hace|no hace falta|no hay que|sin|descarta|fuera|cambia|cambiar|en lugar|en vez|mejor|sustituye|no es|no son|no lleva|tampoco)\b/.test(this.textoN);
       (out.trabajos || []).slice(0, 20).forEach((tr) => {
         try {
           if (tr.quitar && !pideQuitar) return; // la IA no puede quitar lo que el usuario no ha pedido quitar

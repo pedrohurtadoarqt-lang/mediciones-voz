@@ -44,6 +44,18 @@ async function transcribir(audio: string, mime: string) {
 
 function usuarioVisita(ctx: any) {
   const zs = (ctx.zonas || []).map((z: any) => z.ref + ' | ' + z.ambito + ' | ' + z.nombre + (z.datos ? ' | ' + z.datos : '')).join('\n');
+  if (ctx.correccion) {
+    const ws = (ctx.trabajos || []).map((w: any) => w.id + ' | ' + w.label + ' | en: ' + (w.zonas || []).join(', ')).join('\n');
+    return [
+      'NOTA DE CORRECCIÓN dictada por el técnico tras revisar las mediciones (puede tener errores de reconocimiento):',
+      '«' + ctx.transcripcion + '»',
+      'TOMA ACTUAL (ref | ámbito | nombre | datos):\n' + (zs || '(nada)'),
+      'TRABAJOS ANOTADOS (id | trabajo | zonas):\n' + (ws || '(ninguno)'),
+      'INSTRUCCIONES PARA LA CORRECCIÓN: devuelve SOLO los cambios que pide. Para cambiar medidas o datos de una zona, mándala con su ref y los datos nuevos (si cambian las puertas o ventanas, todas con "huecos_modo": "reemplazar"). ' +
+      'Para quitar un trabajo, mándalo con su id y "quitar": true (con "zonas" si solo se quita en algunas). Para añadir, como siempre. Si pide borrar una zona entera, "borrar": true. No repitas lo que no cambia. ' +
+      'Deja "pregunta" vacía. En "mensaje", una frase con lo que NO has podido entender, si hay algo.'
+    ].join('\n\n');
+  }
   return [
     'TRANSCRIPCIÓN COMPLETA DE LA VISITA (dictada por voz recorriendo la obra; puede tener errores de reconocimiento y correcciones sobre la marcha):',
     '«' + ctx.transcripcion + '»',
@@ -108,12 +120,14 @@ Deno.serve(async (req) => {
     const s = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : '');
     const ctx = {
       transcripcion: s(b.transcripcion, 80000),
-      zonas: (Array.isArray(b.zonas) ? b.zonas.slice(0, 80) : []).map((z: any) => ({ ref: s(z?.ref, 20), ambito: s(z?.ambito, 20), nombre: s(z?.nombre, 60), datos: s(z?.datos, 400) }))
+      zonas: (Array.isArray(b.zonas) ? b.zonas.slice(0, 80) : []).map((z: any) => ({ ref: s(z?.ref, 20), ambito: s(z?.ambito, 20), nombre: s(z?.nombre, 60), datos: s(z?.datos, 400) })),
+      trabajos: (Array.isArray(b.trabajos) ? b.trabajos.slice(0, 150) : []).map((w: any) => ({ id: s(w?.id, 60), label: s(w?.label, 200), zonas: (Array.isArray(w?.zonas) ? w.zonas.slice(0, 40) : []).map((x: unknown) => s(x, 60)) })),
+      correccion: b.correccion === true
     };
     if (!ctx.transcripcion.trim()) return new Response(JSON.stringify({ error: 'La transcripción está vacía' }), { status: 400, headers: h });
     const r = await procesar(ctx);
     if (!r) return new Response(JSON.stringify({ error: 'No he podido procesar la visita', detalle: ultimoError }), { status: 502, headers: h });
-    anota(r.modelo, r.tin, r.tout, Date.now() - t0, 'visita');
+    anota(r.modelo, r.tin, r.tout, Date.now() - t0, ctx.correccion ? 'correccion' : 'visita');
     return new Response(JSON.stringify({ result: r.out, modelo: r.modelo, ms: Date.now() - t0 }), { headers: h });
   }
   return new Response(JSON.stringify({ error: 'Modo no válido' }), { status: 400, headers: h });
