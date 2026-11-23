@@ -41,3 +41,10 @@ La app vuelve a preguntar paso a paso, pero cada respuesta la interpreta la IA:
 - **Nunca se atasca**: si una pregunta se repite sin que la respuesta aporte nada, la reformula; a la tercera la deja pendiente y sigue. «Atrás» deshace lo último y vuelve a preguntar.
 - **Terminar**: «genera las mediciones» → pregunta lo imprescindible que falte → genera.
 - «Te lo cuento yo» pasa al modo libre (versión 2); «pregúntame tú» vuelve al guiado.
+
+## Nota de audio de la visita
+«Grabar nota de la visita» (barra de inicio o menú): se graba toda la visita y se procesa al final.
+- **Grabación**: `MediaRecorder` por trozos de 3 minutos (cada trozo es un archivo completo), guardados en IndexedDB (`audios`). Pantalla con temporizador, pausa y la lista de lo que conviene decir en cada estancia.
+- **Transcripción** (función `visita`, modo `transcribir`, Gemini): cada trozo se transcribe mientras se sigue grabando. Distingue «Técnico:» de «Otra persona:» si habla más gente. Si el formato del móvil no se admite, la app lo convierte a WAV de 16 kHz y lo reintenta.
+- **Revisión**: el texto completo se puede corregir a mano antes de procesar.
+- **Procesado** (modo `procesar`, Claude Sonnet; reserva Haiku): la transcripción completa → zonas y trabajos con el mismo formato del modo conversación; se queda con la versión final de lo corregido y, si hay varias personas, con lo que dice o acepta el técnico. La app lo aplica (`aplicarVisita`), genera las mediciones y la agenda guiada pregunta lo que falte.

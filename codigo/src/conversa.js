@@ -178,6 +178,32 @@
         default: return [];
       }
     }
+    /** Visita grabada: aplica de una vez todo lo que la IA ha sacado de la transcripción. */
+    aplicarVisita(out, transcripcion) {
+      out = out || {};
+      const g = this.g;
+      this.snapshot();
+      this.obra.modo = 'conversa'; if (!this.obra.ambito) this.obra.ambito = 'conversa';
+      g.cLibre = false; g.cFin = false; g.cPaso = null; g.fin = true;
+      // Sin las comprobaciones pensadas para una sola frase (recorridos, alturas…): la IA ya ha leído todo el texto
+      this.textoN = norm(transcripcion || ''); this.textoOrig = ''; this.nums = [];
+      let nz = 0, nt = 0;
+      (out.zonas || []).slice(0, 60).forEach((zr) => { try { this.aplicarZona(zr); nz++; } catch (e) { /* zona mal formada */ } });
+      (out.trabajos || []).slice(0, 120).forEach((tr) => {
+        try {
+          if (this.trabajoFontaneria(tr)) return;
+          const r = this.aplicarTrabajo(tr);
+          if (r && !r.quitado) { nt++; (r.zonas || []).forEach((z) => { z.trabajosOk = true; }); }
+        } catch (e) { /* trabajo mal formado */ }
+      });
+      if (ok(out.contenedores)) { g.contenedores = Math.round(out.contenedores); g.contenedoresOk = true; }
+      if (ok(out.seguridad_pct) && out.seguridad_pct < 20) g.sysPct = out.seguridad_pct;
+      this.textoN = '';
+      g.cFoco = (this.toma.zonas[0] || {}).id;
+      this.regenerar();
+      const zs = this.toma.zonas.filter((z) => z.ambito === 'interior').length;
+      return { zonas: nz, estancias: zs, trabajos: nt, partidas: this.obra.partidas.length, mensaje: (out.mensaje || '').trim() };
+    }
     /** Pregunta lo siguiente que falta (o genera, si se ha pedido terminar). */
     siguiente(pre, opt) {
       const g = this.g;

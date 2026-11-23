@@ -170,6 +170,12 @@
     if (error) { let msg = errMsg(error); try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {} throw new Error(msg); }
     return data;
   }
+  async function visita(body) {
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.functions.invoke('visita', { body });
+    if (error) { let msg = errMsg(error); try { const j = await error.context.json(); if (j && j.error) msg = j.error + (j.detalle ? ' (' + j.detalle + ')' : ''); } catch (e) {} throw new Error(msg); }
+    return data;
+  }
   async function voz(texto, nombre) {
     if (!user) throw new Error('sin sesión');
     const { data, error } = await sb.functions.invoke('voz', { body: { texto, voz: nombre } });
@@ -227,6 +233,6 @@
     get user() { return user; }, get perfil() { return perfil; }, get isAdmin() { return admin; },
     signUp, resendConfirmation, signIn, signOut, resetPassword, updatePassword, updateProfile, loadProfile,
     get pendingCount() { return pending.size; },
-    syncObras, queue, flush, deleteObra, ai, agent, conversa, voz, sendFiles, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
+    syncObras, queue, flush, deleteObra, ai, agent, conversa, voz, visita, sendFiles, suggestion, adminData, setSuggestionState, savePrice, newSuggestions
   };
 })(typeof self !== 'undefined' ? self : this);

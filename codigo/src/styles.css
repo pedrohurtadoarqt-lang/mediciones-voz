@@ -287,3 +287,14 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .mfirst .mi { font-weight: 800; font-size: 22px; background: var(--accent); color: var(--accent-fg); border-color: var(--accent); border-radius: 50%; }
 .mi.on { color: var(--ok); border-color: var(--ok); }
 .zbtns { display: flex; gap: 6px; }
+
+/* Nota de audio de la visita */
+.vrec { text-align: center; padding: 22px 14px; }
+.vrec .vtime { font-size: 46px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 6px 0; }
+.vdot { width: 22px; height: 22px; border-radius: 50%; background: var(--rec); margin: 0 auto; animation: vpulse 1.2s infinite; }
+.vdot.p { animation: none; opacity: .4; }
+@keyframes vpulse { 50% { opacity: .25; } }
+.vseg { font-size: 14px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 8px; margin: 8px 0; }
+.vtxt { width: 100%; font: inherit; font-size: 15px; line-height: 1.45; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: inherit; margin: 8px 0; }
+#startbar #btnGrabar { margin-top: 8px; width: 100%; }
+.recdot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--rec); margin-right: 8px; }
