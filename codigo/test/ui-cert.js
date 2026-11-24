@@ -2,7 +2,7 @@
 // node test/ui-cert.js dist/pwa/index.html presupuesto.bc3
 const { chromium } = require('playwright'), path = require('path');
 (async () => {
-  const b = await chromium.launch(); const ctx = await b.newContext({ acceptDownloads: true, viewport: { width: 390, height: 844 } }); const pg = await ctx.newPage();
+  const b = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const ctx = await b.newContext({ acceptDownloads: true, viewport: { width: 390, height: 844 }, permissions: ['microphone'] }); const pg = await ctx.newPage();
   const errs = []; pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto('file://' + path.resolve(process.argv[2])); await pg.waitForTimeout(1200);
   const sc = (n) => pg.screenshot({ path: path.join(__dirname, n + '.png') });
@@ -15,6 +15,23 @@ const { chromium } = require('playwright'), path = require('path');
   await pg.click('[data-a="inicio-cert"]'); await pg.setInputFiles('#cfile', path.resolve(process.argv[3])); await pg.fill('#fcli', 'Cliente X'); await pg.click('#cgo'); await pg.waitForTimeout(800);
   await sc('k_cert');
   await pg.click('.capdesp >> nth=0 >> summary'); await pg.click('[data-a="cpart"] >> nth=0'); await pg.waitForTimeout(200);
+  // Medición del presupuesto: marcar líneas ejecutadas
+  const nPres = await pg.$$eval('.ctab tbody tr', (x) => x.length); console.log('Líneas del presupuesto en la ficha:', nPres);
+  await sc('k_ficha'); if (nPres) { await pg.click('[data-a="cpresl"][data-i="0"]', { timeout: 4000 }); await pg.waitForTimeout(150); if (nPres > 2) { await pg.click('[data-a="cpresl"][data-i="2"]'); await pg.waitForTimeout(150); }
+    console.log('Tras marcar líneas:', (await pg.textContent('#cporig')), '| líneas ejecutadas:', await pg.$$eval('.clines .cline', (x) => x.length)); await sc('k_lineas'); }
+  // Grabación con pausa
+  await pg.click('[data-a="crgrabar"]'); await pg.waitForTimeout(2500);
+  console.log('Grabando:', (await pg.textContent('.crec-t')).trim());
+  await pg.click('[data-a="crpausa"]'); await pg.waitForTimeout(1500); console.log('Pausa:', (await pg.textContent('.crec-t')).trim());
+  await pg.click('[data-a="crpausa"]'); await pg.waitForTimeout(2000); await sc('k_grabando');
+  await pg.click('[data-a="crsig"]'); await pg.waitForTimeout(6000);
+  console.log('Siguiente partida:', (await pg.textContent('.cph')).trim(), '| grabando:', !!(await pg.$('.crec')));
+  await pg.click('[data-a="crfin"]'); await pg.waitForTimeout(1500);
+  await pg.click('[data-a="cerrarficha"]'); await pg.waitForTimeout(200);
+  await pg.click('[data-a="cpart"] >> nth=0'); await pg.waitForTimeout(200);
+  console.log('Notas de grabación:', await pg.$$eval('.cnotas li', (x) => x.map((l) => l.textContent.trim())));
+  await pg.click('[data-a="cerrarficha"]'); await pg.waitForTimeout(200);
+  await pg.click('[data-a="cpart"] >> nth=0'); await pg.waitForTimeout(200);
   await pg.click('[data-a="cpct"][data-v="100"]'); await pg.waitForTimeout(200);
   await pg.click('[data-a="csig"]'); await pg.waitForTimeout(200);
   await pg.click('[data-a="clinea-add"]'); await pg.waitForTimeout(100);

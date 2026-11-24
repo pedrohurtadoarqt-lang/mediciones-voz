@@ -2,6 +2,7 @@
 // Mediciona · Nota de audio de la visita
 // POST { modo: 'transcribir', audio (base64), mime }       → { texto }
 // POST { modo: 'procesar', transcripcion, zonas, trabajos } → { result } (mismo formato que el modo conversación)
+// POST { modo: 'certificar', transcripcion, partida, ejecutado } → { result: { lineas, pct, cantidad, reemplazar, mensaje } }
 // POST { modo: 'presupuesto', pdf (base64) }               → { result: { titulo, capitulos } } (certificaciones)
 // Solo usuarios con sesión. Secretos: GEMINI_API_KEY, ANTHROPIC_API_KEY.
 // Opcionales: VISITA_MODELO (Claude), TRANSCRIBE_MODELOS (Gemini, separados por comas).
@@ -129,6 +130,35 @@ async function leerPresupuesto(pdf: string) {
   return null;
 }
 
+const PROMPT_CERT = 'Eres el ayudante de un técnico que certifica una obra en España. El técnico ha grabado, recorriendo la obra (con pausas al desplazarse), lo que está EJECUTADO de UNA partida del presupuesto. Te paso la partida, su medición presupuestada y la transcripción (puede tener errores de reconocimiento y correcciones sobre la marcha: quédate con la versión final).\n' +
+  'Devuelve SOLO JSON: {"lineas":[{"com":"dónde","uds":1,"l":4.2,"a":null,"h":2.5}],"pct":null,"cantidad":null,"reemplazar":false,"mensaje":""}\n' +
+  'Reglas: cada medida dictada es una línea (com = estancia o lugar, uds = unidades si las dice, l/a/h = largo, ancho y alto en metros; null si no se dicen). Usa las mismas dimensiones que la unidad de la partida: m2 dos medidas, m una, m3 tres, ud unidades. ' +
+  'Si dice que una línea del presupuesto está hecha («lo del salón está terminado», «la línea 3 completa»), cópiala con sus medidas. Si dice que está todo hecho, "pct":100 y sin líneas; «la mitad» 50; «un 30 por ciento» 30. Si da solo una cantidad total («llevamos 12 metros»), "cantidad". ' +
+  '"reemplazar": true solo si pide borrar lo anterior o empezar de nuevo. Lo que no sea medición (saludos, comentarios, ruido) se ignora. "mensaje": una frase corta con lo que no hayas entendido, o vacío. Números con punto decimal.';
+
+async function certificar(ctx: any) {
+  if (!anthropic) { ultimoError = 'sin clave de Anthropic'; return null; }
+  const p = ctx.partida;
+  const lin = (p.lineas || []).map((l: any, i: number) => (i + 1) + '. ' + [l.com || '-', 'uds ' + (l.uds ?? ''), 'largo ' + (l.l ?? ''), 'ancho ' + (l.a ?? ''), 'alto ' + (l.h ?? '')].join(' | ')).join('\n');
+  const user = 'PARTIDA ' + p.codigo + ' (' + p.u + '): ' + p.r + '\nPresupuestado: ' + p.cantidad + ' ' + p.u + '\nMEDICIÓN DEL PRESUPUESTO:\n' + (lin || '(sin líneas)') +
+    (ctx.ejecutado ? '\nYA ANOTADO COMO EJECUTADO: ' + ctx.ejecutado : '') + '\n\nTRANSCRIPCIÓN:\n«' + ctx.transcripcion + '»';
+  for (const modelo of MODELOS_CLAUDE) {
+    try {
+      const params: any = { model: modelo, max_tokens: 8000, system: PROMPT_CERT, messages: [{ role: 'user', content: user }], output_config: { effort: 'low' } };
+      const r = await anthropic.messages.create(params);
+      if (r.stop_reason === 'refusal') { ultimoError = modelo + ': refusal'; continue; }
+      const txt = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+      let out: any = null;
+      try { out = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); } catch (_) { out = null; }
+      if (!out) { ultimoError = modelo + ': respuesta no JSON ' + txt.slice(0, 120); continue; }
+      return { out, modelo, tin: r.usage?.input_tokens || 0, tout: r.usage?.output_tokens || 0 };
+    } catch (e) {
+      ultimoError = modelo + ': ' + (e instanceof Anthropic.APIError ? e.status + ' ' + e.message : String(e));
+    }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   const h = { ...cors(req), 'Content-Type': 'application/json' };
   if (req.method === 'OPTIONS') return new Response('ok', { headers: h });
@@ -166,6 +196,17 @@ Deno.serve(async (req) => {
     if (!r) return new Response(JSON.stringify({ error: 'No he podido procesar la visita', detalle: ultimoError }), { status: 502, headers: h });
     anota(r.modelo, r.tin, r.tout, Date.now() - t0, ctx.correccion ? 'correccion' : 'visita');
     return new Response(JSON.stringify({ result: r.out, modelo: r.modelo, ms: Date.now() - t0 }), { headers: h });
+  }
+  if (b?.modo === 'certificar') {
+    const s = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : '');
+    const p = b.partida || {};
+    const ctx = { transcripcion: s(b.transcripcion, 30000), ejecutado: s(b.ejecutado, 2000),
+      partida: { codigo: s(p.codigo, 40), r: s(p.r, 300), u: s(p.u, 10), cantidad: +p.cantidad || 0, lineas: (Array.isArray(p.lineas) ? p.lineas.slice(0, 200) : []).map((l: any) => ({ com: s(l?.com, 80), uds: l?.uds ?? null, l: l?.l ?? null, a: l?.a ?? null, h: l?.h ?? null })) } };
+    if (!ctx.transcripcion.trim()) return new Response(JSON.stringify({ error: 'La transcripción está vacía' }), { status: 400, headers: h });
+    const r = await certificar(ctx);
+    if (!r) return new Response(JSON.stringify({ error: 'No he podido interpretar la medición', detalle: ultimoError }), { status: 502, headers: h });
+    anota(r.modelo, r.tin, r.tout, Date.now() - t0, 'certificar');
+    return new Response(JSON.stringify({ result: r.out, modelo: r.modelo }), { headers: h });
   }
   if (b?.modo === 'presupuesto') {
     const pdf = typeof b.pdf === 'string' ? b.pdf : '';

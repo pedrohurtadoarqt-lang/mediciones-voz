@@ -380,3 +380,32 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .cline input { min-width: 0; padding: 8px 6px; }
 .iconbtn.sm { width: 36px; height: 36px; }
 .iconbtn.sm svg { width: 16px; height: 16px; }
+/* Certificación: medición del presupuesto y grabación */
+.csub { margin: 16px 0 6px; font-size: var(--fs-s); text-transform: uppercase; letter-spacing: .05em; }
+.csub small { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 500; margin-left: 6px; }
+.ctab { flex: none; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.ctab table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ctab th { text-align: right; font-size: 11px; color: var(--muted); padding: 6px 6px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.ctab td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ctab th:nth-child(2), .ctab td.com { text-align: left; white-space: normal; min-width: 70px; }
+.ctab td.par { font-weight: 700; }
+.ctab tr.on td { color: var(--accent); }
+.ccheck { width: 34px; height: 34px; border-radius: 9px; border: 2px solid var(--line); background: var(--card-2); color: var(--accent-fg); font-weight: 900; font-size: 18px; line-height: 1; }
+.ccheck.on { background: var(--accent); border-color: var(--accent); }
+.crec { border: 2px solid var(--rec, #e11d48); border-radius: 16px; padding: 12px; margin: 8px 0; }
+.crec.pausa { border-color: var(--muted); }
+.crec-t { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; margin-bottom: 8px; }
+.crec-t b { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.crec .dot, .crecbar .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--rec, #e11d48); animation: crlat 1.2s infinite; flex: none; }
+.crec.pausa .dot { background: var(--muted); animation: none; }
+@keyframes crlat { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .crec .dot, .crecbar .dot { animation: none; } }
+.crec-b { gap: 8px; flex-wrap: nowrap; }
+.crec-b .btn { flex: 1; margin: 0; }
+.crecbar { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; width: 100%; text-align: left; border: 2px solid var(--rec, #e11d48); color: var(--fg); }
+.crecbar small { flex-basis: 100%; color: var(--muted); }
+.cnotas { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.cnotas li { background: var(--card-2); border-radius: 10px; padding: 8px 10px; }
+.cnotas li small { display: block; color: var(--muted); margin-top: 3px; }
+.cnotas li.g-error { border-left: 3px solid var(--rec, #e11d48); }
+.mtip { font-size: 13px; line-height: 1.4; }

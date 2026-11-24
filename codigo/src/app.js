@@ -1010,6 +1010,8 @@
       '<div class="certnums"><div><small>Presupuesto</small><b>' + eur(res.tot.pres) + '</b></div><div><small>A origen</small><b>' + eur(res.tot.origen) + '</b><small>' + E.fmt(res.tot.pct) + ' %</small></div><div><small>Esta certificación</small><b class="acc">' + eur(res.tot.actual) + '</b></div></div>' +
       '<div class="certbar"><span style="width:' + Math.min(100, res.tot.pct) + '%"></span></div>' +
       '<div class="row chipsrow">' + c.certs.map((x) => '<button class="chip' + (x.n === n ? ' on' : '') + '" data-a="csel" data-n="' + x.n + '">Nº ' + x.n + '</button>').join('') + '<button class="chip" data-a="cnueva">+ Nueva certificación</button></div></div>';
+    if (CRec.rec) { const fr = filaCert(o, CRec.k); h += '<button class="card crecbar" data-a="cpart" data-k="' + esc(CRec.k) + '"><span class="dot"></span><b>' + (CRec.pausado ? 'En pausa' : 'Grabando') + ' · ' + esc(fr ? fr.p.codigo + ' ' + fr.p.r : '') + '</b><small>Toca para volver a la partida</small></button>'; }
+    else if (!S.settings.cManosVisto) h += '<div class="card mtip">🎧 <b>Para medir con manos libres</b> ponte auriculares con micrófono, entra en una partida y pulsa <b>Grabar lo ejecutado</b>. Con el botón del auricular pausas o sigues; con doble pulsación pasas a la siguiente partida.</div>';
     if (!res.caps.length) h += '<div class="card"><h3>Presupuesto vacío</h3><p class="hint">No he encontrado partidas en el archivo. Prueba con el BC3 del presupuesto o con otro PDF.</p></div>';
     res.caps.forEach((cap) => {
       const pct = cap.impPres ? Math.round(cap.impOrigen / cap.impPres * 100) : 0;
@@ -1022,32 +1024,50 @@
       [['gg', 'Gastos generales %', aj.gg ?? 13], ['bi', 'Beneficio industrial %', aj.bi ?? 6], ['baja', 'Baja %', aj.baja ?? 0], ['iva', 'IVA %', aj.iva ?? 21]].map(([k, l, v]) => '<label class="field"><span>' + l + '</span><input class="cajuste" data-k="' + k + '" inputmode="decimal" value="' + String(v).replace('.', ',') + '"></label>').join('') +
       '</div><p class="hint">Se aplican sobre la ejecución material de esta certificación en el PDF.</p></div>';
     h += '<div class="row exprow"><button class="btn primary" data-a="cexp" data-k="pdf">' + ICON.pdf + ' PDF certificación</button><button class="btn" data-a="cexp" data-k="xlsx">Excel</button><button class="btn" data-a="cexp" data-k="bc3">BC3</button></div>';
-    h += '<p class="hint">Toca una partida para anotar lo ejecutado: dilo con el micrófono («todo», «la mitad», «60 por ciento», «salón 4 por 3»), elige un porcentaje o escribe la medición.</p>';
+    h += '<p class="hint">Toca una partida para ver su medición del presupuesto y anotar lo ejecutado: marca las líneas hechas, graba lo que vas midiendo o pon un porcentaje.</p>';
     return h;
   }
-  /** Ficha de una partida: lo presupuestado y lo ejecutado a origen en la certificación abierta. */
+  /** Ficha de una partida: medición del presupuesto (se marca lo ejecutado), grabación con pausa y lo ejecutado a origen. */
   function certPartidaSheet(k) {
     const o = S.obra, f = filaCert(o, k); if (!f) return;
-    const cur = certActual(o), e = cur.ej[k] || {}, p = f.p;
-    const ls = (e.lineas || []).map((l, i) => '<div class="cline"><input data-i="' + i + '" data-c="com" value="' + esc(l.com || '') + '" placeholder="Dónde"><input data-i="' + i + '" data-c="uds" inputmode="decimal" value="' + (l.uds ?? '') + '" placeholder="Uds"><input data-i="' + i + '" data-c="l" inputmode="decimal" value="' + (l.l ?? '') + '" placeholder="Largo"><input data-i="' + i + '" data-c="a" inputmode="decimal" value="' + (l.a ?? '') + '" placeholder="Ancho"><input data-i="' + i + '" data-c="h" inputmode="decimal" value="' + (l.h ?? '') + '" placeholder="Alto"><button class="iconbtn sm" data-a="clinea-del" data-i="' + i + '" aria-label="Quitar línea">' + ICON.del + '</button></div>').join('');
-    const pres = (p.lineas || []).map((l) => '<li>' + esc(l.com || '-') + ' <span class="meta">' + [l.uds, l.l, l.a, l.h].filter((v) => v != null).map((v) => E.fmt(v)).join(' × ') + '</span></li>').join('');
+    const cur = certActual(o), e = cur.ej[k] || {}, p = f.p, ek = esc(k);
+    const dims = (l) => [l.uds, l.l, l.a, l.h].map((v) => (v == null ? '' : E.fmt(v)));
+    const hechas = new Set((e.lineas || []).filter((l) => l.pres != null).map((l) => l.pres));
+    const pres = (p.lineas || []).map((l, i) => { const d = dims(l), on = hechas.has(i);
+      return '<tr class="' + (on ? 'on' : '') + '"><td><button class="ccheck' + (on ? ' on' : '') + '" data-a="cpresl" data-k="' + ek + '" data-i="' + i + '" aria-pressed="' + on + '" aria-label="Marcar como ejecutada la línea ' + (i + 1) + '">' + (on ? '✓' : '') + '</button></td><td class="com">' + esc(l.com || '—') + '</td><td>' + d[0] + '</td><td>' + d[1] + '</td><td>' + d[2] + '</td><td>' + d[3] + '</td><td class="par">' + E.fmt(CT().parcialLinea(l)) + '</td></tr>'; }).join('');
+    const ls = (e.lineas || []).map((l, i) => '<div class="cline' + (l.pres != null ? ' delpres' : '') + '"><input data-i="' + i + '" data-c="com"' + (l.pres != null ? ' data-p="' + l.pres + '"' : '') + ' value="' + esc(l.com || '') + '" placeholder="Dónde"><input data-i="' + i + '" data-c="uds" inputmode="decimal" value="' + (l.uds ?? '') + '" placeholder="Uds"><input data-i="' + i + '" data-c="l" inputmode="decimal" value="' + (l.l ?? '') + '" placeholder="Largo"><input data-i="' + i + '" data-c="a" inputmode="decimal" value="' + (l.a ?? '') + '" placeholder="Ancho"><input data-i="' + i + '" data-c="h" inputmode="decimal" value="' + (l.h ?? '') + '" placeholder="Alto"><button class="iconbtn sm" data-a="clinea-del" data-i="' + i + '" aria-label="Quitar línea">' + ICON.del + '</button></div>').join('');
+    const grabs = ((cur.grabs || {})[k] || []);
+    const estG = { grabada: 'Guardada, se procesará con conexión', transcribiendo: 'Pasando a texto…', interpretando: 'Convirtiendo en mediciones…', ok: '', error: 'No se pudo procesar' };
+    const notas = grabs.map((g, i) => '<li class="g-' + g.estado + '">' + (g.texto ? '«' + esc(g.texto) + '»' : '<i>' + esc(estG[g.estado] || g.estado) + '</i>') + (g.msg ? '<small>' + esc(g.msg) + '</small>' : '') +
+      (g.estado === 'error' || g.estado === 'grabada' ? ' <button class="linkbtn" data-a="cgretry" data-k="' + ek + '" data-i="' + i + '">Reintentar</button>' : '') + '</li>').join('');
+    const grabando = CRec.rec && CRec.k === k;
+    const rec = grabando
+      ? '<div class="crec' + (CRec.pausado ? ' pausa' : '') + '"><div class="crec-t"><span class="dot"></span><b id="crtime">' + mmss(crTiempo()) + '</b> ' + (CRec.pausado ? 'En pausa' : 'Grabando') + '</div>' +
+        '<div class="row crec-b"><button class="btn big" data-a="crpausa">' + (CRec.pausado ? '▶ Continuar' : '❚❚ Pausa') + '</button><button class="btn primary big" data-a="crfin" data-k="' + ek + '">■ Terminar</button></div>' +
+        '<button class="btn" data-a="crsig" data-k="' + ek + '">Terminar y siguiente partida ›</button>' +
+        '<p class="hint">Di dónde y cuánto: «salón, cuatro veinte por dos cincuenta», «lo del baño está hecho», «todo terminado». Pausa al desplazarte. Auricular: una pulsación pausa / continúa; dos pulsaciones, siguiente partida.</p></div>'
+      : '<button class="btn primary big" data-a="crgrabar" data-k="' + ek + '">● Grabar lo ejecutado</button>' +
+        (S.settings.cManosVisto ? '' : '<p class="hint mtip">🎧 Recomendado: <b>auriculares con micrófono</b> (Bluetooth o cable) y el móvil en el bolsillo. Con el botón del auricular pausas o sigues y, con doble pulsación, pasas a la siguiente partida; la app te dice en voz alta cuál es.</p>');
     sheet('<h2 class="cph"><span class="code"><b>' + esc(p.codigo) + '</b></span> ' + esc(p.r) + '</h2>' +
       (p.t && p.t !== p.r ? '<details class="ctxt"><summary>Descripción</summary><p class="hint">' + esc(p.t) + '</p></details>' : '') +
       '<div class="certnums"><div><small>Presupuesto</small><b>' + E.fmt(p.cantidad) + ' ' + esc(p.u) + '</b><small>' + eur(p.precio) + '/' + esc(p.u) + '</small></div><div><small>Ejecutado a origen</small><b class="acc" id="cporig">' + E.fmt(f.origen) + ' ' + esc(p.u) + '</b><small>' + E.fmt(f.pct) + ' %</small></div><div><small>Anterior</small><b>' + E.fmt(f.anterior) + '</b></div></div>' +
-      (pres ? '<details class="ctxt"><summary>Medición del presupuesto</summary><ul class="cpres">' + pres + '</ul></details>' : '') +
-      '<button class="btn primary big" data-a="cdictar" data-k="' + esc(k) + '">🎤 Dictar lo ejecutado</button><p class="hint" id="cdictado"></p>' +
-      '<div class="row chipsrow">' + [0, 25, 50, 75, 100].map((v) => '<button class="chip' + (e.pct === v && !(e.lineas || []).length ? ' on' : '') + '" data-a="cpct" data-k="' + esc(k) + '" data-v="' + v + '">' + v + ' %</button>').join('') + '</div>' +
+      rec + (notas ? '<ul class="cnotas">' + notas + '</ul>' : '') +
+      (pres ? '<h3 class="csub">Medición del presupuesto <small>toca ✓ en lo que esté hecho</small></h3><div class="ctab"><table><thead><tr><th></th><th>Dónde</th><th>Uds</th><th>Largo</th><th>Ancho</th><th>Alto</th><th>Parcial</th></tr></thead><tbody>' + pres + '</tbody></table></div>' +
+        '<div class="row chipsrow"><button class="chip" data-a="cpresall" data-k="' + ek + '">✓ Todas las líneas</button></div>' : '') +
+      '<h3 class="csub">Ejecutado</h3>' +
+      '<div class="row chipsrow">' + [0, 25, 50, 75, 100].map((v) => '<button class="chip' + (e.pct === v && !(e.lineas || []).length ? ' on' : '') + '" data-a="cpct" data-k="' + ek + '" data-v="' + v + '">' + v + ' %</button>').join('') + '</div>' +
       '<label class="field"><span>Cantidad ejecutada a origen (' + esc(p.u) + ')</span><input id="ccant" inputmode="decimal" value="' + (e.cantidad != null && !(e.lineas || []).length && e.pct == null ? String(e.cantidad).replace('.', ',') : '') + '" placeholder="' + E.fmt(f.origen) + '"></label>' +
-      '<div class="clines">' + ls + '</div><button class="btn" data-a="clinea-add" data-k="' + esc(k) + '">+ Línea de medición</button>' +
-      '<div class="row" style="margin-top:12px"><button class="btn primary" data-a="cguardar" data-k="' + esc(k) + '">Guardar</button><button class="btn" data-a="csig" data-k="' + esc(k) + '">Guardar y siguiente ›</button><button class="btn" data-a="closesheet">Cerrar</button></div>');
+      '<div class="clines">' + ls + '</div><button class="btn" data-a="clinea-add" data-k="' + ek + '">+ Línea de medición</button>' +
+      '<div class="row" style="margin-top:12px"><button class="btn primary" data-a="cguardar" data-k="' + ek + '">Guardar</button><button class="btn" data-a="csig" data-k="' + ek + '">Guardar y siguiente ›</button><button class="btn" data-a="cerrarficha">Cerrar</button></div>');
     S.cK = k;
   }
   const numIn = (v) => { const x = parseFloat(String(v || '').replace(/\./g, (m, i, s) => (s.indexOf(',') >= 0 ? '' : '.')).replace(',', '.')); return isFinite(x) ? x : null; };
   /** Lo escrito en la ficha pasa a la certificación. */
   function certLeerFicha(k) {
+    if (S.cK !== k || !document.querySelector('.cph')) return;
     const cur = certActual(S.obra), e = cur.ej[k] || {};
     const filas = {};
-    document.querySelectorAll('.cline input').forEach((i) => { const r = filas[i.dataset.i] || (filas[i.dataset.i] = {}); r[i.dataset.c] = i.dataset.c === 'com' ? i.value.trim() : numIn(i.value); });
+    document.querySelectorAll('.cline input').forEach((i) => { const r = filas[i.dataset.i] || (filas[i.dataset.i] = {}); r[i.dataset.c] = i.dataset.c === 'com' ? i.value.trim() : numIn(i.value); if (i.dataset.p != null) r.pres = +i.dataset.p; });
     const lineas = Object.keys(filas).sort((a, b) => a - b).map((i) => filas[i]).filter((l) => l.com || l.uds != null || l.l != null || l.a != null || l.h != null);
     const cant = $('#ccant') ? numIn($('#ccant').value) : null;
     if (lineas.length) cur.ej[k] = { lineas };
@@ -1056,32 +1076,135 @@
     else if (!Object.keys(e).length) delete cur.ej[k];
     else if (e.lineas && !lineas.length) delete cur.ej[k];
   }
+  function certClaves() { const keys = []; S.obra.cert.pres.capitulos.forEach((c) => c.partidas.forEach((p) => keys.push(c.codigo + '|' + p.codigo))); return keys; }
   function certSiguiente(k) {
-    const keys = []; S.obra.cert.pres.capitulos.forEach((c) => c.partidas.forEach((p) => keys.push(c.codigo + '|' + p.codigo)));
-    const i = keys.indexOf(k); const sig = keys[i + 1];
-    if (!sig) { closeSheet(); toast('Última partida del presupuesto.'); return; }
+    const keys = certClaves(), sig = keys[keys.indexOf(k) + 1];
+    if (!sig) { closeSheet(); toast('Última partida del presupuesto.'); return null; }
     S.capAbiertos = S.capAbiertos || {}; S.capAbiertos['cert:' + sig.split('|')[0]] = true;
     certPartidaSheet(sig);
+    return sig;
   }
-  /** Dictado de lo ejecutado: una frase, se interpreta en el móvil. */
-  function certDictar(k) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const out = $('#cdictado');
-    if (!SR) { if (out) out.textContent = 'Este navegador no permite dictar. Usa los porcentajes o escribe la cantidad.'; return; }
-    try { VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); } catch (e) {}
-    const r = new SR(); r.lang = 'es-ES'; r.interimResults = false; r.maxAlternatives = 1;
-    if (out) out.textContent = 'Te escucho…';
-    r.onresult = (ev) => {
-      const t = ev.results[0][0].transcript, f = filaCert(S.obra, k), v = CT().interpretarDictado(t, f && f.p);
-      if (!v) { if (out) out.textContent = '«' + t + '»: no lo he entendido. Di «todo», «la mitad», «60 por ciento» o la medida.'; return; }
-      const cur = certActual(S.obra);
-      if (v.lineas) cur.ej[k] = { lineas: ((cur.ej[k] && cur.ej[k].lineas) || []).concat(v.lineas) }; else cur.ej[k] = v;
-      saveObra(); certPartidaSheet(k); render();
-      const o2 = $('#cdictado'); if (o2) o2.textContent = '«' + t + '» ✓';
-    };
-    r.onerror = (ev) => { if (out) out.textContent = ev.error === 'no-speech' ? 'No te he oído. Vuelve a pulsar y habla.' : 'No he podido usar el micrófono (' + ev.error + ').'; };
-    try { r.start(); } catch (e) { if (out) out.textContent = 'No he podido abrir el micrófono.'; }
+  /** Marca / desmarca una línea del presupuesto como ejecutada (se copia con sus medidas). */
+  function certMarcarLinea(k, i, forzar) {
+    certLeerFicha(k);
+    const cur = certActual(S.obra), f = filaCert(S.obra, k), e = cur.ej[k] || {};
+    let ls = (e.lineas || []).slice();
+    const ya = ls.findIndex((l) => l.pres === i);
+    if (ya >= 0 && forzar !== true) ls.splice(ya, 1);
+    else if (ya < 0) { const l = f.p.lineas[i]; ls.push({ com: l.com || '', uds: l.uds ?? null, l: l.l ?? null, a: l.a ?? null, h: l.h ?? null, pres: i }); }
+    ls.sort((a, b) => (a.pres ?? 1e9) - (b.pres ?? 1e9));
+    if (ls.length) cur.ej[k] = { lineas: ls }; else delete cur.ej[k];
+    saveObra(); certPartidaSheet(k); render();
   }
+
+  /* ---- Grabación de lo ejecutado en una partida: continua, con pausa, manos libres ----
+   * MediaRecorder con pausa real; al terminar se guarda en el móvil, se pasa a texto y la IA lo convierte
+   * en líneas de medición de esa partida. El botón del auricular (Media Session) pausa, sigue o pasa de partida. */
+  const CRec = { rec: null, stream: null, chunks: [], mime: '', k: null, t0: 0, acum: 0, pausado: false, timer: null, silencio: null };
+  const crTiempo = () => (CRec.acum + (CRec.pausado || !CRec.t0 ? 0 : Date.now() - CRec.t0)) / 1000;
+  function crDecir(t) { try { return VoiceAdapter.speak(t); } catch (e) { return Promise.resolve(); } }
+  function crMediaSession(on) {
+    const ms = navigator.mediaSession; if (!ms) return;
+    const acts = { play: () => crPausa(false), pause: () => crPausa(true), stop: () => crFin(false), nexttrack: () => crFin(true), previoustrack: () => crPausa() };
+    Object.keys(acts).forEach((a) => { try { ms.setActionHandler(a, on ? acts[a] : null); } catch (e) {} });
+    if (on) {
+      try { ms.metadata = new MediaMetadata({ title: 'Grabando partida', artist: 'Mediciona' }); } catch (e) {}
+      // Un audio silencioso en bucle hace que el móvil mande a la app las pulsaciones del auricular
+      if (!CRec.silencio) {
+        const n = 8000, dv = new DataView(new ArrayBuffer(44 + n * 2)), w = (o, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(o + i, t.charCodeAt(i)); };
+        w(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, 8000, true); dv.setUint32(28, 16000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, n * 2, true);
+        CRec.silencio = new Audio(URL.createObjectURL(new Blob([dv.buffer], { type: 'audio/wav' }))); CRec.silencio.loop = true; CRec.silencio.volume = 0.01;
+      }
+      CRec.silencio.play().catch(() => {});
+      try { ms.playbackState = 'playing'; } catch (e) {}
+    } else if (CRec.silencio) { try { CRec.silencio.pause(); } catch (e) {} }
+  }
+  async function crGrabar(k) {
+    if (CRec.rec) return;
+    if (!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return toast('Este navegador no puede grabar audio. Prueba con Chrome o Safari actualizados.');
+    sayToken++; VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); S.session = false;
+    if (!S.settings.cManosVisto) { S.settings.cManosVisto = true; saveSettings(); }
+    try { CRec.stream = CRec.stream || await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+    catch (e) { return toast('No tengo permiso para el micrófono. Actívalo en los ajustes del navegador.'); }
+    CRec.mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find((m) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || '';
+    await VoiceAdapter.earcon();
+    CRec.chunks = []; CRec.k = k; CRec.acum = 0; CRec.t0 = Date.now(); CRec.pausado = false;
+    CRec.rec = new MediaRecorder(CRec.stream, CRec.mime ? { mimeType: CRec.mime } : undefined);
+    CRec.rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) CRec.chunks.push(ev.data); };
+    CRec.rec.start(5000);
+    keepAwake(); crMediaSession(true);
+    clearInterval(CRec.timer); CRec.timer = setInterval(() => { const el = $('#crtime'); if (el) el.textContent = mmss(crTiempo()); }, 500);
+    if (S.cK === k && document.querySelector('.cph')) certPartidaSheet(k);
+    render();
+  }
+  async function crPausa(pausar) {
+    if (!CRec.rec) return;
+    if (pausar === undefined) pausar = !CRec.pausado;
+    if (pausar && !CRec.pausado) { CRec.rec.pause(); CRec.acum += Date.now() - CRec.t0; CRec.pausado = true; try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} await crDecir('En pausa.'); }
+    else if (!pausar && CRec.pausado) { await crDecir('Seguimos.'); await VoiceAdapter.earcon(); CRec.t0 = Date.now(); CRec.pausado = false; CRec.rec.resume(); try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} }
+    if (CRec.k && S.cK === CRec.k && document.querySelector('.cph')) certPartidaSheet(CRec.k);
+  }
+  /** Termina la grabación de la partida; con «siguiente», anuncia la siguiente y empieza a grabarla. */
+  async function crFin(siguiente) {
+    if (!CRec.rec) return;
+    const k = CRec.k, rec = CRec.rec, seg = crTiempo();
+    const fin = new Promise((ok) => { rec.onstop = ok; });
+    try { if (rec.state !== 'inactive') rec.stop(); } catch (e) {}
+    await fin;
+    clearInterval(CRec.timer); CRec.rec = null; CRec.k = null;
+    const blob = new Blob(CRec.chunks, { type: (CRec.mime || 'audio/webm').split(';')[0] }); CRec.chunks = [];
+    const cur = certActual(S.obra); cur.grabs = cur.grabs || {};
+    const g = { id: 'crt:' + S.obra.id + ':' + Date.now().toString(36), estado: 'grabada', seg: Math.round(seg), texto: '' };
+    if (seg >= 1 && blob.size > 1000) {
+      (cur.grabs[k] = cur.grabs[k] || []).push(g);
+      try { await StorageAdapter.put('audios', { id: g.id, blob, mime: blob.type }); } catch (e) {}
+      saveObra(); crProcesar(k, g);
+    }
+    if (siguiente) {
+      const sig = certSiguiente(k);
+      if (sig) {
+        const f = filaCert(S.obra, sig);
+        await crDecir('Siguiente partida, ' + f.p.codigo.replace(/\./g, ' ') + '. ' + f.p.r + '. Presupuesto ' + E.fmt(f.p.cantidad) + ' ' + (E.unitSpoken ? E.unitSpoken(f.p.u) : f.p.u) + '.');
+        return crGrabar(sig);
+      }
+    }
+    if (CRec.stream) { try { CRec.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} CRec.stream = null; }
+    crMediaSession(false); releaseAwake();
+    crDecir('Grabación terminada.');
+    if (S.cK === k && document.querySelector('.cph')) certPartidaSheet(k);
+    render();
+  }
+  /** Pasa la grabación a texto y la IA la convierte en mediciones de la partida. */
+  async function crProcesar(k, g) {
+    const o = S.obra, refresca = () => { saveObra(); if (S.obra === o && S.cK === k && document.querySelector('.cph') && !(CRec.rec && CRec.k !== k)) certPartidaSheet(k); if (S.obra === o && S.view === 'cert') render(); };
+    if (!(window.Cloud && Cloud.user) || navigator.onLine === false) { g.estado = 'grabada'; g.msg = !(window.Cloud && Cloud.user) ? 'Entra en tu cuenta para procesarla.' : 'Sin conexión.'; return refresca(); }
+    try {
+      if (!g.texto) {
+        g.estado = 'transcribiendo'; g.msg = ''; refresca();
+        const a = await StorageAdapter.get('audios', g.id); if (!a || !a.blob) throw new Error('no encuentro el audio');
+        let r;
+        try { r = await Cloud.visita({ modo: 'transcribir', audio: await aBase64(a.blob), mime: a.mime || 'audio/webm', obra_id: o.id }); }
+        catch (e1) { const wav = await aWav(a.blob); r = await Cloud.visita({ modo: 'transcribir', audio: await aBase64(wav), mime: 'audio/wav', obra_id: o.id }); }
+        g.texto = ((r && r.texto) || '').trim();
+        if (!g.texto) { g.estado = 'ok'; g.msg = 'No se oye ninguna medición.'; return refresca(); }
+      }
+      g.estado = 'interpretando'; refresca();
+      const f = filaCert(o, k), cur = certActual(o), e = cur.ej[k];
+      const ya = e ? (e.lineas && e.lineas.length ? e.lineas.map((l) => [l.com, l.uds, l.l, l.a, l.h].filter((v) => v != null && v !== '').join(' ')).join('; ') : e.pct != null ? e.pct + ' %' : e.cantidad != null ? e.cantidad + ' ' + f.p.u : '') : '';
+      const r = await Cloud.visita({ modo: 'certificar', transcripcion: g.texto, ejecutado: ya, partida: { codigo: f.p.codigo, r: f.p.r, u: f.p.u, cantidad: f.p.cantidad, lineas: f.p.lineas }, obra_id: o.id });
+      const v = (r && r.result) || {};
+      const nuevas = (Array.isArray(v.lineas) ? v.lineas : []).map((l) => ({ com: String(l.com || ''), uds: numOk(l.uds), l: numOk(l.l), a: numOk(l.a), h: numOk(l.h) })).filter((l) => l.uds != null || l.l != null || l.a != null || l.h != null);
+      if (nuevas.length) cur.ej[k] = { lineas: (v.reemplazar || !(e && e.lineas) ? [] : e.lineas).concat(nuevas) };
+      else if (numOk(v.pct) != null) cur.ej[k] = { pct: Math.max(0, Math.min(100, numOk(v.pct))) };
+      else if (numOk(v.cantidad) != null) cur.ej[k] = { cantidad: numOk(v.cantidad) };
+      g.estado = 'ok'; g.msg = v.mensaje ? String(v.mensaje).slice(0, 200) : '';
+      const f2 = filaCert(o, k);
+      toast(f.p.codigo + ': ' + (nuevas.length ? nuevas.length + (nuevas.length === 1 ? ' línea' : ' líneas') + ' · ' : '') + 'ejecutado ' + E.fmt(f2.origen) + ' ' + f.p.u + ' (' + E.fmt(f2.pct) + ' %)');
+    } catch (err) { g.estado = 'error'; g.msg = String((err && err.message) || err).slice(0, 140); }
+    refresca();
+  }
+  const numOk = (v) => { if (v == null || v === '') return null; const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+  window.addEventListener('online', () => { const o = S.obra; if (!o || !o.cert) return; o.cert.certs.forEach((c) => Object.keys(c.grabs || {}).forEach((k) => c.grabs[k].forEach((g) => { if (g.estado === 'grabada') crProcesar(k, g); }))); });
   /** pdf.js bajo demanda (archivos junto a la app). El «worker» se carga como script y trabaja en la página. */
   let pdfjsP = null;
   function cargarPdfjs() {
@@ -1464,7 +1587,8 @@
     h += sec('cert', 'Certificaciones', '<ol class="msteps">' +
       '<li>En el inicio, pulsa <b>Certificación</b> y carga el <b>presupuesto de la obra</b>: el PDF que le diste al cliente o su BC3 (Presto, Arquímedes…).</li>' +
       '<li>La app monta el presupuesto con sus capítulos (se abren y cierran tocándolos) y sus partidas, precios y mediciones.</li>' +
-      '<li>Toca una partida y pulsa <b>Dictar lo ejecutado</b>: ' + say('todo') + ', ' + say('la mitad') + ', ' + say('sesenta por ciento') + ' o la medida ' + say('cocina seis por dos setenta') + '. También puedes elegir un porcentaje o escribirlo. <b>Guardar y siguiente</b> te lleva a la próxima partida.</li>' +
+      '<li>Toca una partida: verás su <b>medición del presupuesto</b> línea a línea. Marca con ✓ las líneas ejecutadas, o pulsa <b>Grabar lo ejecutado</b> y ve diciendo lo que mides (' + say('salón, cuatro veinte por dos cincuenta') + ', ' + say('lo del baño está hecho') + ', ' + say('todo terminado') + '). Pon <b>pausa</b> al moverte por la obra y <b>Terminar</b> al acabar: la app lo pasa a líneas de medición. También puedes poner un porcentaje o escribirlo.</li>' +
+      '<li><b>Manos libres:</b> usa auriculares con micrófono y lleva el móvil en el bolsillo. Botón del auricular: una pulsación pausa o sigue; dos pulsaciones terminan la partida y pasan a la siguiente, que la app te dice en voz alta.</li>' +
       '<li>Saca el <b>PDF de la certificación</b> (numerado, con lo anterior, lo actual y el resumen con gastos generales, beneficio e IVA), el <b>Excel</b> y el <b>BC3</b>.</li>' +
       '<li>El mes siguiente pulsa <b>+ Nueva certificación</b>: parte de lo ya certificado y solo anotas lo nuevo.</li></ol>' +
       '<p class="mtip">El BC3 y los PDF con el formato habitual de «Presupuesto y mediciones» (Presto, Arquímedes, Word…) se leen en el móvil, sin conexión, y se comprueban con el total del PDF. Si el PDF tiene otro formato, lo lee la IA (necesita cuenta e internet).</p>');
@@ -1891,7 +2015,7 @@
     const el = ev.target.closest('[data-a]');
     if (!el) return;
     const a = el.dataset.a;
-    if (a === 'closesheet-bg') { if (ev.target === el) closeSheet(); return; }
+    if (a === 'closesheet-bg') { if (ev.target === el) { if (CRec.rec) return toast('Estás grabando: pulsa «Terminar» antes de cerrar.'); if (S.view === 'cert' && S.cK) { certLeerFicha(S.cK); saveObra(); render(); } closeSheet(); } return; }
     switch (a) {
       case 'closesheet': closeSheet(); break;
       case 'install': closeSheet(); doInstall(); break;
@@ -1907,7 +2031,14 @@
       case 'cnueva': confirmSheet('¿Empezar la certificación nº ' + (S.obra.cert.certs.length + 1) + '? Parte de lo ejecutado hasta ahora; anota lo nuevo encima.', 'Nueva certificación', () => { CT().nueva(S.obra.cert); S.certN = S.obra.cert.certs.length; saveObra(); render(); }); break;
       case 'cpart': certPartidaSheet(el.dataset.k); break;
       case 'cpct': { const cur = certActual(S.obra); cur.ej[el.dataset.k] = { pct: +el.dataset.v }; saveObra(); certPartidaSheet(el.dataset.k); render(); break; }
-      case 'cdictar': certDictar(el.dataset.k); break;
+      case 'crgrabar': crGrabar(el.dataset.k); break;
+      case 'crpausa': crPausa(); break;
+      case 'crfin': crFin(false); break;
+      case 'crsig': crFin(true); break;
+      case 'cgretry': { const cur = certActual(S.obra), g = ((cur.grabs || {})[el.dataset.k] || [])[+el.dataset.i]; if (g) crProcesar(el.dataset.k, g); break; }
+      case 'cpresl': certMarcarLinea(el.dataset.k, +el.dataset.i); break;
+      case 'cpresall': { const f = filaCert(S.obra, el.dataset.k); f.p.lineas.forEach((l, i) => certMarcarLinea(el.dataset.k, i, true)); break; }
+      case 'cerrarficha': if (CRec.rec) { toast('Estás grabando: pulsa «Terminar» antes de cerrar.'); break; } certLeerFicha(S.cK); saveObra(); closeSheet(); render(); break;
       case 'clinea-add': { certLeerFicha(el.dataset.k); const cur = certActual(S.obra), e = cur.ej[el.dataset.k]; cur.ej[el.dataset.k] = { lineas: ((e && e.lineas) || []).concat([{ com: '', uds: 1, l: null, a: null, h: null }]) }; certPartidaSheet(el.dataset.k); break; }
       case 'clinea-del': { const k = S.cK; certLeerFicha(k); const cur = certActual(S.obra), e = cur.ej[k]; if (e && e.lineas) { e.lineas.splice(+el.dataset.i, 1); if (!e.lineas.length) delete cur.ej[k]; } saveObra(); certPartidaSheet(k); render(); break; }
       case 'cguardar': certLeerFicha(el.dataset.k); saveObra(); closeSheet(); render(); break;
@@ -2030,7 +2161,7 @@
     if (ev.target.id === 'logofile' && ev.target.files[0]) { try { S.settings.logo = await leerLogo(ev.target.files[0]); await saveSettings(); render(); toast('Logo guardado: saldrá en el PDF'); } catch (e) { toast(e.message); } }
   });
   $('#btnHelp').addEventListener('click', () => (S.view === 'manual' ? cerrarManual() : abrirManual()));
-  $('#btnBack').addEventListener('click', () => { if (S.view === 'manual') return cerrarManual(); if (S.view === 'visita' && Grab.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && S.vElegir && (visitaDe(S.obra).notas || []).length) { S.vElegir = false; return render(); } if (S.view === 'visita' && Grab.stream) { try { Grab.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} Grab.stream = null; releaseAwake(); } if (S.view === 'obra' || S.view === 'cert' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
+  $('#btnBack').addEventListener('click', () => { if (S.view === 'manual') return cerrarManual(); if (CRec.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && Grab.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && S.vElegir && (visitaDe(S.obra).notas || []).length) { S.vElegir = false; return render(); } if (S.view === 'visita' && Grab.stream) { try { Grab.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} Grab.stream = null; releaseAwake(); } if (S.view === 'obra' || S.view === 'cert' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
   $('#btnMenu').addEventListener('click', menuSheet);
   $('#btnSol').addEventListener('click', () => { S.settings.mode = S.settings.mode === 'sol' ? 'obra' : 'sol'; saveSettings(); render(); });
   $('#btnDock').addEventListener('click', () => { S.settings.dockMin = !S.settings.dockMin; saveSettings(); renderMic(); });
