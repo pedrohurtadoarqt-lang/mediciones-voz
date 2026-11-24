@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const b = await chromium.launch(); const pg = await b.newPage({ viewport: { width: 390, height: 844 }, acceptDownloads: true });
   const errs = []; pg.on('pageerror', (e) => errs.push(e.message)); pg.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
   await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html'); await pg.waitForTimeout(1500);
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Prueba 2'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Prueba 2'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   for (const t of ['vivienda', 'salón 4 por 3', '2,60', 'una puerta de 0,82 por 2,03', 'no', 'baño', '2 por 1,8', 'la misma', 'iguales que el salón', 'no', 'pasillo', '3 por 1', '2,6', 'ninguna']) await say(t);
   await pg.click('[data-a="zdel"] >> nth=2'); await pg.click('.sheet button:text-is("Eliminar")'); await pg.waitForTimeout(200);

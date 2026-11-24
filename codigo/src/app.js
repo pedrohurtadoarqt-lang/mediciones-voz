@@ -8,6 +8,9 @@
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ICON = {
+    mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',
+    cert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>',
+    galeria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>',
     camara: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
     pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0119 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>',
@@ -557,6 +560,7 @@
     else if (S.view === 'resumen') { t.innerHTML = 'Resumen<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewResumen(); }
     else if (S.view === 'catalogos') { t.innerHTML = 'Bases de datos BC3<small>Sin precios: código, unidad, resumen y texto</small>'; v.innerHTML = viewCatalogos(); }
     else if (S.view === 'ajustes') { t.innerHTML = 'Ajustes'; v.innerHTML = viewAjustes(); }
+    else if (S.view === 'cert') { t.innerHTML = esc(S.obra.titulo) + '<small>Certificaciones' + (S.obra.cliente ? ' · ' + esc(S.obra.cliente) : '') + '</small>'; v.innerHTML = viewCert(); }
     else if (S.view === 'visita') { t.innerHTML = 'Nota de la visita<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewVisita(); }
     else if (S.view === 'manual') { t.innerHTML = 'Cómo se usa<small>Guía rápida de Mediciona</small>'; v.innerHTML = viewManual(); }
     else if (S.view === 'admin') { t.innerHTML = '<span class="brandtitle">Administración</span><small>Usuarios, sugerencias e IA</small>'; v.innerHTML = viewAdmin(); }
@@ -621,7 +625,7 @@
     zs.forEach((z) => { (grupos[z.ambito] = grupos[z.ambito] || []).push(z); });
     Object.keys(grupos).forEach((k) => {
       h += '<div class="chap"><span></span><span>' + esc(AL[k] || k) + '</span></div><div class="plist">';
-      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '<span></span>') + '<span class="zbtns"><label class="iconbtn zdel" aria-label="Foto de ' + esc(z.nombre) + '">' + ICON.camara + '<input type="file" accept="image/*" multiple hidden class="fotoin" data-k="z" data-id="' + z.id + '"></label><button class="iconbtn zdel" data-a="zedit" data-z="' + z.id + '" aria-label="Editar ' + esc(z.nombre) + '">' + ICON.edit + '</button><button class="iconbtn zdel" data-a="zdel" data-z="' + z.id + '" aria-label="Eliminar ' + esc(z.nombre) + '">' + ICON.del + '</button></span></div>' + (z.fotos && z.fotos.length ? fotosHTML('z', z.id, z.fotos) : ''); });
+      grupos[k].forEach((z) => { h += '<div class="pitem toma-z"><span class="r">' + esc(z.nombre) + '<small>' + esc(zonaResumen(z)) + '</small></span>' + (z.planta && z.planta.pts ? '<span class="mini">' + E.plantaSVG(z.planta) + '</span>' : '<span></span>') + '<span class="zbtns"><label class="iconbtn zdel" aria-label="Hacer foto de ' + esc(z.nombre) + '">' + ICON.camara + '<input type="file" accept="image/*" capture="environment" hidden class="fotoin" data-k="z" data-id="' + z.id + '"></label><button class="iconbtn zdel" data-a="zedit" data-z="' + z.id + '" aria-label="Editar ' + esc(z.nombre) + '">' + ICON.edit + '</button><button class="iconbtn zdel" data-a="zdel" data-z="' + z.id + '" aria-label="Eliminar ' + esc(z.nombre) + '">' + ICON.del + '</button></span></div>' + (z.fotos && z.fotos.length ? fotosHTML('z', z.id, z.fotos) : ''); });
       h += '</div>';
     });
     const ps = o.partidas.filter((x) => x.lineas.length);
@@ -731,15 +735,24 @@
     }
     if (canOfferInstall()) h += '<div class="installcard"><img src="' + ($('#brandlogo') ? $('#brandlogo').src : '') + '" alt=""><div class="tx"><b>Instalar en este móvil</b>Úsala como una app, desde un icono y a pantalla completa.</div><button class="btn primary" data-a="install">Instalar</button></div>';
     if (!S.settings.manualVisto) h += '<button class="installcard mfirst" data-a="manual"><span class="mi">?</span><span class="tx"><b>¿Primera vez?</b>Mira en 1 minuto cómo se usa Mediciona.</span></button>';
-    h += '<div class="row" style="justify-content:space-between">' + plan + '<button class="btn primary" data-a="newobra"' + (canNew ? '' : ' disabled') + '>Nueva obra</button></div>';
+    // Inicio: primero se elige qué se va a hacer
+    h += '<div class="inicio">' +
+      '<button class="iniciobtn" data-a="newobra"' + (canNew ? '' : ' disabled') + '><span class="ib-i">' + ICON.mic + '</span><span class="ib-t"><b>Medición</b><small>Medir una obra hablando: guiada o con nota de audio</small></span></button>' +
+      '<button class="iniciobtn" data-a="inicio-cert"' + (canNew ? '' : ' disabled') + '><span class="ib-i">' + ICON.cert + '</span><span class="ib-t"><b>Certificación</b><small>Cargar el presupuesto y certificar lo ejecutado</small></span></button></div>';
     if (!canNew) h += '<p class="hint">Has llegado al límite del plan Demo. Borra una obra o activa el plan Pro en Ajustes.</p>';
-    if (!list.length) h += '<div class="card"><h3>Sin obras todavía</h3><p class="hint">Crea una obra, elige el ámbito de la visita y dicta las partidas y medidas mientras recorres la obra.</p></div>';
-    list.forEach((o) => {
-      const np = o.partidas.filter((p) => p.lineas.length).length, nl = o.partidas.reduce((a, p) => a + p.lineas.length, 0);
-      h += '<div class="card"><div class="row" style="justify-content:space-between"><h3>' + esc(o.titulo) + '</h3>' + (o.ejemplo ? '<span class="badge ex">Ejemplo</span>' : o.unlocked ? '<span class="badge pro">Desbloqueada</span>' : '') + '</div>' +
-        '<div class="meta">' + esc([o.cliente, o.ubicacion].filter(Boolean).join(' · ')) + (o.cliente || o.ubicacion ? ' · ' : '') + (o.ambito ? esc(E.AMBITOS[o.ambito].label) + ' · ' : '') + np + ' partidas · ' + nl + ' líneas · ' + new Date(o.updated || o.created).toLocaleDateString('es-ES') + '</div>' +
-        '<div class="row"><button class="btn primary" data-a="open" data-id="' + o.id + '">Abrir</button><button class="btn" data-a="pdf" data-id="' + o.id + '">PDF</button><button class="btn" data-a="xlsx" data-id="' + o.id + '">Excel</button><button class="btn" data-a="bc3" data-id="' + o.id + '">BC3</button><button class="btn" data-a="share" data-id="' + o.id + '">Compartir</button><button class="btn" data-a="sendmail" data-id="' + o.id + '">Enviar al correo</button><button class="btn danger" data-a="delobra" data-id="' + o.id + '">Borrar</button></div></div>';
-    });
+    if (list.length) {
+      h += '<h3 class="seccion">Tus obras</h3><div class="obralist">';
+      list.forEach((o) => {
+        const cert = o.tipo === 'cert';
+        const np = cert ? o.cert.pres.capitulos.reduce((a, c) => a + c.partidas.length, 0) : o.partidas.filter((p) => p.lineas.length).length;
+        const det = cert ? 'Certificación nº ' + o.cert.certs.length + ' · ' + np + ' partidas' : np + ' partidas';
+        h += '<div class="obrarow"><button class="obraopen" data-a="open" data-id="' + o.id + '"><span class="tag ' + (cert ? 'cert' : 'med') + '">' + (cert ? 'Certificación' : 'Medición') + '</span><b>' + esc(o.titulo) + '</b>' +
+          '<small>' + esc([o.cliente, det, new Date(o.updated || o.created).toLocaleDateString('es-ES')].filter(Boolean).join(' · ')) + (o.ejemplo ? ' · Ejemplo' : '') + '</small></button>' +
+          '<button class="iconbtn" data-a="obramenu" data-id="' + o.id + '" aria-label="Más opciones de ' + esc(o.titulo) + '">⋯</button></div>';
+      });
+      h += '</div>';
+    }
+    h += '<div class="pie">' + plan + '</div>';
     h += '<p class="hint">Tus obras se guardan en este dispositivo. La búsqueda de partidas, el diálogo y el cálculo funcionan sin conexión.</p>';
     h += '<button class="btn" data-a="sugerencias">Buzón de sugerencias</button>';
     h += '<p class="hint legal-links"><a href="legal/aviso-legal.html">Aviso legal</a> · <a href="legal/privacidad.html">Privacidad</a> · <a href="legal/cookies.html">Cookies</a></p>';
@@ -829,13 +842,18 @@
   async function openObra(id) {
     const o = S.obras.find((x) => x.id === id) || await StorageAdapter.get('obras', id);
     if (!o) return;
-    S.obra = o; S.view = 'obra'; S.log = []; S.chips = []; S.filterEst = null;
+    S.obra = o; S.view = o.tipo === 'cert' ? 'cert' : 'obra'; S.log = []; S.chips = []; S.filterEst = null;
+    if (o.tipo === 'cert') { S.certN = o.cert.certs.length; render(); return; }
     await loadCatalog(o.catalogo || S.settings.catalogo);
     dialog.setObra(o);
     render();
   }
   function newObraSheet() {
-    sheet('<h2>Nueva obra</h2><form id="fnew" class="card" style="background:none;border:0;padding:0">' +
+    S.nuevoModo = 'guiada';
+    sheet('<h2>Nueva medición</h2><div class="modos">' +
+      '<button type="button" class="modocard on" data-a="nmodo" data-m="guiada"><b>Medición guiada</b><small>La app te va preguntando estancia por estancia y tú contestas como quieras.</small></button>' +
+      '<button type="button" class="modocard" data-a="nmodo" data-m="medir"><b>Medir</b><small>Grabas la visita (por estancias o seguida) y al terminar la app lo convierte en mediciones.</small></button></div>' +
+      '<form id="fnew" class="card" style="background:none;border:0;padding:0">' +
       '<div class="field"><label for="ftit">Obra</label><input id="ftit" required placeholder="Reforma integral Calle Mayor 14"></div>' +
       '<div class="field"><label for="fcli">Cliente</label><input id="fcli" placeholder="Nombre del cliente"></div>' +
       '<div class="field"><label for="fubi">Ubicación</label><input id="fubi" placeholder="Palma de Mallorca"></div>' +
@@ -845,7 +863,9 @@
       e.preventDefault();
       const o = { id: 'obra_' + Date.now().toString(36), titulo: $('#ftit').value.trim() || 'Obra sin nombre', cliente: $('#fcli').value.trim(), ubicacion: $('#fubi').value.trim(), ambito: null, estActiva: '', estancias: [], partidas: [], activa: null, catalogo: S.settings.catalogo, created: Date.now(), updated: Date.now() };
       S.obras.push(o); await StorageAdapter.put('obras', o);
-      closeSheet(); openObra(o.id);
+      const modo = S.nuevoModo; o.modo = modo;
+      closeSheet(); await openObra(o.id);
+      if (modo === 'medir') { S.vElegir = true; S.view = 'visita'; render(); }
     });
   }
   function sheet(html) { const s = $('#sheet'); s.innerHTML = '<div class="sheet-bg" data-a="closesheet-bg"><div class="sheet" role="dialog" aria-modal="true">' + html + '</div></div>'; s.hidden = false; }
@@ -947,7 +967,8 @@
   }
   function fotosHTML(k, id, fotos) {
     return '<div class="fotos">' + (fotos || []).map((f) => '<button class="foto" data-a="verfoto" data-k="' + k + '" data-id="' + esc(id) + '" data-f="' + f.id + '" aria-label="Ver foto"><img src="' + f.mini + '" alt=""></button>').join('') +
-      '<label class="foto add" aria-label="Añadir foto">' + ICON.camara + '<input type="file" accept="image/*" multiple hidden class="fotoin" data-k="' + k + '" data-id="' + esc(id) + '"></label></div>';
+      '<label class="foto add" aria-label="Hacer foto con la cámara">' + ICON.camara + '<small>Cámara</small><input type="file" accept="image/*" capture="environment" hidden class="fotoin" data-k="' + k + '" data-id="' + esc(id) + '"></label>' +
+      '<label class="foto add" aria-label="Elegir fotos de la galería">' + ICON.galeria + '<small>Galería</small><input type="file" accept="image/*" multiple hidden class="fotoin" data-k="' + k + '" data-id="' + esc(id) + '"></label></div>';
   }
   async function verFoto(k, id, fid) {
     const t = destinoFoto(k, id), f = t && (t.fotos || []).find((x) => x.id === fid); if (!f) return;
@@ -971,6 +992,189 @@
     return '<details class="capdesp"' + (open ? ' open' : '') + ' data-cap="' + esc(clave) + '"><summary>' + cabecera + '</summary>' + cuerpo + '</details>';
   }
   document.addEventListener('toggle', (e) => { const d = e.target; if (d && d.classList && d.classList.contains('capdesp')) { S.capAbiertos = S.capAbiertos || {}; S.capAbiertos[d.dataset.cap] = d.open; } }, true);
+
+  /* ============================================================
+   * CERTIFICACIONES — presupuesto navegable por capítulos; en cada
+   * partida se anota lo ejecutado (porcentaje, cantidad, líneas o dictado)
+   * y se sacan el PDF numerado, el Excel y el BC3 de la certificación.
+   * ============================================================ */
+  const CT = () => window.Certificacion;
+  const eur = (v) => E.fmt(v || 0) + ' €';
+  const certN = (o) => Math.min(S.certN || o.cert.certs.length, o.cert.certs.length) || 1;
+  function certActual(o) { const c = o.cert; if (!c.certs.length) CT().nueva(c); return c.certs[certN(o) - 1]; }
+  function filaCert(o, k) { const res = CT().resumen(o.cert, certN(o)); for (const c of res.caps) for (const f of c.filas) if (f.k === k) return f; return null; }
+  function viewCert() {
+    const o = S.obra, c = o.cert; certActual(o);
+    const n = certN(o), res = CT().resumen(c, n), aj = c.ajustes || {};
+    let h = '<div class="card certtot"><div class="row" style="justify-content:space-between;align-items:baseline"><h3>Certificación nº ' + n + '</h3><span class="meta">' + new Date(c.certs[n - 1].fecha).toLocaleDateString('es-ES') + '</span></div>' +
+      '<div class="certnums"><div><small>Presupuesto</small><b>' + eur(res.tot.pres) + '</b></div><div><small>A origen</small><b>' + eur(res.tot.origen) + '</b><small>' + E.fmt(res.tot.pct) + ' %</small></div><div><small>Esta certificación</small><b class="acc">' + eur(res.tot.actual) + '</b></div></div>' +
+      '<div class="certbar"><span style="width:' + Math.min(100, res.tot.pct) + '%"></span></div>' +
+      '<div class="row chipsrow">' + c.certs.map((x) => '<button class="chip' + (x.n === n ? ' on' : '') + '" data-a="csel" data-n="' + x.n + '">Nº ' + x.n + '</button>').join('') + '<button class="chip" data-a="cnueva">+ Nueva certificación</button></div></div>';
+    if (!res.caps.length) h += '<div class="card"><h3>Presupuesto vacío</h3><p class="hint">No he encontrado partidas en el archivo. Prueba con el BC3 del presupuesto o con otro PDF.</p></div>';
+    res.caps.forEach((cap) => {
+      const pct = cap.impPres ? Math.round(cap.impOrigen / cap.impPres * 100) : 0;
+      const cuerpo = cap.filas.map((f) => '<button class="cpart' + (f.origen ? ' hecho' : '') + (f.actual ? ' nuevo' : '') + '" data-a="cpart" data-k="' + esc(f.k) + '"><span class="code"><b>' + esc(f.p.codigo) + '</b> ' + esc(E.unitLabel ? E.unitLabel(f.p.u) : f.p.u) + '</span><span class="r">' + esc(f.p.r) + '</span>' +
+        '<span class="nums">Pres. ' + E.fmt(f.p.cantidad) + ' · Ejec. ' + E.fmt(f.origen) + ' (' + E.fmt(f.pct) + ' %)' + (f.actual ? ' · <b>esta: ' + E.fmt(f.actual) + '</b>' : '') + '</span>' +
+        '<span class="cbar"><span style="width:' + Math.min(100, f.pct) + '%"></span></span></button>').join('');
+      h += capituloHTML('cert:' + cap.codigo, '<span class="c">' + esc(cap.codigo) + '</span><span class="t">' + esc(cap.titulo) + '</span><span class="n">' + pct + ' % · ' + eur(cap.impActual) + '</span>', '<div class="cparts">' + cuerpo + '</div>', false);
+    });
+    h += '<div class="card"><h3>Resumen económico</h3><div class="row certaj">' +
+      [['gg', 'Gastos generales %', aj.gg ?? 13], ['bi', 'Beneficio industrial %', aj.bi ?? 6], ['baja', 'Baja %', aj.baja ?? 0], ['iva', 'IVA %', aj.iva ?? 21]].map(([k, l, v]) => '<label class="field"><span>' + l + '</span><input class="cajuste" data-k="' + k + '" inputmode="decimal" value="' + String(v).replace('.', ',') + '"></label>').join('') +
+      '</div><p class="hint">Se aplican sobre la ejecución material de esta certificación en el PDF.</p></div>';
+    h += '<div class="row exprow"><button class="btn primary" data-a="cexp" data-k="pdf">' + ICON.pdf + ' PDF certificación</button><button class="btn" data-a="cexp" data-k="xlsx">Excel</button><button class="btn" data-a="cexp" data-k="bc3">BC3</button></div>';
+    h += '<p class="hint">Toca una partida para anotar lo ejecutado: dilo con el micrófono («todo», «la mitad», «60 por ciento», «salón 4 por 3»), elige un porcentaje o escribe la medición.</p>';
+    return h;
+  }
+  /** Ficha de una partida: lo presupuestado y lo ejecutado a origen en la certificación abierta. */
+  function certPartidaSheet(k) {
+    const o = S.obra, f = filaCert(o, k); if (!f) return;
+    const cur = certActual(o), e = cur.ej[k] || {}, p = f.p;
+    const ls = (e.lineas || []).map((l, i) => '<div class="cline"><input data-i="' + i + '" data-c="com" value="' + esc(l.com || '') + '" placeholder="Dónde"><input data-i="' + i + '" data-c="uds" inputmode="decimal" value="' + (l.uds ?? '') + '" placeholder="Uds"><input data-i="' + i + '" data-c="l" inputmode="decimal" value="' + (l.l ?? '') + '" placeholder="Largo"><input data-i="' + i + '" data-c="a" inputmode="decimal" value="' + (l.a ?? '') + '" placeholder="Ancho"><input data-i="' + i + '" data-c="h" inputmode="decimal" value="' + (l.h ?? '') + '" placeholder="Alto"><button class="iconbtn sm" data-a="clinea-del" data-i="' + i + '" aria-label="Quitar línea">' + ICON.del + '</button></div>').join('');
+    const pres = (p.lineas || []).map((l) => '<li>' + esc(l.com || '-') + ' <span class="meta">' + [l.uds, l.l, l.a, l.h].filter((v) => v != null).map((v) => E.fmt(v)).join(' × ') + '</span></li>').join('');
+    sheet('<h2 class="cph"><span class="code"><b>' + esc(p.codigo) + '</b></span> ' + esc(p.r) + '</h2>' +
+      (p.t && p.t !== p.r ? '<details class="ctxt"><summary>Descripción</summary><p class="hint">' + esc(p.t) + '</p></details>' : '') +
+      '<div class="certnums"><div><small>Presupuesto</small><b>' + E.fmt(p.cantidad) + ' ' + esc(p.u) + '</b><small>' + eur(p.precio) + '/' + esc(p.u) + '</small></div><div><small>Ejecutado a origen</small><b class="acc" id="cporig">' + E.fmt(f.origen) + ' ' + esc(p.u) + '</b><small>' + E.fmt(f.pct) + ' %</small></div><div><small>Anterior</small><b>' + E.fmt(f.anterior) + '</b></div></div>' +
+      (pres ? '<details class="ctxt"><summary>Medición del presupuesto</summary><ul class="cpres">' + pres + '</ul></details>' : '') +
+      '<button class="btn primary big" data-a="cdictar" data-k="' + esc(k) + '">🎤 Dictar lo ejecutado</button><p class="hint" id="cdictado"></p>' +
+      '<div class="row chipsrow">' + [0, 25, 50, 75, 100].map((v) => '<button class="chip' + (e.pct === v && !(e.lineas || []).length ? ' on' : '') + '" data-a="cpct" data-k="' + esc(k) + '" data-v="' + v + '">' + v + ' %</button>').join('') + '</div>' +
+      '<label class="field"><span>Cantidad ejecutada a origen (' + esc(p.u) + ')</span><input id="ccant" inputmode="decimal" value="' + (e.cantidad != null && !(e.lineas || []).length && e.pct == null ? String(e.cantidad).replace('.', ',') : '') + '" placeholder="' + E.fmt(f.origen) + '"></label>' +
+      '<div class="clines">' + ls + '</div><button class="btn" data-a="clinea-add" data-k="' + esc(k) + '">+ Línea de medición</button>' +
+      '<div class="row" style="margin-top:12px"><button class="btn primary" data-a="cguardar" data-k="' + esc(k) + '">Guardar</button><button class="btn" data-a="csig" data-k="' + esc(k) + '">Guardar y siguiente ›</button><button class="btn" data-a="closesheet">Cerrar</button></div>');
+    S.cK = k;
+  }
+  const numIn = (v) => { const x = parseFloat(String(v || '').replace(/\./g, (m, i, s) => (s.indexOf(',') >= 0 ? '' : '.')).replace(',', '.')); return isFinite(x) ? x : null; };
+  /** Lo escrito en la ficha pasa a la certificación. */
+  function certLeerFicha(k) {
+    const cur = certActual(S.obra), e = cur.ej[k] || {};
+    const filas = {};
+    document.querySelectorAll('.cline input').forEach((i) => { const r = filas[i.dataset.i] || (filas[i.dataset.i] = {}); r[i.dataset.c] = i.dataset.c === 'com' ? i.value.trim() : numIn(i.value); });
+    const lineas = Object.keys(filas).sort((a, b) => a - b).map((i) => filas[i]).filter((l) => l.com || l.uds != null || l.l != null || l.a != null || l.h != null);
+    const cant = $('#ccant') ? numIn($('#ccant').value) : null;
+    if (lineas.length) cur.ej[k] = { lineas };
+    else if (cant != null) cur.ej[k] = { cantidad: cant };
+    else if (e.pct != null) cur.ej[k] = { pct: e.pct };
+    else if (!Object.keys(e).length) delete cur.ej[k];
+    else if (e.lineas && !lineas.length) delete cur.ej[k];
+  }
+  function certSiguiente(k) {
+    const keys = []; S.obra.cert.pres.capitulos.forEach((c) => c.partidas.forEach((p) => keys.push(c.codigo + '|' + p.codigo)));
+    const i = keys.indexOf(k); const sig = keys[i + 1];
+    if (!sig) { closeSheet(); toast('Última partida del presupuesto.'); return; }
+    S.capAbiertos = S.capAbiertos || {}; S.capAbiertos['cert:' + sig.split('|')[0]] = true;
+    certPartidaSheet(sig);
+  }
+  /** Dictado de lo ejecutado: una frase, se interpreta en el móvil. */
+  function certDictar(k) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const out = $('#cdictado');
+    if (!SR) { if (out) out.textContent = 'Este navegador no permite dictar. Usa los porcentajes o escribe la cantidad.'; return; }
+    try { VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); } catch (e) {}
+    const r = new SR(); r.lang = 'es-ES'; r.interimResults = false; r.maxAlternatives = 1;
+    if (out) out.textContent = 'Te escucho…';
+    r.onresult = (ev) => {
+      const t = ev.results[0][0].transcript, f = filaCert(S.obra, k), v = CT().interpretarDictado(t, f && f.p);
+      if (!v) { if (out) out.textContent = '«' + t + '»: no lo he entendido. Di «todo», «la mitad», «60 por ciento» o la medida.'; return; }
+      const cur = certActual(S.obra);
+      if (v.lineas) cur.ej[k] = { lineas: ((cur.ej[k] && cur.ej[k].lineas) || []).concat(v.lineas) }; else cur.ej[k] = v;
+      saveObra(); certPartidaSheet(k); render();
+      const o2 = $('#cdictado'); if (o2) o2.textContent = '«' + t + '» ✓';
+    };
+    r.onerror = (ev) => { if (out) out.textContent = ev.error === 'no-speech' ? 'No te he oído. Vuelve a pulsar y habla.' : 'No he podido usar el micrófono (' + ev.error + ').'; };
+    try { r.start(); } catch (e) { if (out) out.textContent = 'No he podido abrir el micrófono.'; }
+  }
+  /** Nueva certificación: nombre, datos y el presupuesto (BC3 o PDF). */
+  function certSheet() {
+    sheet('<h2>Nueva certificación</h2><form id="fcert" class="card" style="background:none;border:0;padding:0">' +
+      '<div class="field"><label for="cfile">Presupuesto o medición completa de la obra</label><input id="cfile" type="file" accept=".bc3,.BC3,.pdf,application/pdf" required><small class="hint">PDF del presupuesto presentado al cliente, o su BC3 (Presto, Arquímedes…).</small></div>' +
+      '<div class="field"><label for="ftit">Obra</label><input id="ftit" placeholder="Se toma del presupuesto si lo dejas vacío"></div>' +
+      '<div class="field"><label for="fcli">Cliente</label><input id="fcli" placeholder="Nombre del cliente"></div>' +
+      '<p class="hint" id="cmsg"></p>' +
+      '<div class="row"><button class="btn primary" type="submit" id="cgo">Cargar presupuesto</button><button class="btn" type="button" data-a="closesheet">Cancelar</button></div></form>');
+    $('#fcert').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = $('#cfile').files[0]; if (!file) return;
+      const msg = $('#cmsg'), btn = $('#cgo'); btn.disabled = true;
+      try {
+        let pres;
+        if (/\.bc3$/i.test(file.name)) { msg.textContent = 'Leyendo el BC3…'; pres = CT().leerPresupuestoBC3(new Uint8Array(await file.arrayBuffer())); }
+        else {
+          if (!(window.Cloud && Cloud.user)) throw new Error('Para leer un PDF entra en tu cuenta (el BC3 se lee sin cuenta).');
+          if (navigator.onLine === false) throw new Error('Sin conexión: para leer el PDF hace falta internet.');
+          if (file.size > 20 * 1024 * 1024) throw new Error('El PDF pesa más de 20 MB.');
+          msg.textContent = 'Leyendo el presupuesto… en un presupuesto largo puede tardar un par de minutos. No cierres esta pantalla.';
+          const r = await Cloud.visita({ modo: 'presupuesto', pdf: await aBase64(file) });
+          pres = r && r.result;
+          if (r && r.cortado) toast('El presupuesto es muy largo: revisa que estén todos los capítulos al final.');
+        }
+        pres = pres || { capitulos: [] };
+        pres.capitulos = (pres.capitulos || []).map((c) => ({ codigo: String(c.codigo || ''), titulo: String(c.titulo || ''), partidas: (c.partidas || []).map((p) => ({ codigo: String(p.codigo || ''), u: String(p.u || 'ud'), r: String(p.r || ''), t: String(p.t || ''), precio: +p.precio || 0, cantidad: +p.cantidad || 0, lineas: Array.isArray(p.lineas) ? p.lineas : [] })) })).filter((c) => c.partidas.length);
+        const np = pres.capitulos.reduce((a, c) => a + c.partidas.length, 0);
+        if (!np) throw new Error('No he encontrado partidas en el archivo.');
+        const o = { id: 'obra_' + Date.now().toString(36), tipo: 'cert', titulo: $('#ftit').value.trim() || pres.titulo || file.name.replace(/\.[^.]+$/, ''), cliente: $('#fcli').value.trim(), ubicacion: '', ambito: null, estActiva: '', estancias: [], partidas: [], activa: null, catalogo: S.settings.catalogo, created: Date.now(), updated: Date.now(),
+          cert: { pres, archivo: file.name, certs: [], ajustes: { gg: 13, bi: 6, baja: 0, iva: 21 } } };
+        CT().nueva(o.cert);
+        S.obras.push(o); await StorageAdapter.put('obras', o);
+        try { await StorageAdapter.put('fotos', { id: 'pres:' + o.id, blob: file, nombre: file.name }); } catch (e2) {}
+        closeSheet(); S.certN = 1; openObra(o.id);
+        toast('Presupuesto cargado: ' + pres.capitulos.length + ' capítulos, ' + np + ' partidas.');
+      } catch (err) { msg.textContent = (err && err.message) || String(err); btn.disabled = false; }
+    });
+  }
+  /** PDF de la certificación nº n (relación valorada + resumen). */
+  function buildPdfCert(o, n, J) {
+    const doc = new J({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+    let F = 'helvetica';
+    if (window.PDF_FONTS) { try { doc.addFileToVFS('LS-R.ttf', window.PDF_FONTS.regular); doc.addFont('LS-R.ttf', 'LS', 'normal'); doc.addFileToVFS('LS-B.ttf', window.PDF_FONTS.bold); doc.addFont('LS-B.ttf', 'LS', 'bold'); F = 'LS'; } catch (e) { F = 'helvetica'; } }
+    const res = CT().resumen(o.cert, n), aj = o.cert.ajustes || {}, W = 297, M = 12;
+    const cols = [[M, 'Código', 'l'], [M + 22, 'Descripción', 'l'], [150, 'Ud', 'l'], [172, 'Pres.', 'r'], [190, 'Precio', 'r'], [210, 'A origen', 'r'], [228, 'Anterior', 'r'], [246, 'Actual', 'r'], [W - M, 'Importe', 'r']];
+    let y = 0, pag = 0;
+    const f2 = (v) => E.fmt(v || 0);
+    const cab = () => {
+      pag++; y = M;
+      doc.setFont(F, 'bold'); doc.setFontSize(14); doc.text('CERTIFICACIÓN Nº ' + n, M, y + 5);
+      doc.setFontSize(9); doc.setFont(F, 'normal'); doc.text(o.titulo + (o.cliente ? ' · ' + o.cliente : ''), M, y + 11);
+      doc.text(new Date(o.cert.certs[n - 1].fecha).toLocaleDateString('es-ES') + ' · pág. ' + pag, W - M, y + 5, { align: 'right' });
+      y += 17; doc.setFillColor(30, 41, 59); doc.rect(M, y - 4, W - 2 * M, 6, 'F'); doc.setTextColor(255); doc.setFont(F, 'bold'); doc.setFontSize(8);
+      cols.forEach(([x, t, al]) => doc.text(t, x, y, { align: al === 'r' ? 'right' : 'left' })); doc.setTextColor(0); y += 6;
+    };
+    const salto = (h) => { if (y + h > 200) { doc.addPage(); cab(); } };
+    cab();
+    res.caps.forEach((c) => {
+      salto(10); doc.setFont(F, 'bold'); doc.setFontSize(9); doc.setFillColor(226, 232, 240); doc.rect(M, y - 4, W - 2 * M, 6, 'F'); doc.text(c.codigo + '  ' + c.titulo, M + 1, y); y += 6;
+      c.filas.forEach((f) => {
+        const desc = doc.splitTextToSize(f.p.r, 112); salto(desc.length * 3.6 + 2);
+        doc.setFont(F, 'normal'); doc.setFontSize(8);
+        doc.text(f.p.codigo, cols[0][0], y); doc.text(desc, cols[1][0], y); doc.text(f.p.u, cols[2][0], y);
+        [f.p.cantidad, f.p.precio, f.origen, f.anterior, f.actual].forEach((v, i) => doc.text(f2(v), cols[3 + i][0], y, { align: 'right' }));
+        doc.setFont(F, 'bold'); doc.text(f2(f.impActual), cols[8][0], y, { align: 'right' });
+        y += desc.length * 3.6 + 1.5;
+      });
+      salto(6); doc.setFont(F, 'bold'); doc.text('Total capítulo ' + c.codigo + ' (a origen ' + f2(c.impOrigen) + ' €)', cols[7][0], y, { align: 'right' }); doc.text(f2(c.impActual) + ' €', cols[8][0], y, { align: 'right' }); y += 7;
+    });
+    // Resumen
+    salto(60); y += 4; doc.setFontSize(10); doc.setFont(F, 'bold'); doc.text('RESUMEN DE LA CERTIFICACIÓN Nº ' + n, M, y); y += 7;
+    const pem = res.tot.actual, gg = pem * (+aj.gg || 0) / 100, bi = pem * (+aj.bi || 0) / 100, sub = pem + gg + bi, baja = sub * (+aj.baja || 0) / 100, base = sub - baja, iva = base * (+aj.iva || 0) / 100;
+    const filas = [['Ejecución material a origen', res.tot.origen], ['A deducir certificaciones anteriores', -res.tot.anterior], ['Ejecución material de esta certificación', pem], ['Gastos generales ' + f2(+aj.gg || 0) + ' %', gg], ['Beneficio industrial ' + f2(+aj.bi || 0) + ' %', bi]]
+      .concat(+aj.baja ? [['Baja ' + f2(+aj.baja) + ' %', -baja]] : []).concat([['Base imponible', base], ['IVA ' + f2(+aj.iva || 0) + ' %', iva], ['TOTAL A ABONAR', base + iva]]);
+    doc.setFontSize(9);
+    filas.forEach(([t, v], i) => { const fuerte = i === 2 || i === filas.length - 1; doc.setFont(F, fuerte ? 'bold' : 'normal'); doc.text(t, 150, y); doc.text(f2(v) + ' €', W - M, y, { align: 'right' }); y += 5.5; });
+    y += 4; doc.setFont(F, 'normal'); doc.setFontSize(8); doc.text('Avance de la obra: ' + f2(res.tot.pct) + ' % del presupuesto (' + f2(res.tot.pres) + ' € de ejecución material).', M, y);
+    y += 18; doc.text('La dirección facultativa', 40, y); doc.text('El contratista', 200, y);
+    return doc;
+  }
+  async function exportCert(kind) {
+    const o = S.obra; if (!o || !o.cert) return;
+    const n = certN(o), base = 'Certificacion_' + n + '_' + o.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, '_').slice(0, 50);
+    try {
+      if (kind === 'pdf') { const J = window.jspdf && window.jspdf.jsPDF; if (!J) return toast('El generador de PDF no está disponible.'); return fileReady(base + '.pdf', new Blob([buildPdfCert(o, n, J).output('blob')], { type: 'application/pdf' }), 'PDF'); }
+      if (kind === 'xlsx') return fileReady(base + '.xlsx', new Blob([CT().buildXLSX(o.cert, n)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'Excel');
+      return fileReady(base + '.bc3', new Blob([CT().buildBC3(o.cert, n)], { type: 'application/octet-stream' }), 'BC3');
+    } catch (e) { console.error(e); toast('No se pudo generar el archivo: ' + e.message); }
+  }
+  document.addEventListener('change', (ev) => {
+    const i = ev.target; if (!i.classList || !i.classList.contains('cajuste') || !S.obra || !S.obra.cert) return;
+    S.obra.cert.ajustes = S.obra.cert.ajustes || {}; S.obra.cert.ajustes[i.dataset.k] = numIn(i.value) || 0; saveObra();
+  });
 
   /* ---- Nota de audio de la visita ----
    * Graba por trozos de 3 minutos (cada uno es un archivo completo), los guarda en el móvil
@@ -1221,12 +1425,19 @@
     const sec = (id, tit, body, open) => '<details class="card msec" id="m_' + id + '"' + (open ? ' open' : '') + '><summary>' + tit + '</summary><div class="mbody">' + body + '</div></details>';
     let h = '<p class="mlead">Mediciona mide la obra <b>hablando</b>. Tú dices las medidas en voz alta y la app las apunta, calcula y prepara el estado de mediciones en PDF, Excel o BC3.</p>';
     h += sec('pasos', '1. Empezar en 4 pasos', '<ol class="msteps">' +
-      '<li>En <b>Mis obras</b>, pulsa <b>Nueva obra</b> y ponle un nombre.</li>' +
+      '<li>En el inicio, pulsa <b>Medición</b>, elige <b>Medición guiada</b> (la app pregunta) o <b>Medir</b> (grabas la visita y la app la procesa al final) y ponle un nombre.</li>' +
       '<li>Pulsa <b>Empezar a medir</b>. La primera vez el móvil te pedirá permiso para el micrófono: dale a <b>Permitir</b>.</li>' +
       '<li><b>La app te pregunta paso a paso</b> (medidas, altura, puertas y ventanas, qué hay que hacer…) y tú <b>contestas con tus palabras</b>. Puedes decir más de lo que te pregunta o adelantar cosas: ' + say('dos sesenta, y por cierto la cocina mide tres por dos cuarenta') + '. Lo guarda todo y no te vuelve a preguntar lo que ya sabe.</li>' +
       '<li>Cuando acabes, di ' + say('genera las mediciones') + '. Te preguntará lo que falte y tendrás el estado de mediciones listo para exportar.</li></ol>' +
       '<p class="mtip">Para corregir: ' + say('atrás') + ' o ' + say('no, eran dos cincuenta') + '. Para saltar una pregunta: ' + say('saltar') + '. Si prefieres contarlo todo tú sin preguntas, di ' + say('te lo cuento yo') + '. Con la cuenta iniciada y conexión la app entiende respuestas libres; sin ella, pregunta paso a paso con respuestas más cortas.</p>' +
       '<p class="mtip">No hace falta pulsar nada mientras hablas: el micrófono se abre solo cuando la app termina de hablar.</p>', true);
+    h += sec('cert', 'Certificaciones', '<ol class="msteps">' +
+      '<li>En el inicio, pulsa <b>Certificación</b> y carga el <b>presupuesto de la obra</b>: el PDF que le diste al cliente o su BC3 (Presto, Arquímedes…).</li>' +
+      '<li>La app monta el presupuesto con sus capítulos (se abren y cierran tocándolos) y sus partidas, precios y mediciones.</li>' +
+      '<li>Toca una partida y pulsa <b>Dictar lo ejecutado</b>: ' + say('todo') + ', ' + say('la mitad') + ', ' + say('sesenta por ciento') + ' o la medida ' + say('cocina seis por dos setenta') + '. También puedes elegir un porcentaje o escribirlo. <b>Guardar y siguiente</b> te lleva a la próxima partida.</li>' +
+      '<li>Saca el <b>PDF de la certificación</b> (numerado, con lo anterior, lo actual y el resumen con gastos generales, beneficio e IVA), el <b>Excel</b> y el <b>BC3</b>.</li>' +
+      '<li>El mes siguiente pulsa <b>+ Nueva certificación</b>: parte de lo ya certificado y solo anotas lo nuevo.</li></ol>' +
+      '<p class="mtip">El BC3 se lee en el móvil sin conexión. El PDF lo lee la IA y necesita cuenta e internet; en presupuestos largos tarda un par de minutos.</p>');
     h += sec('nota', 'Grabar la visita de un tirón (nota de audio)', '<ol class="msteps">' +
       '<li>En la obra, pulsa <b>Grabar nota de la visita</b>. Por defecto se graba <b>por estancias</b>: elige la estancia (Cocina, Baño…), cuéntala y pulsa <b>Siguiente estancia</b>. Cada estancia queda en su nota y la puedes volver a grabar o borrar por separado.</li>' +
       '<li>Si mides solo y de un tirón, elige <b>Grabación continua</b> y cuenta toda la visita seguida.</li>' +
@@ -1657,6 +1868,21 @@
       case 'iosclose': { const g = $('.ios-guide'); if (g) g.remove(); try { localStorage.setItem('iosGuideSeen', '1'); } catch (e) {} break; }
       case 'toastact': { $('#toast').hidden = true; const fn = toastAction && toastAction.fn; toastAction = null; if (fn) fn(); break; }
       case 'newobra': newObraSheet(); break;
+      case 'inicio-cert': certSheet(); break;
+      case 'nmodo': document.querySelectorAll('.modocard').forEach((x) => x.classList.toggle('on', x === el)); S.nuevoModo = el.dataset.m; break;
+      case 'obramenu': { const o = S.obras.find((x) => x.id === el.dataset.id); if (!o) break; const cert = o.tipo === 'cert';
+        sheet('<h2>' + esc(o.titulo) + '</h2><div class="menu-list">' + (cert ? '' : [['pdf', 'PDF de mediciones'], ['xlsx', 'Excel (.xlsx)'], ['bc3', 'BC3 (Presto / Arquímedes)'], ['share', 'Compartir archivos'], ['sendmail', 'Enviar a mi correo']].map(([k, l]) => '<button class="menu-item" data-a="' + k + '" data-id="' + o.id + '">' + l + '</button>').join('')) +
+          '<button class="menu-item danger" data-a="delobra" data-id="' + o.id + '">Borrar obra</button></div><div class="row"><button class="btn" data-a="closesheet">Cerrar</button></div>'); break; }
+      case 'csel': S.certN = +el.dataset.n; render(); break;
+      case 'cnueva': confirmSheet('¿Empezar la certificación nº ' + (S.obra.cert.certs.length + 1) + '? Parte de lo ejecutado hasta ahora; anota lo nuevo encima.', 'Nueva certificación', () => { CT().nueva(S.obra.cert); S.certN = S.obra.cert.certs.length; saveObra(); render(); }); break;
+      case 'cpart': certPartidaSheet(el.dataset.k); break;
+      case 'cpct': { const cur = certActual(S.obra); cur.ej[el.dataset.k] = { pct: +el.dataset.v }; saveObra(); certPartidaSheet(el.dataset.k); render(); break; }
+      case 'cdictar': certDictar(el.dataset.k); break;
+      case 'clinea-add': { certLeerFicha(el.dataset.k); const cur = certActual(S.obra), e = cur.ej[el.dataset.k]; cur.ej[el.dataset.k] = { lineas: ((e && e.lineas) || []).concat([{ com: '', uds: 1, l: null, a: null, h: null }]) }; certPartidaSheet(el.dataset.k); break; }
+      case 'clinea-del': { const k = S.cK; certLeerFicha(k); const cur = certActual(S.obra), e = cur.ej[k]; if (e && e.lineas) { e.lineas.splice(+el.dataset.i, 1); if (!e.lineas.length) delete cur.ej[k]; } saveObra(); certPartidaSheet(k); render(); break; }
+      case 'cguardar': certLeerFicha(el.dataset.k); saveObra(); closeSheet(); render(); break;
+      case 'csig': certLeerFicha(el.dataset.k); saveObra(); render(); certSiguiente(el.dataset.k); break;
+      case 'cexp': exportCert(el.dataset.k); break;
       case 'open': openObra(el.dataset.id); break;
       case 'obras': closeSheet(); goObras(); break;
       case 'menu-obra': case 'back2obra': closeSheet(); S.view = 'obra'; render(); break;
@@ -1774,7 +2000,7 @@
     if (ev.target.id === 'logofile' && ev.target.files[0]) { try { S.settings.logo = await leerLogo(ev.target.files[0]); await saveSettings(); render(); toast('Logo guardado: saldrá en el PDF'); } catch (e) { toast(e.message); } }
   });
   $('#btnHelp').addEventListener('click', () => (S.view === 'manual' ? cerrarManual() : abrirManual()));
-  $('#btnBack').addEventListener('click', () => { if (S.view === 'manual') return cerrarManual(); if (S.view === 'visita' && Grab.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && S.vElegir && (visitaDe(S.obra).notas || []).length) { S.vElegir = false; return render(); } if (S.view === 'visita' && Grab.stream) { try { Grab.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} Grab.stream = null; releaseAwake(); } if (S.view === 'obra' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
+  $('#btnBack').addEventListener('click', () => { if (S.view === 'manual') return cerrarManual(); if (S.view === 'visita' && Grab.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && S.vElegir && (visitaDe(S.obra).notas || []).length) { S.vElegir = false; return render(); } if (S.view === 'visita' && Grab.stream) { try { Grab.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} Grab.stream = null; releaseAwake(); } if (S.view === 'obra' || S.view === 'cert' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
   $('#btnMenu').addEventListener('click', menuSheet);
   $('#btnSol').addEventListener('click', () => { S.settings.mode = S.settings.mode === 'sol' ? 'obra' : 'sol'; saveSettings(); render(); });
   $('#btnDock').addEventListener('click', () => { S.settings.dockMin = !S.settings.dockMin; saveSettings(); renderMic(); });

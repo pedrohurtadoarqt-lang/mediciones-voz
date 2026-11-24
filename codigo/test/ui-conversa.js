@@ -13,7 +13,7 @@ const C = require('./c1.js');
     window.__ctx = [];
     window.Cloud = new Proxy(real, { get: (t, k) => k === 'user' ? { id: 'u1', email: 'prueba@local' } : k === 'available' ? () => true : k === 'conversa' ? async (ctx) => { window.__ctx.push(ctx); await new Promise((r) => setTimeout(r, 150)); const r = mapa.get(ctx.frase) || {}; return { result: Object.assign({ zonas: [], trabajos: [], contenedores: null, seguridad_pct: null, accion: '', mensaje: '', pregunta: null, opciones: [] }, r, { zonas: (r.zonas || []).map((z) => Object.assign({}, ZV, z)), trabajos: (r.trabajos || []).map((x) => Object.assign({}, TV, x)) }) }; } : t[k] });
   }, C);
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Reforma piso Conversación'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Reforma piso Conversación'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   console.log('Saludo:', (await pg.textContent('#talk')).slice(-200));
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(450); };
   for (const [f] of C.slice(0, 7)) await say(f);

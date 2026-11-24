@@ -17,7 +17,7 @@ const { chromium } = require('playwright');
       return { result: { zonas: [Z({ nombre: 'Cocina', largo: 4, ancho: 3, altura: 2.7 }), Z({ nombre: 'Baño', largo: 2, ancho: 1.9 })], trabajos: [{ id: 'dem_alic', codigo: '', buscar: '', unidad: '', ambito: '', zonas: ['Cocina'], quitar: false, medidas: [] }, { id: 'rev_alic', codigo: '', buscar: '', unidad: '', ambito: '', zonas: ['Cocina'], quitar: false, medidas: [] }], contenedores: null, seguridad_pct: null, accion: '', mensaje: '', pregunta: null, opciones: [] } };
     } : t[key] });
   });
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Visita por estancias'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Visita por estancias'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   await pg.click('#btnGrabar'); await pg.waitForTimeout(300);
   await pg.click('[data-a="vnueva"][data-nom="Cocina"]'); await pg.waitForTimeout(2000);
   await pg.screenshot({ path: 'test/v2_grabando.png' });

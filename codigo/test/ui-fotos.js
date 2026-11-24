@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const b = await chromium.launch(); const pg = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, acceptDownloads: true });
   const errs = []; pg.on('pageerror', (e) => errs.push(e.message)); pg.setDefaultTimeout(6000); const paso = (t) => console.log('· ' + t);
   await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html'); await pg.waitForTimeout(1000);
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Fotos y capítulos'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Fotos y capítulos'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   for (const t of ['estancia', 'baño', '2 por 1,8', '2,40', 'ninguna', 'elegir trabajos', 'correcto', 'no', 'no']) await say(t);
   for (const t of ['Demolición de alicatado', 'Alicatado', 'Solado de gres porcelánico']) await pg.click('.tw-main:has-text("' + t + '")').catch(() => {});

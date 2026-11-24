@@ -321,3 +321,62 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .visor img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; }
 .visor .hint { color: #ddd; }
 .toma-z .zbtns label { cursor: pointer; }
+.foto.add { flex-direction: column; gap: 2px; display: flex; align-items: center; justify-content: center; }
+.foto.add small { font-size: 10px; }
+
+/* ---- Inicio: Medición o Certificación ---- */
+.inicio { display: grid; gap: 12px; margin: 6px 0 18px; }
+.iniciobtn { display: flex; gap: 16px; align-items: center; text-align: left; padding: 20px 18px; border-radius: 18px; border: 2px solid var(--line); background: var(--card); color: var(--fg); min-height: 96px; }
+.iniciobtn:active { border-color: var(--accent); }
+.iniciobtn:disabled { opacity: .5; }
+.iniciobtn .ib-i { flex: none; width: 52px; height: 52px; border-radius: 14px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; }
+.iniciobtn .ib-i svg { width: 28px; height: 28px; }
+.iniciobtn .ib-t { display: flex; flex-direction: column; gap: 4px; }
+.iniciobtn b { font-size: 1.25rem; }
+.iniciobtn small { color: var(--muted); font-size: var(--fs-s); line-height: 1.3; }
+.seccion { margin: 8px 2px 8px; font-size: var(--fs-s); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.obralist { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-bottom: 14px; }
+.obrarow { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); }
+.obraopen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 12px 4px; background: none; border: 0; color: var(--fg); }
+.obraopen b { font-size: var(--fs-m, 1rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.obraopen small { color: var(--muted); font-size: 12px; }
+.obraopen .tag { align-self: flex-start; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; color: var(--accent); }
+.obraopen .tag.cert { color: var(--teal, var(--ok)); }
+.pie { margin: 6px 0 12px; }
+.modos { display: grid; gap: 10px; margin-bottom: 14px; }
+.modocard { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--card-2); color: var(--fg); }
+.modocard.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.modocard b { font-size: 1.05rem; }
+.modocard small { color: var(--muted); line-height: 1.3; }
+
+/* ---- Certificación ---- */
+.certnums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.certnums > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.certnums small { color: var(--muted); font-size: 11px; }
+.certnums b { font-size: 1rem; overflow-wrap: anywhere; }
+.certnums b.acc { color: var(--accent); }
+.certbar, .cbar { display: block; height: 6px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
+.certbar span, .cbar span { display: block; height: 100%; background: var(--accent); }
+.chipsrow { gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.chipsrow .chip { min-height: 40px; padding: 6px 14px; }
+.chip.on { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+.cparts { display: flex; flex-direction: column; gap: 6px; padding: 0 0 12px; }
+.cpart { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-2); color: var(--fg); }
+.cpart.hecho { border-left: 4px solid var(--accent); }
+.cpart .r { font-weight: 700; line-height: 1.25; }
+.cpart .nums { font-size: 12px; color: var(--muted); }
+.cpart .nums b { color: var(--accent); }
+.certaj { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.certaj .field span { font-size: 12px; color: var(--muted); }
+.certaj input { width: 100%; }
+.exprow { gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.exprow svg { width: 18px; height: 18px; vertical-align: -3px; }
+.cph { font-size: 1.05rem; line-height: 1.3; }
+.ctxt summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: 6px 0; }
+.cpres { margin: 4px 0 10px 18px; font-size: 13px; }
+.btn.big { width: 100%; min-height: 56px; font-size: 1.05rem; margin: 6px 0 2px; }
+.clines { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 6px; }
+.cline { display: grid; grid-template-columns: 2fr repeat(4, minmax(0, 1fr)) auto; gap: 4px; align-items: center; }
+.cline input { min-width: 0; padding: 8px 6px; }
+.iconbtn.sm { width: 36px; height: 36px; }
+.iconbtn.sm svg { width: 16px; height: 16px; }

@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const b = await chromium.launch(); const pg = await b.newPage({ viewport: { width: 400, height: 860 }, acceptDownloads: true });
   const errs = []; pg.on('pageerror', (e) => errs.push(e.message)); pg.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
   await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html'); await pg.waitForTimeout(1500);
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Reforma piso Sindicat'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Reforma piso Sindicat'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   await pg.click('.chip >> nth=0'); await pg.waitForTimeout(200);
   for (const t of ['salón', '4,20 metros derecha, 3,50 derecha, 4,20 derecha, 3,50 derecha', '2,60', 'una puerta de 0,82 por 2,03 y una ventana de 1,20 por 1,10', 'ninguna más', 'baño', '2 por 1,80', 'la misma', 'una puerta de 0,72 por 2,03', 'no']) await say(t);

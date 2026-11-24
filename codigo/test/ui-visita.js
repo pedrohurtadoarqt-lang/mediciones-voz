@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
         trabajos: [T({ id: 'dem_alic', zonas: ['Cocina'] }), T({ id: 'dem_gres', zonas: ['Cocina'] }), T({ id: 'rev_alic', zonas: ['Cocina'] }), T({ id: 'car_puertas', zonas: ['Cocina'] })], contenedores: null, seguridad_pct: null, accion: '', mensaje: '', pregunta: null, opciones: [] } };
     } : t[k] });
   });
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Visita grabada'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Visita grabada'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   await pg.click('#btnGrabar'); await pg.waitForTimeout(300);
   await pg.screenshot({ path: 'test/v_inicio.png' });
   await pg.click('[data-a="vmodo"][data-m="continua"]'); await pg.waitForTimeout(200);

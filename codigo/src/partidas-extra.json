@@ -236,5 +236,19 @@
   "ch": "D1702",
   "r": "Equipo descalcificador de agua para vivienda",
   "t": "Suministro e instalación de equipo descalcificador de agua para vivienda, de resinas de intercambio iónico con regeneración automática por volumen, con depósito de sal, válvula de bypass y conexiones a la red de agua fría, incluso desagüe a la red de saneamiento. Totalmente montado, conexionado y probado."
+ },
+ {
+  "c": "DRS060",
+  "u": "m2",
+  "ch": "D0105",
+  "r": "Demolición de pavimento de baldosa hidráulica",
+  "t": "Demolición de pavimento existente de baldosas hidráulicas y su capa de mortero de agarre, con medios manuales, sin deteriorar los elementos constructivos contiguos, separación de los residuos según su tipología de manera que el transporte a gestor autorizado se realice como escombro \"limpio\" y carga manual sobre camión o contenedor."
+ },
+ {
+  "c": "RPX010",
+  "u": "m2",
+  "ch": "D0903",
+  "r": "Puente de unión sobre paramento para guarnecido de yeso",
+  "t": "Aplicación de puente de unión a base de resinas sintéticas sobre paramento vertical interior liso o poco absorbente, para mejorar la adherencia del posterior guarnecido de yeso, aplicado con rodillo o brocha. Incluso limpieza previa del soporte."
  }
 ]

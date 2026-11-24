@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const b = await chromium.launch(); const pg = await b.newPage({ viewport: { width: 390, height: 844 } });
   const errs = []; pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html'); await pg.waitForTimeout(1000);
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Edición de zona'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Edición de zona'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   for (const t of ['estancia', 'dormitorio', '4 por 3', '2,60', 'una puerta de 0,82 por 2,03', 'ninguna más']) await say(t);
   await pg.click('[data-a="zedit"]'); await pg.waitForTimeout(200);

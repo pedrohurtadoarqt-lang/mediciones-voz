@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
     window.SpeechRecognition = window.webkitSpeechRecognition = function () { const r = this; r.start = () => { window.__ev.push('MICRO ABIERTO @' + Date.now()); setTimeout(() => r.onstart && r.onstart(), 10); window.__rec = r; }; r.abort = () => {}; r.stop = () => {}; };
   });
   await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html'); await pg.waitForTimeout(1200);
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Android'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(300);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Android'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(300);
   await pg.click('#btnStart'); await pg.waitForTimeout(3500);
   // El usuario «dice» vivienda: resultado final del reconocimiento
   console.log('antes:', JSON.stringify(await pg.evaluate(() => window.__ev)), '|', await pg.textContent('#vstate'), '| modo:', await pg.evaluate(() => typeof window.webkitSpeechRecognition));

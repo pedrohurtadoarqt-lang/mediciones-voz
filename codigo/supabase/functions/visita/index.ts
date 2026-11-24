@@ -2,6 +2,7 @@
 // Mediciona · Nota de audio de la visita
 // POST { modo: 'transcribir', audio (base64), mime }       → { texto }
 // POST { modo: 'procesar', transcripcion, zonas, trabajos } → { result } (mismo formato que el modo conversación)
+// POST { modo: 'presupuesto', pdf (base64) }               → { result: { titulo, capitulos } } (certificaciones)
 // Solo usuarios con sesión. Secretos: GEMINI_API_KEY, ANTHROPIC_API_KEY.
 // Opcionales: VISITA_MODELO (Claude), TRANSCRIBE_MODELOS (Gemini, separados por comas).
 // ============================================================
@@ -93,6 +94,41 @@ async function procesar(ctx: any) {
   return null;
 }
 
+const PROMPT_PRESUPUESTO = 'Este PDF es el presupuesto (o la medición) de una obra de construcción en España. Extrae su estructura completa y devuélvela SOLO como JSON, sin texto alrededor, con este formato:\n' +
+  '{"titulo":"nombre de la obra","capitulos":[{"codigo":"01","titulo":"DEMOLICIONES","partidas":[{"codigo":"DRS020","u":"m2","r":"resumen corto de la partida","t":"descripción larga si la hay","precio":9.85,"cantidad":21,"lineas":[{"com":"Cocina","uds":1,"l":3,"a":3,"h":null}]}]}]}\n' +
+  'Reglas: todas las partidas de todos los capítulos, en el orden del documento; si hay subcapítulos, ponlos como capítulos con código «01.02» y título «CAPÍTULO › SUBCAPÍTULO». ' +
+  '"codigo" el de la partida tal cual (si no tiene, «01.01», «01.02»…). "u" la unidad (m2, m3, m, ud, kg, pa…). "precio" el precio unitario y "cantidad" la medición total, como números con punto decimal (en el PDF van con coma: 1.234,56 → 1234.56). ' +
+  '"lineas" las líneas de medición si aparecen (comentario, unidades, longitud, anchura, altura; null si la casilla está vacía); si no hay, []. "t" vacío si no hay descripción larga distinta del resumen. ' +
+  'No inventes nada: si un dato no está, null. No incluyas el resumen de capítulos, totales, gastos generales, beneficio industrial ni IVA como partidas.';
+
+async function leerPresupuesto(pdf: string) {
+  if (!anthropic) { ultimoError = 'sin clave de Anthropic'; return null; }
+  for (const modelo of MODELOS_CLAUDE) {
+    try {
+      const params: any = {
+        model: modelo,
+        max_tokens: 64000,
+        messages: [{ role: 'user', content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } },
+          { type: 'text', text: PROMPT_PRESUPUESTO }
+        ] }],
+        output_config: { effort: 'low' }
+      };
+      const r = await anthropic.messages.stream(params).finalMessage();
+      if (r.stop_reason === 'refusal') { ultimoError = modelo + ': refusal'; continue; }
+      const txt = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+      const i = txt.indexOf('{'), j = txt.lastIndexOf('}');
+      let out: any = null;
+      try { out = JSON.parse(txt.slice(i, j + 1)); } catch (_) { out = null; }
+      if (!out || !Array.isArray(out.capitulos)) { ultimoError = modelo + ': respuesta no válida (' + r.stop_reason + ') ' + txt.slice(0, 120); continue; }
+      return { out, modelo, cortado: r.stop_reason === 'max_tokens', tin: r.usage?.input_tokens || 0, tout: r.usage?.output_tokens || 0 };
+    } catch (e) {
+      ultimoError = modelo + ': ' + (e instanceof Anthropic.APIError ? e.status + ' ' + e.message : String(e));
+    }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   const h = { ...cors(req), 'Content-Type': 'application/json' };
   if (req.method === 'OPTIONS') return new Response('ok', { headers: h });
@@ -130,6 +166,14 @@ Deno.serve(async (req) => {
     if (!r) return new Response(JSON.stringify({ error: 'No he podido procesar la visita', detalle: ultimoError }), { status: 502, headers: h });
     anota(r.modelo, r.tin, r.tout, Date.now() - t0, ctx.correccion ? 'correccion' : 'visita');
     return new Response(JSON.stringify({ result: r.out, modelo: r.modelo, ms: Date.now() - t0 }), { headers: h });
+  }
+  if (b?.modo === 'presupuesto') {
+    const pdf = typeof b.pdf === 'string' ? b.pdf : '';
+    if (!pdf || pdf.length > 30_000_000) return new Response(JSON.stringify({ error: 'PDF vacío o demasiado grande (máx. unos 20 MB)' }), { status: 400, headers: h });
+    const r = await leerPresupuesto(pdf);
+    if (!r) return new Response(JSON.stringify({ error: 'No he podido leer el presupuesto', detalle: ultimoError }), { status: 502, headers: h });
+    anota(r.modelo, r.tin, r.tout, Date.now() - t0, 'presupuesto');
+    return new Response(JSON.stringify({ result: r.out, cortado: r.cortado, modelo: r.modelo, ms: Date.now() - t0 }), { headers: h });
   }
   return new Response(JSON.stringify({ error: 'Modo no válido' }), { status: 400, headers: h });
 });

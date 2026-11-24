@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
   await pg.addInitScript(() => { window.__comp = []; navigator.canShare = (d) => !!(d && d.files); navigator.share = async (d) => { window.__comp.push(d.files.map((f) => f.name + ' (' + f.type + ', ' + f.size + ' B)')); }; });
   const errs = []; pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html'); await pg.waitForTimeout(1500);
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Compartir'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Compartir'); await pg.click('text=Crear y empezar'); await pg.waitForTimeout(400);
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   for (const t of ['vivienda', 'salón 4 por 3', '2,60', 'ninguna', 'elegir trabajos', 'no']) await say(t);
   await pg.click('.tw-main:has-text("Pintura plástica en paredes")'); await pg.click('text=Generar mediciones'); await pg.waitForTimeout(400);

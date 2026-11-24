@@ -747,6 +747,47 @@
       this.save();
       return r;
     }
+    demMaterial(sel2, nuevos, puestos, quitados) {
+      const t = this.textoN || '';
+      if (!/(demol|quit|levant|pica|arranc|retir)/.test(t) || !/(suelo|solado|soldado|pavimento|baldosa|terrazo|tarima|parquet|laminad)/.test(t)) return;
+      const MAT = [['dem_hidraulica', /hidraul/], ['dem_terrazo', /terrazo/], ['dem_tarima', /tarima|parquet/], ['dem_laminado', /laminad/], ['dem_gres', /\bgres\b|ceramic/]];
+      // Lo que se pone nuevo no cuenta: «quitar el gres y poner hidráulica»
+      const limpio = t.replace(/(poner|pondremos|ponemos|colocar|colocamos|nuevo|nueva|embaldosar|solar|solaremos|acabado)[^,.]*/g, '').replace(/rodapie[^,.]*/g, '');
+      const hay = MAT.map(([id, re]) => { const m = limpio.match(re); return m ? { id, i: limpio.lastIndexOf(m[0]), es: new RegExp('\\b(es|son|era|eran|realmente|en realidad)\\b[^,.]{0,40}' + re.source).test(limpio) } : null; }).filter(Boolean);
+      if (!hay.length) return;
+      const elegido = (hay.find((h) => h.es) || hay.sort((a, b) => b.i - a.i)[0]).id;
+      if (!sel2[elegido]) return;
+      const otros = MAT.map(([id]) => id).filter((id) => id !== elegido && sel2[id] && sel2[id].on);
+      // Zonas: las de la demolición de suelo anterior; si no hay, la estancia en curso
+      let zonas = [];
+      otros.forEach((id) => { zonas = zonas.concat(sel2[id].zonas || []); });
+      const foco = this.g.cFoco || this.g.cZona;
+      if (foco && zonas.includes(foco) && !this.textoLargo) zonas = [foco];
+      if (!zonas.length && !sel2[elegido].on) { if (!foco) return; zonas = [foco]; }
+      const lab = (id) => ((G.TRABAJOS.find((w) => w.id === id) || {}).label || id).toLowerCase();
+      // Un solado nuevo del mismo material recién puesto era en realidad la demolición
+      const reMat = MAT.find(([id]) => id === elegido)[1];
+      G.trabajosPara(this.obra).forEach((w) => {
+        if (!nuevos.includes(w.id) || /^dem/.test(w.id) || /demol/.test(norm(w.label)) || !reMat.test(norm(w.label))) return;
+        if (!/(es|son|era|eran|corrig|cambi|modific|partida)/.test(t)) return;
+        sel2[w.id].on = false; nuevos.splice(nuevos.indexOf(w.id), 1); this._demOk = lab(elegido);
+        const i = puestos.indexOf(w.label.replace(/\s*\(.*?\)\s*$/, '').toLowerCase()); if (i >= 0) puestos.splice(i, 1);
+      });
+      const s = sel2[elegido], nuevo = !s.on;
+      if (!nuevo && !otros.length && /\b(corrig\w*|cambi\w*|modific\w*|partida|es|son)\b/.test(t)) this._demOk = lab(elegido);
+      if (!zonas.length) return;
+      s.zonas = nuevo ? zonas.slice() : Array.from(new Set((s.zonas || []).concat(zonas))); s.on = true; s.todas = false;
+      if (nuevo) { nuevos.push(elegido); puestos.push(lab(elegido)); }
+      otros.forEach((id) => {
+        const o = sel2[id]; const antes = o.zonas.length;
+        o.zonas = o.zonas.filter((z) => !zonas.includes(z)); o.todas = false;
+        if (!o.zonas.length) o.on = false;
+        if (o.zonas.length === antes) return;
+        const i = puestos.indexOf(lab(id));
+        if (i >= 0) { puestos.splice(i, 1); if (!o.on && nuevos.includes(id)) nuevos.splice(nuevos.indexOf(id), 1); } // recién puesta: se cambia sin decir nada
+        else quitados.push(lab(id));
+      });
+    }
     aplicar(out, text) {
       out = out || {};
       const g = this.g;
@@ -805,6 +846,10 @@
         sel2[quita].on = false; nuevos.splice(nuevos.indexOf(quita), 1);
         const i = puestos.indexOf((G.TRABAJOS.find((w) => w.id === quita) || {}).label.toLowerCase()); if (i >= 0) puestos.splice(i, 1);
       }
+      // Demolición de un suelo de otro material («no es gres, es baldosa hidráulica»): se cambia la DEMOLICIÓN, nunca se añade un solado nuevo
+      this._demOk = '';
+      this.demMaterial(sel2, nuevos, puestos, quitados);
+      if (this._demOk && !puestos.length && !quitados.length) frases.push('Queda ' + this._demOk + '.');
       g.cRecientes = (g.cRecientes || []).concat([nuevos]).slice(-4);
       let voz = null;
       if (puestos.length) { frases.push('Apunto ' + lista(puestos) + '.'); if (puestos.length > 2) voz = 'Apunto ' + puestos.length + ' trabajos.'; }

@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
   await pg.goto('file://' + process.cwd() + '/dist/mediciones-voz.html');
   await pg.waitForTimeout(1500);
   await pg.screenshot({ path: 'test/s_home.png' });
-  await pg.click('text=Nueva obra'); await pg.fill('#ftit', 'Reforma Piso Avenida'); await pg.fill('#fcli', 'Ana P.'); await pg.click('text=Crear y empezar');
+  await pg.click('[data-a="newobra"]'); await pg.fill('#ftit', 'Reforma Piso Avenida'); await pg.fill('#fcli', 'Ana P.'); await pg.click('text=Crear y empezar');
   await pg.waitForTimeout(500);
   const say = async (t) => { if (await pg.isHidden('#typebar')) await pg.click('#btnKeyboard'); await pg.fill('#typein', t); await pg.press('#typein', 'Enter'); await pg.waitForTimeout(250); };
   await pg.click('.chip >> nth=0'); await pg.waitForTimeout(200);
