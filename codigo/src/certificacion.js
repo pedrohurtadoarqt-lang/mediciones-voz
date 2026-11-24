@@ -119,8 +119,9 @@
    * Entrada: por página, los trozos de texto con su posición { s, x, y, w } (pdf.js).
    * Los números van alineados a la derecha dentro de la columna de su cabecera. */
   const UNID = /^(m|ml|m2|m²|m3|m³|u|ud|uds|un|kg|t|l|h|pa|p\.a\.|pp|mes|día|dia|km|%)\.?$/i;
-  const esNum = (t) => /^-?\d{1,3}(\.\d{3})*(,\d+)?$|^-?\d+(,\d+)?$/.test(t);
-  const numES = (t) => parseFloat(String(t).replace(/\./g, '').replace(',', '.'));
+  const sinEur = (t) => String(t).replace(/^EUR\s*/i, '').replace(/\s*€$/, '').trim();
+  const esNum = (t) => /^-?\d{1,3}(\.\d{3})*(,\d+)?$|^-?\d+(,\d+)?$/.test(sinEur(t));
+  const numES = (t) => parseFloat(sinEur(t).replace(/\./g, '').replace(',', '.'));
   const sinTilde = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
   function filasDePagina(items) {
     const rows = [];
@@ -131,7 +132,20 @@
     });
     rows.sort((a, b) => b.y - a.y);
     rows.forEach((r) => {
-      r.items.sort((a, b) => a.x - b.x);
+      // Texto dibujado dos veces o en trozos solapados (falsa negrita): se unen por lo que comparten
+      r.items.sort((a, b) => a.x - b.x || b.s.length - a.s.length);
+      const uni = [];
+      r.items.forEach((t) => {
+        const c = uni[uni.length - 1];
+        if (c && t.x < c.x + c.w - 1) {
+          if (c.s.includes(t.s)) { c.w = Math.max(c.w, t.x + t.w - c.x); return; }
+          let k = Math.min(c.s.length, t.s.length);
+          while (k > 0 && !c.s.endsWith(t.s.slice(0, k))) k--;
+          if (k > 0 || t.x < c.x + c.w - 3) { c.s += t.s.slice(k); c.w = Math.max(c.w, t.x + t.w - c.x); return; }
+        }
+        uni.push({ s: t.s, x: t.x, w: t.w });
+      });
+      r.items = uni;
       // Trozos pegados («CAPÍ» + «TULO») se unen; los separados son tokens distintos
       const toks = [];
       r.items.forEach((t) => {
@@ -155,9 +169,11 @@
       for (const r of filasDePagina(items)) {
         const T = sinTilde(r.txt);
         // Cabecera de columnas
-        if (/\bCODIGO\b/.test(T) && /\bRESUMEN\b/.test(T) && /(CANTIDAD|MEDICION|IMPORTE)/.test(T)) {
-          const nombres = { UDS: 'uds', UD: 'uds', 'N.': 'uds', LONGITUD: 'l', LARGO: 'l', ANCHURA: 'a', ANCHO: 'a', LATITUD: 'a', ALTURA: 'h', ALTO: 'h', PARCIALES: 'par', PARCIAL: 'par', CANTIDAD: 'cant', MEDICION: 'cant', PRECIO: 'precio', IMPORTE: 'imp', RESUMEN: 'resumen', CODIGO: 'codigo' };
-          cab = []; r.toks.forEach((t) => t.s.split(/\s+/).forEach((w, i, a) => { const n = nombres[sinTilde(w)]; if (n) cab.push({ n, x: t.x + (t.r - t.x) * (a.slice(0, i).join(' ').length / Math.max(1, t.s.length)) }); }));
+        if (/\b(CODIGO|ARTICULO|CONCEPTO|DESCRIPCION)\b/.test(T) && /\b(CANTIDAD|MEDICION|CANT|UDS)\b/.test(T) && /\b(PRECIO|TARIFA|IMPORTE|TOTAL)\b/.test(T) && !/\d,\d/.test(T)) {
+          const nombres = { UDS: 'uds', UD: 'uds', 'N': 'uds', LONGITUD: 'l', LARGO: 'l', ANCHURA: 'a', ANCHO: 'a', LATITUD: 'a', ALTURA: 'h', ALTO: 'h', PARCIALES: 'par', PARCIAL: 'par', CANTIDAD: 'cant', CANT: 'cant', MEDICION: 'cant', PRECIO: 'precio', TARIFA: 'precio', IMPORTE: 'imp', TOTAL: 'imp', RESUMEN: 'resumen', ARTICULO: 'resumen', CONCEPTO: 'resumen', DESCRIPCION: 'resumen', CODIGO: 'codigo' };
+          cab = []; r.toks.forEach((t) => t.s.split(/\s+/).forEach((w, i, a) => { const n = nombres[sinTilde(w).replace(/\.+$/, '')]; if (n && !cab.some((h) => h.n === n)) cab.push({ n, x: t.x + (t.r - t.x) * (a.slice(0, i).join(' ').length / Math.max(1, t.s.length)) }); }));
+          // Con UDS pero sin LONGITUD, «UDS» es la cantidad
+          if (cab.some((h) => h.n === 'uds') && !cab.some((h) => h.n === 'l') && !cab.some((h) => h.n === 'cant')) cab.find((h) => h.n === 'uds').n = 'cant';
           cab.sort((a, b) => a.x - b.x);
           continue;
         }
@@ -165,8 +181,9 @@
         if (/^_+$/.test(r.txt.replace(/\s/g, '')) || /^PRESUPUESTO( Y MEDICIONES)?$|^MEDICIONES Y PRESUPUESTO$|^PAGINA \d+$|^\d{1,2} DE [A-Z]+ DE \d{4}( PAGINA \d+)?$/.test(T)) continue;
         if (/^PAGINA\b/.test(T) || /\bPAGINA \d+$/.test(T)) continue;
         // Totales
-        const mt = T.match(/^TOTAL\b(.*?)[\s.]*([\d.]+,\d+)\s*$/);
-        if (mt) { const v = numES(mt[2]); const mc = mt[1].match(/(SUB)?CAPITULO\s+([\w.]+)/); if (mc) totCap[mc[2]] = v; else if (/^\s*\.*\s*$/.test(mt[1]) || /PRESUPUESTO|EJECUCION/.test(mt[1])) totalLeido = v; cierra(); continue; }
+        const mt = T.replace(/\s*€\s*$/, '').match(/^(SUB)?TOTAL\b(.*?)[\s.]*([\d.]+,\d+)\s*$/);
+        if (mt) { const v = numES(mt[3]); const mc = mt[2].match(/(SUB)?CAPITULO\s+([\w.]+)/); if (mc) totCap[mc[2]] = v; else if (totalLeido == null && (/^\s*\.*\s*$/.test(mt[2]) || /PRESUPUESTO|EJECUCION|PARCIAL|BASE|EUR/.test(mt[2]))) totalLeido = v; cierra(); continue; }
+        if (/^(IVA|I\.V\.A|BASE IMPONIBLE|DESCUENTO|RETENCION)\b/.test(T)) { cierra(); continue; }
         if (/^TOTAL\b/.test(T)) { cierra(); continue; }
         // Capítulos y subcapítulos
         const mcap = r.txt.match(/^(SUB)?CAP[IÍ]TULO\s+([\w.]+)\s*(.*)$/i);
@@ -178,15 +195,27 @@
           capitulos.push(cap); continue;
         }
         const resX = (cab.find((h) => h.n === 'resumen') || { x: 90 }).x, udsX = (cab.find((h) => h.n === 'uds') || { x: 220 }).x;
-        const t0 = r.toks[0];
+        let t0 = r.toks[0];
+        const mx = t0 && !mcap && t0.s.match(/^(\d+(?:\.\d+)+)\s+(\S+)\s+(.+)$/);
+        if (mx && UNID.test(mx[2])) { r.toks = [{ s: mx[1], x: t0.x, r: t0.x + 1 }, { s: mx[2] + ' ' + mx[3], x: t0.x + 2, r: t0.r }].concat(r.toks.slice(1)); t0 = r.toks[0]; }
         // Partida: código a la izquierda de la columna RESUMEN, y unidad
-        if (t0 && t0.r < resX + 2 && /^[\w.\-#]+$/.test(t0.s) && r.toks.length >= 2) {
+        const minNumX = Math.min(...cab.filter((h) => /^(uds|l|a|h|par|cant|precio|imp)$/.test(h.n)).map((h) => h.x));
+        if (t0 && (t0.r < resX + 2 || (/^\d+(\.\d+)+$/.test(t0.s) && t0.x <= resX + 5 && r.toks.slice(1).some((t) => esNum(t.s) && t.x >= minNumX - 30))) && /^[\w.\-#]+$/.test(t0.s) && r.toks.length >= 2) {
           let resto = r.toks.slice(1), u = '';
           const w0 = resto[0].s.split(/\s+/);
           if (UNID.test(w0[0])) { u = w0[0]; resto = [{ s: w0.slice(1).join(' '), x: resto[0].x, r: resto[0].r }].concat(resto.slice(1)).filter((t) => t.s); }
           if (u || !esNum(t0.s)) {
+            const pref = t0.s.includes('.') ? t0.s.split('.').slice(0, -1).join('.') : '';
+            if (pref && (!cap || cap._auto) && (!cap || cap.codigo !== pref)) { cap = { codigo: pref, titulo: 'Capítulo ' + pref, partidas: [], _auto: true }; capitulos.push(cap); }
             if (!cap) { cap = { codigo: '00', titulo: 'Partidas', partidas: [] }; capitulos.push(cap); }
-            part = { codigo: t0.s, u: (u || 'ud').replace('²', '2').replace('³', '3').toLowerCase().replace(/^(un|uds)$/, 'ud').replace(/^u$/, 'ud'), r: resto.map((t) => t.s).join(' ').trim(), t: '', precio: 0, cantidad: 0, lineas: [], _med: false, _com: '' };
+            // En algunos formatos el precio, la cantidad y el importe van en la misma fila que el código
+            const nf = resto.filter((t) => esNum(t.s) && t.x >= udsX - 30 && colDe(t));
+            part = { codigo: t0.s, u: (u || 'ud').replace('²', '2').replace('³', '3').toLowerCase().replace(/^(un|uds)$/, 'ud').replace(/^u$/, 'ud'), r: resto.filter((t) => !nf.includes(t) && !(t.x >= minNumX - 10 && (esNum(t.s) || t.s.length < 14))).map((t) => t.s).join(' ').trim(), t: '', precio: 0, cantidad: 0, lineas: [], _med: false, _com: '' };
+            const v = {}; nf.forEach((t) => { v[colDe(t)] = numES(t.s); });
+            if (v.cant != null) part.cantidad = v.cant;
+            if (v.precio != null) part.precio = v.precio;
+            if (v.cant == null && v.imp && v.precio) part.cantidad = Math.round(v.imp / v.precio * 1000) / 1000;
+            if (v.imp != null) part._imp = v.imp;
             cap.partidas.push(part); continue;
           }
         }
@@ -216,7 +245,13 @@
         if (r.toks.some((t) => t.s === '-')) part.t += '-';
       }
     }
-    capitulos.forEach((c) => c.partidas.forEach((p) => { delete p._med; delete p._com; p.t = p.t.replace(/-$/, ''); }));
+    capitulos.forEach((c) => { delete c._auto; c.partidas.forEach((p) => {
+      delete p._med; delete p._com; delete p._imp; p.t = p.t.replace(/-$/, '').replace(/\s+/g, ' ').trim();
+      // El resumen sigue en la línea siguiente y la descripción lo repite: «… con» + «mortero» + «Reparación … con mortero 1. …»
+      if (!p.r) { const m = p.t.match(/^(.{10,90}?)(\.\s|\s(?=[A-ZÁÉÍÓÚ][a-záéíóú])|$)/); p.r = (m ? m[1] : p.t.slice(0, 80)).trim(); }
+      const i = p.r.length > 12 ? p.t.indexOf(p.r) : -1;
+      if (i > 0 && i < 60) { p.r = (p.r + ' ' + p.t.slice(0, i)).replace(/\s+/g, ' ').trim(); p.t = p.t.slice(i); }
+    }); });
     const res = capitulos.filter((c) => c.partidas.length);
     const calc = r2(res.reduce((a, c) => a + c.partidas.reduce((b, p) => b + r2(p.cantidad * p.precio), 0), 0));
     const malCaps = res.filter((c) => totCap[c.codigo] != null && Math.abs(totCap[c.codigo] - c.partidas.reduce((b, p) => b + r2(p.cantidad * p.precio), 0)) > 0.05 * Math.max(1, c.partidas.length)).map((c) => c.codigo);
