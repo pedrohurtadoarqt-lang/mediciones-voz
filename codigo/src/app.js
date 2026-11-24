@@ -1082,6 +1082,23 @@
     r.onerror = (ev) => { if (out) out.textContent = ev.error === 'no-speech' ? 'No te he oído. Vuelve a pulsar y habla.' : 'No he podido usar el micrófono (' + ev.error + ').'; };
     try { r.start(); } catch (e) { if (out) out.textContent = 'No he podido abrir el micrófono.'; }
   }
+  /** pdf.js bajo demanda (archivos junto a la app). El «worker» se carga como script y trabaja en la página. */
+  let pdfjsP = null;
+  function cargarPdfjs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    const script = (src) => new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ko(new Error('no se pudo cargar ' + src)); document.head.appendChild(s); });
+    pdfjsP = pdfjsP || script('vendor/pdf.worker.min.js').then(() => script('vendor/pdf.min.js')).then(() => { if (!window.pdfjsLib) throw new Error('lector de PDF no disponible'); window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js'; return window.pdfjsLib; });
+    pdfjsP.catch(() => { pdfjsP = null; });
+    return pdfjsP;
+  }
+  /** Lee un presupuesto en PDF en el propio móvil: texto con posiciones → capítulos, partidas, mediciones y precios. */
+  async function leerPdfLocal(file) {
+    const lib = await cargarPdfjs();
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+    const pags = [];
+    for (let i = 1; i <= doc.numPages; i++) { const tc = await (await doc.getPage(i)).getTextContent(); pags.push(tc.items.filter((t) => t.str && t.str.trim()).map((t) => ({ s: t.str, x: t.transform[4], y: t.transform[5], w: t.width }))); }
+    return CT().leerPresupuestoPDF(pags);
+  }
   /** Nueva certificación: nombre, datos y el presupuesto (BC3 o PDF). */
   function certSheet() {
     sheet('<h2>Nueva certificación</h2><form id="fcert" class="card" style="background:none;border:0;padding:0">' +
@@ -1098,7 +1115,20 @@
         let pres;
         if (/\.bc3$/i.test(file.name)) { msg.textContent = 'Leyendo el BC3…'; pres = CT().leerPresupuestoBC3(new Uint8Array(await file.arrayBuffer())); }
         else {
-          if (!(window.Cloud && Cloud.user)) throw new Error('Para leer un PDF entra en tu cuenta (el BC3 se lee sin cuenta).');
+          // 1) En el móvil: presupuestos con el formato habitual (Presto, Arquímedes, Word…). Se comprueba con el total del PDF.
+          msg.textContent = 'Leyendo el PDF…';
+          let local = null;
+          try { local = await leerPdfLocal(file); } catch (e1) { console.warn(e1); }
+          const nLoc = local ? local.capitulos.reduce((a, c) => a + c.partidas.length, 0) : 0;
+          const cuadra = local && nLoc && (local.totalLeido == null || Math.abs(local.totalLeido - local.totalCalculado) < 1) && !local.revisar.length;
+          if (cuadra || (nLoc && !(window.Cloud && Cloud.user && navigator.onLine !== false))) {
+            pres = local;
+            if (!cuadra) toast('Revisa el presupuesto: la suma de las partidas (' + E.fmt(local.totalCalculado) + ' €) no coincide con el total del PDF' + (local.totalLeido != null ? ' (' + E.fmt(local.totalLeido) + ' €)' : '') + '.');
+          }
+        }
+        if (!pres && !/\.bc3$/i.test(file.name)) {
+          // 2) Formato no reconocido: lo lee la IA
+          if (!(window.Cloud && Cloud.user)) throw new Error('No reconozco el formato de este PDF. Entra en tu cuenta para que lo lea la IA, o usa el BC3 del presupuesto.');
           if (navigator.onLine === false) throw new Error('Sin conexión: para leer el PDF hace falta internet.');
           if (file.size > 20 * 1024 * 1024) throw new Error('El PDF pesa más de 20 MB.');
           msg.textContent = 'Leyendo el presupuesto… en un presupuesto largo puede tardar un par de minutos. No cierres esta pantalla.';
@@ -1110,7 +1140,7 @@
         pres.capitulos = (pres.capitulos || []).map((c) => ({ codigo: String(c.codigo || ''), titulo: String(c.titulo || ''), partidas: (c.partidas || []).map((p) => ({ codigo: String(p.codigo || ''), u: String(p.u || 'ud'), r: String(p.r || ''), t: String(p.t || ''), precio: +p.precio || 0, cantidad: +p.cantidad || 0, lineas: Array.isArray(p.lineas) ? p.lineas : [] })) })).filter((c) => c.partidas.length);
         const np = pres.capitulos.reduce((a, c) => a + c.partidas.length, 0);
         if (!np) throw new Error('No he encontrado partidas en el archivo.');
-        const o = { id: 'obra_' + Date.now().toString(36), tipo: 'cert', titulo: $('#ftit').value.trim() || pres.titulo || file.name.replace(/\.[^.]+$/, ''), cliente: $('#fcli').value.trim(), ubicacion: '', ambito: null, estActiva: '', estancias: [], partidas: [], activa: null, catalogo: S.settings.catalogo, created: Date.now(), updated: Date.now(),
+        const o = { id: 'obra_' + Date.now().toString(36), tipo: 'cert', titulo: $('#ftit').value.trim() || pres.titulo || file.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s*(presupuesto|mediciones)( y (mediciones|presupuesto))?\s*/ig, ' ').replace(/([a-záéíóúñ])([A-ZÁÉÍÓÚÑ])/g, '$1 $2').trim(), cliente: $('#fcli').value.trim(), ubicacion: '', ambito: null, estActiva: '', estancias: [], partidas: [], activa: null, catalogo: S.settings.catalogo, created: Date.now(), updated: Date.now(),
           cert: { pres, archivo: file.name, certs: [], ajustes: { gg: 13, bi: 6, baja: 0, iva: 21 } } };
         CT().nueva(o.cert);
         S.obras.push(o); await StorageAdapter.put('obras', o);
@@ -1437,7 +1467,7 @@
       '<li>Toca una partida y pulsa <b>Dictar lo ejecutado</b>: ' + say('todo') + ', ' + say('la mitad') + ', ' + say('sesenta por ciento') + ' o la medida ' + say('cocina seis por dos setenta') + '. También puedes elegir un porcentaje o escribirlo. <b>Guardar y siguiente</b> te lleva a la próxima partida.</li>' +
       '<li>Saca el <b>PDF de la certificación</b> (numerado, con lo anterior, lo actual y el resumen con gastos generales, beneficio e IVA), el <b>Excel</b> y el <b>BC3</b>.</li>' +
       '<li>El mes siguiente pulsa <b>+ Nueva certificación</b>: parte de lo ya certificado y solo anotas lo nuevo.</li></ol>' +
-      '<p class="mtip">El BC3 se lee en el móvil sin conexión. El PDF lo lee la IA y necesita cuenta e internet; en presupuestos largos tarda un par de minutos.</p>');
+      '<p class="mtip">El BC3 y los PDF con el formato habitual de «Presupuesto y mediciones» (Presto, Arquímedes, Word…) se leen en el móvil, sin conexión, y se comprueban con el total del PDF. Si el PDF tiene otro formato, lo lee la IA (necesita cuenta e internet).</p>');
     h += sec('nota', 'Grabar la visita de un tirón (nota de audio)', '<ol class="msteps">' +
       '<li>En la obra, pulsa <b>Grabar nota de la visita</b>. Por defecto se graba <b>por estancias</b>: elige la estancia (Cocina, Baño…), cuéntala y pulsa <b>Siguiente estancia</b>. Cada estancia queda en su nota y la puedes volver a grabar o borrar por separado.</li>' +
       '<li>Si mides solo y de un tirón, elige <b>Grabación continua</b> y cuenta toda la visita seguida.</li>' +

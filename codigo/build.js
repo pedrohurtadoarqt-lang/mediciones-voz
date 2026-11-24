@@ -37,6 +37,9 @@ fs.writeFileSync(path.join(pwa, 'sw.js'), "const C='mediciona-" + ver + "';\nsel
 fs.writeFileSync(path.join(pwa, 'manifest.webmanifest'), JSON.stringify({ name: 'Mediciona · Mediciones de obra con IA', short_name: 'Mediciona', description: 'Mediciones de obra por voz con IA: partidas BC3, PDF, Excel y BC3.', id: './', start_url: './', scope: './', display: 'standalone', orientation: 'portrait', background_color: '#1A2231', theme_color: '#1A2231', lang: 'es', categories: ['business', 'productivity', 'utilities'], icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] }, null, 2));
 for (const f of ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png']) fs.copyFileSync(path.join(__dirname, 'src', 'brand', f), path.join(pwa, f));
 fs.copyFileSync(path.join(__dirname, 'src', 'brand', 'logo.svg'), path.join(pwa, 'logo.svg'));
+// Lector de PDF (se carga solo al leer un presupuesto en PDF)
+fs.mkdirSync(path.join(pwa, 'vendor'), { recursive: true });
+for (const f of ['pdf.min.js', 'pdf.worker.min.js']) fs.copyFileSync(path.join(__dirname, 'src', 'vendor-pdfjs', f), path.join(pwa, 'vendor', f));
 fs.mkdirSync(path.join(pwa, 'legal'), { recursive: true });
 for (const f of fs.readdirSync(path.join(__dirname, 'src', 'legal'))) fs.copyFileSync(path.join(__dirname, 'src', 'legal', f), path.join(pwa, 'legal', f));
 console.log('PWA en dist/pwa');

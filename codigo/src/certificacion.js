@@ -115,6 +115,114 @@
   }
 
 
+  /* ---------------- Presupuesto en PDF (formato «Presupuesto y mediciones» de Presto, Arquímedes…) ----------------
+   * Entrada: por página, los trozos de texto con su posición { s, x, y, w } (pdf.js).
+   * Los números van alineados a la derecha dentro de la columna de su cabecera. */
+  const UNID = /^(m|ml|m2|m²|m3|m³|u|ud|uds|un|kg|t|l|h|pa|p\.a\.|pp|mes|día|dia|km|%)\.?$/i;
+  const esNum = (t) => /^-?\d{1,3}(\.\d{3})*(,\d+)?$|^-?\d+(,\d+)?$/.test(t);
+  const numES = (t) => parseFloat(String(t).replace(/\./g, '').replace(',', '.'));
+  const sinTilde = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  function filasDePagina(items) {
+    const rows = [];
+    items.slice().sort((a, b) => b.y - a.y || a.x - b.x).forEach((t) => {
+      let r = rows.find((q) => Math.abs(q.y - t.y) < 2.5);
+      if (!r) { r = { y: t.y, items: [] }; rows.push(r); }
+      r.items.push(t);
+    });
+    rows.sort((a, b) => b.y - a.y);
+    rows.forEach((r) => {
+      r.items.sort((a, b) => a.x - b.x);
+      // Trozos pegados («CAPÍ» + «TULO») se unen; los separados son tokens distintos
+      const toks = [];
+      r.items.forEach((t) => {
+        const prev = toks[toks.length - 1];
+        const pegado = prev && t.x - (prev.x + prev.w) < 1.2;
+        if (pegado && prev.s.trim() === '-' && esNum(t.s.trim())) { prev.s = '-' + t.s.trim(); prev.w = t.x + t.w - prev.x; } // signo de una deducción
+        else if (pegado && !(esNum(prev.s.trim()) || esNum(t.s.trim()))) { prev.s += t.s; prev.w = t.x + t.w - prev.x; }
+        else toks.push({ s: t.s, x: t.x, w: t.w });
+      });
+      // Cada trozo puede llevar varias palabras; los números sueltos se separan para asignarlos a columnas
+      r.toks = toks.map((t) => ({ s: t.s.trim(), x: t.x, r: t.x + t.w })).filter((t) => t.s);
+      r.txt = r.toks.map((t) => t.s).join(' ').replace(/\s+/g, ' ').trim();
+    });
+    return rows;
+  }
+  function leerPresupuestoPDF(paginas) {
+    const capitulos = []; let cab = null, cap = null, part = null, capPadre = null, totalLeido = null; const totCap = {};
+    const colDe = (t) => { if (!cab) return null; let c = null; cab.forEach((h) => { if (t.r - 1 >= h.x) c = h.n; }); return c; };
+    const cierra = () => { part = null; };
+    for (const items of paginas) {
+      for (const r of filasDePagina(items)) {
+        const T = sinTilde(r.txt);
+        // Cabecera de columnas
+        if (/\bCODIGO\b/.test(T) && /\bRESUMEN\b/.test(T) && /(CANTIDAD|MEDICION|IMPORTE)/.test(T)) {
+          const nombres = { UDS: 'uds', UD: 'uds', 'N.': 'uds', LONGITUD: 'l', LARGO: 'l', ANCHURA: 'a', ANCHO: 'a', LATITUD: 'a', ALTURA: 'h', ALTO: 'h', PARCIALES: 'par', PARCIAL: 'par', CANTIDAD: 'cant', MEDICION: 'cant', PRECIO: 'precio', IMPORTE: 'imp', RESUMEN: 'resumen', CODIGO: 'codigo' };
+          cab = []; r.toks.forEach((t) => t.s.split(/\s+/).forEach((w, i, a) => { const n = nombres[sinTilde(w)]; if (n) cab.push({ n, x: t.x + (t.r - t.x) * (a.slice(0, i).join(' ').length / Math.max(1, t.s.length)) }); }));
+          cab.sort((a, b) => a.x - b.x);
+          continue;
+        }
+        if (!cab) continue;
+        if (/^_+$/.test(r.txt.replace(/\s/g, '')) || /^PRESUPUESTO( Y MEDICIONES)?$|^MEDICIONES Y PRESUPUESTO$|^PAGINA \d+$|^\d{1,2} DE [A-Z]+ DE \d{4}( PAGINA \d+)?$/.test(T)) continue;
+        if (/^PAGINA\b/.test(T) || /\bPAGINA \d+$/.test(T)) continue;
+        // Totales
+        const mt = T.match(/^TOTAL\b(.*?)[\s.]*([\d.]+,\d+)\s*$/);
+        if (mt) { const v = numES(mt[2]); const mc = mt[1].match(/(SUB)?CAPITULO\s+([\w.]+)/); if (mc) totCap[mc[2]] = v; else if (/^\s*\.*\s*$/.test(mt[1]) || /PRESUPUESTO|EJECUCION/.test(mt[1])) totalLeido = v; cierra(); continue; }
+        if (/^TOTAL\b/.test(T)) { cierra(); continue; }
+        // Capítulos y subcapítulos
+        const mcap = r.txt.match(/^(SUB)?CAP[IÍ]TULO\s+([\w.]+)\s*(.*)$/i);
+        if (mcap) {
+          cierra();
+          const sub = !!mcap[1];
+          cap = { codigo: mcap[2], titulo: (sub && capPadre ? capPadre.titulo + ' › ' : '') + mcap[3].trim(), partidas: [] };
+          if (!sub) capPadre = cap;
+          capitulos.push(cap); continue;
+        }
+        const resX = (cab.find((h) => h.n === 'resumen') || { x: 90 }).x, udsX = (cab.find((h) => h.n === 'uds') || { x: 220 }).x;
+        const t0 = r.toks[0];
+        // Partida: código a la izquierda de la columna RESUMEN, y unidad
+        if (t0 && t0.r < resX + 2 && /^[\w.\-#]+$/.test(t0.s) && r.toks.length >= 2) {
+          let resto = r.toks.slice(1), u = '';
+          const w0 = resto[0].s.split(/\s+/);
+          if (UNID.test(w0[0])) { u = w0[0]; resto = [{ s: w0.slice(1).join(' '), x: resto[0].x, r: resto[0].r }].concat(resto.slice(1)).filter((t) => t.s); }
+          if (u || !esNum(t0.s)) {
+            if (!cap) { cap = { codigo: '00', titulo: 'Partidas', partidas: [] }; capitulos.push(cap); }
+            part = { codigo: t0.s, u: (u || 'ud').replace('²', '2').replace('³', '3').toLowerCase().replace(/^(un|uds)$/, 'ud').replace(/^u$/, 'ud'), r: resto.map((t) => t.s).join(' ').trim(), t: '', precio: 0, cantidad: 0, lineas: [], _med: false, _com: '' };
+            cap.partidas.push(part); continue;
+          }
+        }
+        if (!part) continue;
+        // Números en columnas
+        const nums = r.toks.filter((t) => esNum(t.s) && t.x >= udsX - 30);
+        const texto = r.toks.filter((t) => !nums.includes(t) && t.s !== '-');
+        if (nums.length) {
+          const v = {}; nums.forEach((t) => { const c = colDe(t); if (c) v[c] = numES(t.s); });
+          if (v.cant != null || v.precio != null || v.imp != null) {
+            if (v.cant != null) part.cantidad = v.cant;
+            if (v.precio != null) part.precio = v.precio;
+            if (part.cantidad === 0 && v.imp && v.precio) part.cantidad = Math.round(v.imp / v.precio * 1000) / 1000;
+            continue;
+          }
+          const com = (part._com ? part._com + ' ' : '') + texto.map((t) => t.s).join(' ');
+          part._com = ''; part._med = true;
+          part.lineas.push({ com: com.trim(), uds: v.uds ?? null, l: v.l ?? null, a: v.a ?? null, h: v.h ?? null });
+          continue;
+        }
+        // Texto: descripción (antes de las mediciones) o comentario de la línea siguiente
+        const tx = texto.map((t) => t.s).join(' ');
+        if (!tx) continue;
+        if (part._med || (texto[0] && texto[0].r < udsX && r.toks.every((t) => t.r < udsX + 40) && part.t && tx.length < 40 && false)) { part._com = (part._com ? part._com + ' ' : '') + tx; continue; }
+        const guion = r.toks.some((t) => t.s === '-') || /-$/.test(part.t);
+        part.t = part.t ? (/-$/.test(part.t) ? part.t.slice(0, -1) + tx : (guion && !/-$/.test(part.t) ? part.t + tx : part.t + ' ' + tx)) : tx;
+        if (r.toks.some((t) => t.s === '-')) part.t += '-';
+      }
+    }
+    capitulos.forEach((c) => c.partidas.forEach((p) => { delete p._med; delete p._com; p.t = p.t.replace(/-$/, ''); }));
+    const res = capitulos.filter((c) => c.partidas.length);
+    const calc = r2(res.reduce((a, c) => a + c.partidas.reduce((b, p) => b + r2(p.cantidad * p.precio), 0), 0));
+    const malCaps = res.filter((c) => totCap[c.codigo] != null && Math.abs(totCap[c.codigo] - c.partidas.reduce((b, p) => b + r2(p.cantidad * p.precio), 0)) > 0.05 * Math.max(1, c.partidas.length)).map((c) => c.codigo);
+    return { titulo: '', capitulos: res, totalLeido, totalCalculado: calc, revisar: malCaps };
+  }
+
   /* ---------------- Salidas ---------------- */
   const X = () => root.Exporters || (typeof require !== 'undefined' ? require('./export.js') : null);
   const cleanB = (v) => String(v == null ? '' : v).replace(/[|~\\]/g, '/').replace(/\r?\n/g, ' ').trim();
@@ -215,7 +323,7 @@
     return null;
   }
 
-  const api = { leerPresupuestoBC3, ejecutado, resumen, nueva, parcialLinea, importe, buildBC3, buildXLSX, lineasEj, interpretarDictado };
+  const api = { leerPresupuestoBC3, ejecutado, resumen, nueva, parcialLinea, importe, buildBC3, buildXLSX, lineasEj, interpretarDictado, leerPresupuestoPDF, filasDePagina };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Certificacion = api;
 })(typeof self !== 'undefined' ? self : this);
