@@ -409,3 +409,15 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .cnotas li small { display: block; color: var(--muted); margin-top: 3px; }
 .cnotas li.g-error { border-left: 3px solid var(--rec, #e11d48); }
 .mtip { font-size: 13px; line-height: 1.4; }
+/* Progreso con porcentaje */
+.prog { display: flex; flex-direction: column; gap: 5px; margin: 8px 0; }
+.prog-b { height: 8px; border-radius: 99px; background: var(--card-2); overflow: hidden; border: 1px solid var(--line); }
+.prog-b span { display: block; height: 100%; background: var(--accent); transition: width .35s ease-out; }
+.prog-t { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.prog-t b { color: var(--fg); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .prog-b span { transition: none; } }
+.iniciobtn.sec { min-height: 76px; padding: 14px 18px; background: var(--card-2); }
+.iniciobtn.sec .ib-i { width: 44px; height: 44px; background: var(--card); color: var(--accent); border: 1px solid var(--line); }
+.iniciobtn .ib-t { flex: 1; }
+.iniciobtn .ib-n { font-size: 1.3rem; font-weight: 800; color: var(--accent); }
+.filtros { margin: 4px 0 12px; }

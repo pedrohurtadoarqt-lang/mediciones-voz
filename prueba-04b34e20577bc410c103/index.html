@@ -428,6 +428,18 @@ ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
 .cnotas li small { display: block; color: var(--muted); margin-top: 3px; }
 .cnotas li.g-error { border-left: 3px solid var(--rec, #e11d48); }
 .mtip { font-size: 13px; line-height: 1.4; }
+/* Progreso con porcentaje */
+.prog { display: flex; flex-direction: column; gap: 5px; margin: 8px 0; }
+.prog-b { height: 8px; border-radius: 99px; background: var(--card-2); overflow: hidden; border: 1px solid var(--line); }
+.prog-b span { display: block; height: 100%; background: var(--accent); transition: width .35s ease-out; }
+.prog-t { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.prog-t b { color: var(--fg); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .prog-b span { transition: none; } }
+.iniciobtn.sec { min-height: 76px; padding: 14px 18px; background: var(--card-2); }
+.iniciobtn.sec .ib-i { width: 44px; height: 44px; background: var(--card); color: var(--accent); border: 1px solid var(--line); }
+.iniciobtn .ib-t { flex: 1; }
+.iniciobtn .ib-n { font-size: 1.3rem; font-weight: 800; color: var(--accent); }
+.filtros { margin: 4px 0 12px; }
 </style>
 </head>
 <body>
@@ -8252,6 +8264,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     else if (S.view === 'resumen') { t.innerHTML = 'Resumen<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewResumen(); }
     else if (S.view === 'catalogos') { t.innerHTML = 'Bases de datos BC3<small>Sin precios: código, unidad, resumen y texto</small>'; v.innerHTML = viewCatalogos(); }
     else if (S.view === 'ajustes') { t.innerHTML = 'Ajustes'; v.innerHTML = viewAjustes(); }
+    else if (S.view === 'misobras') { t.innerHTML = 'Tus obras<small>Mediciones y certificaciones</small>'; v.innerHTML = viewMisObras(); }
     else if (S.view === 'cert') { t.innerHTML = esc(S.obra.titulo) + '<small>Certificaciones' + (S.obra.cliente ? ' · ' + esc(S.obra.cliente) : '') + '</small>'; v.innerHTML = viewCert(); }
     else if (S.view === 'visita') { t.innerHTML = 'Nota de la visita<small>' + esc(S.obra.titulo) + '</small>'; v.innerHTML = viewVisita(); }
     else if (S.view === 'manual') { t.innerHTML = 'Cómo se usa<small>Guía rápida de Mediciona</small>'; v.innerHTML = viewManual(); }
@@ -8415,6 +8428,31 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     $('#typebar').hidden = !S.typing;
   }
 
+  function listaObras() {
+    const uid = window.Cloud && Cloud.user ? Cloud.user.id : null;
+    return S.obras.filter((o) => o.ejemplo || !o.owner || o.owner === uid).slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  }
+  /** Tus obras: mediciones y certificaciones, con filtro. */
+  function viewMisObras() {
+    const todas = listaObras(), f = S.filtroObras || 'todas';
+    const list = todas.filter((o) => f === 'todas' || (f === 'cert') === (o.tipo === 'cert'));
+    const n = (t) => todas.filter((o) => t === 'todas' || (t === 'cert') === (o.tipo === 'cert')).length;
+    let h = '<div class="row chipsrow filtros">' + [['todas', 'Todas'], ['med', 'Mediciones'], ['cert', 'Certificaciones']].map(([k, l]) => '<button class="chip' + (f === k ? ' on' : '') + '" data-a="fobras" data-f="' + k + '">' + l + ' · ' + n(k) + '</button>').join('') + '</div>';
+    if (!list.length) h += '<div class="card"><p class="hint">' + (todas.length ? 'No hay obras de este tipo.' : 'Aún no tienes obras. Vuelve al inicio y empieza una medición o una certificación.') + '</p></div>';
+    else {
+      h += '<div class="obralist">';
+      list.forEach((o) => {
+        const cert = o.tipo === 'cert';
+        const np = cert ? o.cert.pres.capitulos.reduce((a, c) => a + c.partidas.length, 0) : o.partidas.filter((p) => p.lineas.length).length;
+        const det = cert ? 'Certificación nº ' + o.cert.certs.length + ' · ' + np + ' partidas' : np + ' partidas';
+        h += '<div class="obrarow"><button class="obraopen" data-a="open" data-id="' + o.id + '"><span class="tag ' + (cert ? 'cert' : 'med') + '">' + (cert ? 'Certificación' : 'Medición') + '</span><b>' + esc(o.titulo) + '</b>' +
+          '<small>' + esc([o.cliente, det, new Date(o.updated || o.created).toLocaleDateString('es-ES')].filter(Boolean).join(' · ')) + (o.ejemplo ? ' · Ejemplo' : '') + '</small></button>' +
+          '<button class="iconbtn" data-a="obramenu" data-id="' + o.id + '" aria-label="Más opciones de ' + esc(o.titulo) + '">⋯</button></div>';
+      });
+      h += '</div>';
+    }
+    return h;
+  }
   function viewObras() {
     const uid = window.Cloud && Cloud.user ? Cloud.user.id : null;
     const list = S.obras.filter((o) => o.ejemplo || !o.owner || o.owner === uid).slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
@@ -8432,18 +8470,9 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       '<button class="iniciobtn" data-a="newobra"' + (canNew ? '' : ' disabled') + '><span class="ib-i">' + ICON.mic + '</span><span class="ib-t"><b>Medición</b><small>Medir una obra hablando: guiada o con nota de audio</small></span></button>' +
       '<button class="iniciobtn" data-a="inicio-cert"' + (canNew ? '' : ' disabled') + '><span class="ib-i">' + ICON.cert + '</span><span class="ib-t"><b>Certificación</b><small>Cargar el presupuesto y certificar lo ejecutado</small></span></button></div>';
     if (!canNew) h += '<p class="hint">Has llegado al límite del plan Demo. Borra una obra o activa el plan Pro en Ajustes.</p>';
-    if (list.length) {
-      h += '<h3 class="seccion">Tus obras</h3><div class="obralist">';
-      list.forEach((o) => {
-        const cert = o.tipo === 'cert';
-        const np = cert ? o.cert.pres.capitulos.reduce((a, c) => a + c.partidas.length, 0) : o.partidas.filter((p) => p.lineas.length).length;
-        const det = cert ? 'Certificación nº ' + o.cert.certs.length + ' · ' + np + ' partidas' : np + ' partidas';
-        h += '<div class="obrarow"><button class="obraopen" data-a="open" data-id="' + o.id + '"><span class="tag ' + (cert ? 'cert' : 'med') + '">' + (cert ? 'Certificación' : 'Medición') + '</span><b>' + esc(o.titulo) + '</b>' +
-          '<small>' + esc([o.cliente, det, new Date(o.updated || o.created).toLocaleDateString('es-ES')].filter(Boolean).join(' · ')) + (o.ejemplo ? ' · Ejemplo' : '') + '</small></button>' +
-          '<button class="iconbtn" data-a="obramenu" data-id="' + o.id + '" aria-label="Más opciones de ' + esc(o.titulo) + '">⋯</button></div>';
-      });
-      h += '</div>';
-    }
+    const nc = list.filter((o) => o.tipo === 'cert').length, nm = list.length - nc;
+    h += '<button class="iniciobtn sec" data-a="misobras"><span class="ib-i">' + ICON.obras + '</span><span class="ib-t"><b>Tus obras</b><small>' +
+      (list.length ? nm + ' ' + (nm === 1 ? 'medición' : 'mediciones') + ' · ' + nc + ' ' + (nc === 1 ? 'certificación' : 'certificaciones') : 'Aún no tienes obras') + '</small></span><span class="ib-n">' + list.length + '</span></button>';
     h += '<div class="pie">' + plan + '</div>';
     h += '<p class="hint">Tus obras se guardan en este dispositivo. La búsqueda de partidas, el diálogo y el cálculo funcionan sin conexión.</p>';
     h += '<button class="btn" data-a="sugerencias">Buzón de sugerencias</button>';
@@ -8571,6 +8600,34 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     t.hidden = false;
     clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, action ? 9000 : 4000);
   }
+  /* ---- Progreso con porcentaje ----
+   * Real cuando se sabe (páginas leídas, trozos transcritos) y estimado por el tiempo esperado cuando
+   * depende del servidor: avanza deprisa al principio y frena antes del 100 % hasta que termina de verdad. */
+  const Prog = {};
+  function progIni(id, texto, estMs, desde, hasta) { Prog[id] = { t0: Date.now(), est: Math.max(1500, estMs || 10000), texto: texto || '', desde: desde || 0, hasta: hasta == null ? 100 : hasta, real: null }; progPinta(); }
+  function progReal(id, frac, texto) { const p = Prog[id]; if (!p) return progIni(id, texto, 10000), progReal(id, frac, texto); p.real = Math.max(0, Math.min(1, frac)); if (texto) p.texto = texto; progPinta(); }
+  function progFin(id) { delete Prog[id]; }
+  function progPct(id) {
+    const p = Prog[id]; if (!p) return 0;
+    let f;
+    if (p.real != null) f = p.real;
+    else { const x = (Date.now() - p.t0) / p.est; f = x < 0.8 ? x : 0.8 + 0.17 * (1 - Math.exp(-(x - 0.8) * 2.5)); }
+    return Math.min(99, Math.round(p.desde + (p.hasta - p.desde) * f));
+  }
+  function progHTML(id, texto) {
+    const p = Prog[id], pct = progPct(id), t = (p && p.texto) || texto || 'Cargando';
+    return '<div class="prog" data-prog="' + esc(id) + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><div class="prog-b"><span style="width:' + pct + '%"></span></div><span class="prog-t"><span class="prog-l">' + esc(t) + '</span><b>' + pct + ' %</b></span></div>';
+  }
+  function progPinta() {
+    document.querySelectorAll('[data-prog]').forEach((el) => {
+      const id = el.dataset.prog, p = Prog[id]; if (!p) return;
+      const pct = progPct(id); el.setAttribute('aria-valuenow', pct);
+      const b = el.querySelector('.prog-b span'); if (b) b.style.width = pct + '%';
+      const n = el.querySelector('.prog-t b'); if (n) n.textContent = pct + ' %';
+      const l = el.querySelector('.prog-l'); if (l && p.texto) l.textContent = p.texto;
+    });
+  }
+  setInterval(() => { if (Object.keys(Prog).length) progPinta(); }, 400);
   /* ---- Archivo generado: se descarga y, si el móvil lo permite, se ofrece compartir (correo, WhatsApp…) ---- */
   function canShareFile(file) { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: [file] })); } catch (e) { return false; } }
   async function fileReady(name, blob, label) {
@@ -8715,7 +8772,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     h += '<div class="card"><h3>Resumen económico</h3><div class="row certaj">' +
       [['gg', 'Gastos generales %', aj.gg ?? 13], ['bi', 'Beneficio industrial %', aj.bi ?? 6], ['baja', 'Baja %', aj.baja ?? 0], ['iva', 'IVA %', aj.iva ?? 21]].map(([k, l, v]) => '<label class="field"><span>' + l + '</span><input class="cajuste" data-k="' + k + '" inputmode="decimal" value="' + String(v).replace('.', ',') + '"></label>').join('') +
       '</div><p class="hint">Se aplican sobre la ejecución material de esta certificación en el PDF.</p></div>';
-    h += '<div class="row exprow"><button class="btn primary" data-a="cexp" data-k="pdf">' + ICON.pdf + ' PDF certificación</button><button class="btn" data-a="cexp" data-k="xlsx">Excel</button><button class="btn" data-a="cexp" data-k="bc3">BC3</button></div>';
+    h += '<div class="row exprow"><button class="btn primary" data-a="cexp" data-k="pdf">' + ICON.pdf + ' PDF certificación</button><button class="btn" data-a="cexp" data-k="xlsx">Excel</button></div>';
     h += '<p class="hint">Toca una partida para ver su medición del presupuesto y anotar lo ejecutado: marca las líneas hechas, graba lo que vas midiendo o pon un porcentaje.</p>';
     return h;
   }
@@ -8730,7 +8787,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     const ls = (e.lineas || []).map((l, i) => '<div class="cline' + (l.pres != null ? ' delpres' : '') + '"><input data-i="' + i + '" data-c="com"' + (l.pres != null ? ' data-p="' + l.pres + '"' : '') + ' value="' + esc(l.com || '') + '" placeholder="Dónde"><input data-i="' + i + '" data-c="uds" inputmode="decimal" value="' + (l.uds ?? '') + '" placeholder="Uds"><input data-i="' + i + '" data-c="l" inputmode="decimal" value="' + (l.l ?? '') + '" placeholder="Largo"><input data-i="' + i + '" data-c="a" inputmode="decimal" value="' + (l.a ?? '') + '" placeholder="Ancho"><input data-i="' + i + '" data-c="h" inputmode="decimal" value="' + (l.h ?? '') + '" placeholder="Alto"><button class="iconbtn sm" data-a="clinea-del" data-i="' + i + '" aria-label="Quitar línea">' + ICON.del + '</button></div>').join('');
     const grabs = ((cur.grabs || {})[k] || []);
     const estG = { grabada: 'Guardada, se procesará con conexión', transcribiendo: 'Pasando a texto…', interpretando: 'Convirtiendo en mediciones…', ok: '', error: 'No se pudo procesar' };
-    const notas = grabs.map((g, i) => '<li class="g-' + g.estado + '">' + (g.texto ? '«' + esc(g.texto) + '»' : '<i>' + esc(estG[g.estado] || g.estado) + '</i>') + (g.msg ? '<small>' + esc(g.msg) + '</small>' : '') +
+    const notas = grabs.map((g, i) => '<li class="g-' + g.estado + '">' + (Prog['g:' + g.id] ? progHTML('g:' + g.id) : '') + (g.texto ? '«' + esc(g.texto) + '»' : Prog['g:' + g.id] ? '' : '<i>' + esc(estG[g.estado] || g.estado) + '</i>') + (g.msg ? '<small>' + esc(g.msg) + '</small>' : '') +
       (g.estado === 'error' || g.estado === 'grabada' ? ' <button class="linkbtn" data-a="cgretry" data-k="' + ek + '" data-i="' + i + '">Reintentar</button>' : '') + '</li>').join('');
     const grabando = CRec.rec && CRec.k === k;
     const rec = grabando
@@ -8872,7 +8929,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     if (!(window.Cloud && Cloud.user) || navigator.onLine === false) { g.estado = 'grabada'; g.msg = !(window.Cloud && Cloud.user) ? 'Entra en tu cuenta para procesarla.' : 'Sin conexión.'; return refresca(); }
     try {
       if (!g.texto) {
-        g.estado = 'transcribiendo'; g.msg = ''; refresca();
+        g.estado = 'transcribiendo'; g.msg = ''; progIni('g:' + g.id, 'Pasando a texto', 5000 + (g.seg || 30) * 250, 0, 60); refresca();
         const a = await StorageAdapter.get('audios', g.id); if (!a || !a.blob) throw new Error('no encuentro el audio');
         let r;
         try { r = await Cloud.visita({ modo: 'transcribir', audio: await aBase64(a.blob), mime: a.mime || 'audio/webm', obra_id: o.id }); }
@@ -8880,7 +8937,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         g.texto = ((r && r.texto) || '').trim();
         if (!g.texto) { g.estado = 'ok'; g.msg = 'No se oye ninguna medición.'; return refresca(); }
       }
-      g.estado = 'interpretando'; refresca();
+      g.estado = 'interpretando'; progIni('g:' + g.id, 'Convirtiendo en mediciones', 12000, Prog['g:' + g.id] ? 60 : 0, 100); refresca();
       const f = filaCert(o, k), cur = certActual(o), e = cur.ej[k];
       const ya = e ? (e.lineas && e.lineas.length ? e.lineas.map((l) => [l.com, l.uds, l.l, l.a, l.h].filter((v) => v != null && v !== '').join(' ')).join('; ') : e.pct != null ? e.pct + ' %' : e.cantidad != null ? e.cantidad + ' ' + f.p.u : '') : '';
       const r = await Cloud.visita({ modo: 'certificar', transcripcion: g.texto, ejecutado: ya, partida: { codigo: f.p.codigo, r: f.p.r, u: f.p.u, cantidad: f.p.cantidad, lineas: f.p.lineas }, obra_id: o.id });
@@ -8889,10 +8946,10 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       if (nuevas.length) cur.ej[k] = { lineas: (v.reemplazar || !(e && e.lineas) ? [] : e.lineas).concat(nuevas) };
       else if (numOk(v.pct) != null) cur.ej[k] = { pct: Math.max(0, Math.min(100, numOk(v.pct))) };
       else if (numOk(v.cantidad) != null) cur.ej[k] = { cantidad: numOk(v.cantidad) };
-      g.estado = 'ok'; g.msg = v.mensaje ? String(v.mensaje).slice(0, 200) : '';
+      g.estado = 'ok'; progFin('g:' + g.id); g.msg = v.mensaje ? String(v.mensaje).slice(0, 200) : '';
       const f2 = filaCert(o, k);
       toast(f.p.codigo + ': ' + (nuevas.length ? nuevas.length + (nuevas.length === 1 ? ' línea' : ' líneas') + ' · ' : '') + 'ejecutado ' + E.fmt(f2.origen) + ' ' + f.p.u + ' (' + E.fmt(f2.pct) + ' %)');
-    } catch (err) { g.estado = 'error'; g.msg = String((err && err.message) || err).slice(0, 140); }
+    } catch (err) { g.estado = 'error'; progFin('g:' + g.id); g.msg = String((err && err.message) || err).slice(0, 140); }
     refresca();
   }
   const numOk = (v) => { if (v == null || v === '') return null; const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
@@ -8907,12 +8964,18 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     return pdfjsP;
   }
   /** Lee un presupuesto en PDF en el propio móvil: texto con posiciones → capítulos, partidas, mediciones y precios. */
-  async function leerPdfLocal(file) {
+  async function leerPdfLocal(file, pid) {
+    if (pid && !window.pdfjsLib) progIni(pid, 'Preparando el lector de PDF', 3000, 0, 15);
     const lib = await cargarPdfjs();
     const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
     const pags = [];
-    for (let i = 1; i <= doc.numPages; i++) { const tc = await (await doc.getPage(i)).getTextContent(); pags.push(tc.items.filter((t) => t.str && t.str.trim()).map((t) => ({ s: t.str, x: t.transform[4], y: t.transform[5], w: t.width }))); }
-    return CT().leerPresupuestoPDF(pags);
+    if (pid) progIni(pid, 'Leyendo el PDF', 5000, 15, 100);
+    for (let i = 1; i <= doc.numPages; i++) {
+      const tc = await (await doc.getPage(i)).getTextContent(); pags.push(tc.items.filter((t) => t.str && t.str.trim()).map((t) => ({ s: t.str, x: t.transform[4], y: t.transform[5], w: t.width })));
+      if (pid) progReal(pid, i / doc.numPages, 'Leyendo página ' + i + ' de ' + doc.numPages);
+    }
+    const r = CT().leerPresupuestoPDF(pags); r.paginas = doc.numPages;
+    return r;
   }
   /** Nueva certificación: nombre, datos y el presupuesto (BC3 o PDF). */
   function certSheet() {
@@ -8928,12 +8991,12 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       const msg = $('#cmsg'), btn = $('#cgo'); btn.disabled = true;
       try {
         let pres;
-        if (/\.bc3$/i.test(file.name)) { msg.textContent = 'Leyendo el BC3…'; pres = CT().leerPresupuestoBC3(new Uint8Array(await file.arrayBuffer())); }
+        if (/\.bc3$/i.test(file.name)) { progIni('pres', 'Leyendo el BC3', 1500); msg.innerHTML = progHTML('pres'); pres = CT().leerPresupuestoBC3(new Uint8Array(await file.arrayBuffer())); }
         else {
           // 1) En el móvil: presupuestos con el formato habitual (Presto, Arquímedes, Word…). Se comprueba con el total del PDF.
-          msg.textContent = 'Leyendo el PDF…';
+          progIni('pres', 'Leyendo el PDF', 4000); msg.innerHTML = progHTML('pres');
           let local = null;
-          try { local = await leerPdfLocal(file); } catch (e1) { console.warn(e1); }
+          try { local = await leerPdfLocal(file, 'pres'); } catch (e1) { console.warn(e1); }
           const nLoc = local ? local.capitulos.reduce((a, c) => a + c.partidas.length, 0) : 0;
           const cuadra = local && nLoc && (local.totalLeido == null || Math.abs(local.totalLeido - local.totalCalculado) < 1) && !local.revisar.length;
           if (cuadra || (nLoc && !(window.Cloud && Cloud.user && navigator.onLine !== false))) {
@@ -8946,7 +9009,9 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
           if (!(window.Cloud && Cloud.user)) throw new Error('No reconozco el formato de este PDF. Entra en tu cuenta para que lo lea la IA, o usa el BC3 del presupuesto.');
           if (navigator.onLine === false) throw new Error('Sin conexión: para leer el PDF hace falta internet.');
           if (file.size > 20 * 1024 * 1024) throw new Error('El PDF pesa más de 20 MB.');
-          msg.textContent = 'Leyendo el presupuesto… en un presupuesto largo puede tardar un par de minutos. No cierres esta pantalla.';
+          const paginas = (local && local.paginas) || Math.max(1, Math.round(file.size / 12000));
+          progIni('pres', 'La IA está leyendo el presupuesto (' + paginas + ' págs.)', 15000 + paginas * 8000);
+          msg.innerHTML = progHTML('pres') + '<p class="hint">No cierres esta pantalla.</p>';
           const r = await Cloud.visita({ modo: 'presupuesto', pdf: await aBase64(file) });
           pres = r && r.result;
           if (r && r.cortado) toast('El presupuesto es muy largo: revisa que estén todos los capítulos al final.');
@@ -8960,9 +9025,9 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         CT().nueva(o.cert);
         S.obras.push(o); await StorageAdapter.put('obras', o);
         try { await StorageAdapter.put('fotos', { id: 'pres:' + o.id, blob: file, nombre: file.name }); } catch (e2) {}
-        closeSheet(); S.certN = 1; openObra(o.id);
+        progFin('pres'); closeSheet(); S.certN = 1; openObra(o.id);
         toast('Presupuesto cargado: ' + pres.capitulos.length + ' capítulos, ' + np + ' partidas.');
-      } catch (err) { msg.textContent = (err && err.message) || String(err); btn.disabled = false; }
+      } catch (err) { progFin('pres'); msg.textContent = (err && err.message) || String(err); btn.disabled = false; }
     });
   }
   /** PDF de la certificación nº n (relación valorada + resumen). */
@@ -9127,7 +9192,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     const v = dstDe(o, dest), sg = v && v.segs[n]; if (!sg) return;
     if (!(window.Cloud && Cloud.user)) { sg.estado = 'sin cuenta'; saveObra(); if (S.view === 'visita') render(); return; }
     if (navigator.onLine === false) { sg.estado = 'sin conexión'; saveObra(); if (S.view === 'visita') render(); return; }
-    sg.estado = 'transcribiendo'; if (S.view === 'visita') render();
+    sg.estado = 'transcribiendo'; progIni('seg:' + (dest || 'v') + ':' + n, 'Trozo ' + (n + 1) + ': pasando a texto', 8000 + Math.min(180, sg.segundos || 180) * 120); if (S.view === 'visita') render();
     try {
       const a = await StorageAdapter.get('audios', claveAudio(o, dest, n));
       if (!a || !a.blob) throw new Error('no encuentro el audio');
@@ -9138,11 +9203,11 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         const wav = await aWav(a.blob);
         r = await Cloud.visita({ modo: 'transcribir', audio: await aBase64(wav), mime: 'audio/wav', obra_id: o.id });
       }
-      sg.texto = (r && r.texto) || ''; sg.estado = 'ok';
+      sg.texto = (r && r.texto) || ''; sg.estado = 'ok'; progFin('seg:' + (dest || 'v') + ':' + n);
       // Nota de una estancia sin nombre: se toma el que se dice en el audio («ahora estamos en el baño en suite»)
       if (dest && dest.startsWith('n:') && /^Estancia \d+$/.test(v.nombre || '') && n === 0) { const nom = nombreDicho(sg.texto); if (nom) v.nombre = nom; }
       v.texto = ''; // la transcripción completa se rehace con el trozo nuevo
-    } catch (e) { sg.estado = 'error'; sg.error = String(e && e.message || e).slice(0, 120); }
+    } catch (e) { sg.estado = 'error'; progFin('seg:' + (dest || 'v') + ':' + n); sg.error = String(e && e.message || e).slice(0, 120); }
     saveObra(); if (S.view === 'visita') render();
   }
   function textoVisita(v) { return v.texto || (v.segs || []).filter(Boolean).map((x) => x.texto).filter(Boolean).join('\n\n'); }
@@ -9159,15 +9224,16 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     const txt = textoVisita(c).trim();
     if (!txt) return toast('No hay texto de corrección.');
     if (!(window.Cloud && Cloud.user)) return toast('Entra en tu cuenta para aplicar la corrección.');
+    progIni('vproc', 'Aplicando la corrección', 10000 + txt.length * 12);
     S.vProcesando = true; render();
     try {
       const C = dialog.conversa, ctx = C.contexto('');
       const r = await Cloud.visita({ modo: 'procesar', correccion: true, transcripcion: txt, zonas: ctx.zonas, trabajos: ctx.trabajos.map((w) => ({ id: w.id, label: w.label, zonas: w.zonas })), obra_id: o.id });
       if (!r || !r.result) throw new Error((r && r.error) || 'sin respuesta');
-      c.aplicada = Date.now(); S.vProcesando = false; saveObra();
+      c.aplicada = Date.now(); S.vProcesando = false; progFin('vproc'); saveObra();
       S.view = 'obra'; render();
       C.aplicarCorreccion(r.result, txt);
-    } catch (e) { S.vProcesando = false; render(); toast('No he podido aplicar la corrección: ' + (e.message || e)); }
+    } catch (e) { S.vProcesando = false; progFin('vproc'); render(); toast('No he podido aplicar la corrección: ' + (e.message || e)); }
   }
   async function procesarVisita() {
     const o = S.obra, v = o.visita; if (!v) return;
@@ -9175,6 +9241,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     const txt = textoCompleto(v).trim();
     if (!txt) return toast('No hay texto que procesar.');
     if (!(window.Cloud && Cloud.user)) return toast('Entra en tu cuenta para procesar la visita.');
+    progIni('vproc', 'Procesando la visita', 15000 + txt.length * 12);
     S.vProcesando = true; render();
     try {
       const C = dialog.conversa;
@@ -9185,10 +9252,10 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       const r = await Cloud.visita({ modo: 'procesar', transcripcion: txt, zonas: ctx.zonas, obra_id: o.id });
       if (!r || !r.result) throw new Error((r && r.error) || 'sin respuesta');
       const res = C.aplicarVisita(r.result, txt);
-      v.procesada = Date.now(); S.vProcesando = false; saveObra();
+      v.procesada = Date.now(); S.vProcesando = false; progFin('vproc'); saveObra();
       S.view = 'obra'; render();
       C.siguiente('He procesado la visita: ' + res.zonas + ' ' + (res.zonas === 1 ? 'zona' : 'zonas') + ', ' + res.trabajos + ' trabajos y ' + res.partidas + ' partidas.' + (res.mensaje ? ' ' + res.mensaje : '') + ' Ahora te pregunto lo que falte.');
-    } catch (e) { S.vProcesando = false; render(); toast('No he podido procesar la visita: ' + (e.message || e)); }
+    } catch (e) { S.vProcesando = false; progFin('vproc'); render(); toast('No he podido procesar la visita: ' + (e.message || e)); }
   }
   function viewVisita() {
     const v = S.obra ? visitaDe(S.obra) : { segs: [], notas: [] }, segs = (v.segs || []).filter(Boolean), porEst = v.modo === 'estancias';
@@ -9220,6 +9287,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         if (grabandoNota && notaAct === n) return;
         const ss = (n.segs || []).filter(Boolean), listo = ss.length && ss.every((x) => x.estado === 'ok');
         h += '<div class="card vnota"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b>' + esc(n.nombre) + '</b><span class="hint">' + mmss(n.segundos || 0) + ' · ' + estado(n) + '</span></div>' + reintentos(n, 'n:' + n.id) +
+          ss.filter((x) => x.estado === 'transcribiendo').map((x) => progHTML('seg:n:' + n.id + ':' + x.n, 'Pasando a texto')).join('') +
           (listo ? '<textarea class="vtxt" rows="4" data-nota="' + n.id + '">' + esc(textoVisita(n)) + '</textarea>' : '') +
           (Grab.rec ? '' : '<div class="row"><button class="btn small" data-a="vregrabar" data-id="' + n.id + '">Volver a grabar</button><button class="btn small danger" data-a="vnborrar" data-id="' + n.id + '">Borrar</button></div>') + '</div>';
       });
@@ -9235,13 +9303,14 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       if (Grab.rec && Grab.dest === 'v') h += segs.slice(-3).map((x) => '<p class="vseg">' + (x.estado === 'ok' ? esc(x.texto || '(sin voz)') : '<i>' + esc(x.estado) + '…</i>') + '</p>').join('');
       else {
         const listo = ok === segs.length;
-        h += (listo ? '<p class="hint">Revisa el texto y corrige lo que esté mal antes de procesarlo.</p><textarea id="vtxt" rows="14" class="vtxt">' + esc(textoVisita(v)) + '</textarea>' : '<p class="hint">Transcribiendo… puedes esperar aquí.</p>') +
+        h += (listo ? '<p class="hint">Revisa el texto y corrige lo que esté mal antes de procesarlo.</p><textarea id="vtxt" rows="14" class="vtxt">' + esc(textoVisita(v)) + '</textarea>' : ('<p class="hint">Pasando a texto: puedes esperar aquí.</p>' + segs.filter((x) => x.estado === 'transcribiendo').map((x) => progHTML('seg:v:' + x.n, 'Trozo ' + (x.n + 1))).join(''))) +
           '<div class="row" style="flex-wrap:wrap"><button class="btn primary" data-a="vprocesar"' + (listo && !S.vProcesando ? '' : ' disabled') + '>' + (S.vProcesando ? 'Procesando…' : v.procesada ? 'Volver a procesar' : 'Procesar la visita') + '</button>' +
           (v.procesada ? '' : '<button class="btn" data-a="vgrabar">Seguir grabando</button>') + '<button class="btn danger" data-a="vborrar">Borrar grabación</button></div>';
       }
       h += '</div>';
     }
     if (porEst && v.procesada && !Grab.rec && S.vElegir) h += elegir();
+    if (S.vProcesando) h = '<div class="card">' + progHTML('vproc', 'Procesando') + '</div>' + h;
     // Corrección tras revisar las mediciones
     if (v.procesada && !(Grab.rec && Grab.dest !== 'c')) {
       const c = v.corr, cs = ((c && c.segs) || []).filter(Boolean);
@@ -9254,7 +9323,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
         const okc = cs.filter((x) => x.estado === 'ok').length, listo = okc === cs.length;
         h += reintentos(c, 'c');
         if (Grab.rec && Grab.dest === 'c') h += cs.slice(-2).map((x) => '<p class="vseg">' + (x.estado === 'ok' ? esc(x.texto || '(sin voz)') : '<i>' + esc(x.estado) + '…</i>') + '</p>').join('');
-        else h += (listo ? '<textarea id="ctxt" rows="6" class="vtxt">' + esc(textoVisita(c)) + '</textarea>' : '<p class="hint">Transcribiendo la corrección…</p>') +
+        else h += (listo ? '<textarea id="ctxt" rows="6" class="vtxt">' + esc(textoVisita(c)) + '</textarea>' : ('<p class="hint">Pasando a texto la corrección…</p>' + cs.filter((x) => x.estado === 'transcribiendo').map((x) => progHTML('seg:c:' + x.n, 'Trozo ' + (x.n + 1))).join(''))) +
           '<div class="row" style="flex-wrap:wrap"><button class="btn primary" data-a="vcorrapl"' + (listo && !S.vProcesando ? '' : ' disabled') + '>' + (S.vProcesando ? 'Aplicando…' : 'Aplicar correcciones') + '</button><button class="btn" data-a="vcorr">Seguir grabando</button><button class="btn danger" data-a="vcorrborrar">Descartar</button></div>';
       }
       h += '</div>';
@@ -9736,7 +9805,9 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
       case 'cguardar': certLeerFicha(el.dataset.k); saveObra(); closeSheet(); render(); break;
       case 'csig': certLeerFicha(el.dataset.k); saveObra(); render(); certSiguiente(el.dataset.k); break;
       case 'cexp': exportCert(el.dataset.k); break;
-      case 'open': openObra(el.dataset.id); break;
+      case 'open': S.volverLista = S.view === 'misobras'; openObra(el.dataset.id); break;
+      case 'misobras': S.view = 'misobras'; render(); break;
+      case 'fobras': S.filtroObras = el.dataset.f; render(); break;
       case 'obras': closeSheet(); goObras(); break;
       case 'menu-obra': case 'back2obra': closeSheet(); S.view = 'obra'; render(); break;
       case 'resumen': closeSheet(); S.view = 'resumen'; render(); break;
@@ -9853,7 +9924,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     if (ev.target.id === 'logofile' && ev.target.files[0]) { try { S.settings.logo = await leerLogo(ev.target.files[0]); await saveSettings(); render(); toast('Logo guardado: saldrá en el PDF'); } catch (e) { toast(e.message); } }
   });
   $('#btnHelp').addEventListener('click', () => (S.view === 'manual' ? cerrarManual() : abrirManual()));
-  $('#btnBack').addEventListener('click', () => { if (S.view === 'manual') return cerrarManual(); if (CRec.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && Grab.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && S.vElegir && (visitaDe(S.obra).notas || []).length) { S.vElegir = false; return render(); } if (S.view === 'visita' && Grab.stream) { try { Grab.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} Grab.stream = null; releaseAwake(); } if (S.view === 'obra' || S.view === 'cert' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
+  $('#btnBack').addEventListener('click', () => { if (S.view === 'manual') return cerrarManual(); if (CRec.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && Grab.rec) return toast('Termina la grabación antes de salir (botón «Terminar»).'); if (S.view === 'visita' && S.vElegir && (visitaDe(S.obra).notas || []).length) { S.vElegir = false; return render(); } if (S.view === 'visita' && Grab.stream) { try { Grab.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} Grab.stream = null; releaseAwake(); } if (S.view === 'misobras') { S.view = 'obras'; render(); } else if (S.view === 'obra' || S.view === 'cert' || !S.obra) goObras(); else if (S.view === 'trabajos') { S.view = 'obra'; render(); } else { S.view = 'obra'; render(); } });
   $('#btnMenu').addEventListener('click', menuSheet);
   $('#btnSol').addEventListener('click', () => { S.settings.mode = S.settings.mode === 'sol' ? 'obra' : 'sol'; saveSettings(); render(); });
   $('#btnDock').addEventListener('click', () => { S.settings.dockMin = !S.settings.dockMin; saveSettings(); renderMic(); });
@@ -9872,7 +9943,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
     else VoiceAdapter.listen(true);
   });
   $('#btnStart').addEventListener('click', () => startSession());
-  function goObras() { S.greetPending = false; S.session = false; S.ended = false; releaseAwake(); VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); sayToken++; S.view = 'obras'; render(); }
+  function goObras() { S.greetPending = false; S.session = false; S.ended = false; releaseAwake(); VoiceAdapter.stopSpeaking(); VoiceAdapter.stopListening(); sayToken++; S.view = S.volverLista && S.view !== 'misobras' ? 'misobras' : 'obras'; S.volverLista = false; render(); }
 
   /* ---- Importación de BC3 ---- */
   async function importBC3(file) {
@@ -10204,7 +10275,7 @@ window.MEDICIONA_CLOUD = { url: "https://jdkgowutdtlaitszckjo.supabase.co", anon
           syncNow();
           if (Cloud.isAdmin && !S.sgNotified) Cloud.newSuggestions().then((n) => { S.sgNew = n; if (n) { S.sgNotified = true; toast(n === 1 ? 'Tienes 1 sugerencia nueva' : 'Tienes ' + n + ' sugerencias nuevas', false, { label: 'Ver', fn: () => { S.view = 'admin'; S.adminTab = 'sugerencias'; S.adminData = null; render(); loadAdmin(); } }); } render(); }).catch(() => {});
         }
-        if (S.view === 'obras' || S.view === 'ajustes') render();
+        if (S.view === 'obras' || S.view === 'misobras' || S.view === 'ajustes') render();
       });
       window.addEventListener('online', () => { syncNow(); if (S.view === 'obras') render(); });
       window.addEventListener('offline', () => { if (S.view === 'obras') render(); });

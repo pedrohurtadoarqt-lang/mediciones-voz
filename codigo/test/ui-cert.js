@@ -12,7 +12,7 @@ const { chromium } = require('playwright'), path = require('path');
   console.log('Medir → vista:', await pg.evaluate(() => document.querySelector('#title, header h1, .title') ? document.body.innerText.slice(0, 80).replace(/\n/g, ' | ') : ''));
   await pg.click('#btnBack'); await pg.waitForTimeout(300); if (await pg.$('#btnBack:not([hidden])')) { await pg.click('#btnBack'); await pg.waitForTimeout(300); }
   // Certificación
-  await pg.click('[data-a="inicio-cert"]'); await pg.setInputFiles('#cfile', path.resolve(process.argv[3])); await pg.fill('#fcli', 'Cliente X'); await pg.click('#cgo'); await pg.waitForTimeout(800);
+  await pg.click('[data-a="inicio-cert"]'); await pg.setInputFiles('#cfile', path.resolve(process.argv[3])); await pg.fill('#fcli', 'Cliente X'); await pg.click('#cgo'); await pg.waitForTimeout(250); console.log('Progreso al cargar:', await pg.evaluate(() => { const p = document.querySelector('.prog'); return p ? p.textContent : '(ya cargado)'; })); await pg.waitForTimeout(1500);
   await sc('k_cert');
   await pg.click('.capdesp >> nth=0 >> summary'); await pg.click('[data-a="cpart"] >> nth=0'); await pg.waitForTimeout(200);
   // Medición del presupuesto: marcar líneas ejecutadas
@@ -41,14 +41,20 @@ const { chromium } = require('playwright'), path = require('path');
   console.log('Totales:', (await pg.textContent('.certnums')).replace(/\s+/g, ' '));
   await pg.click('[data-a="cnueva"]'); await pg.click('text=Nueva certificación >> nth=-1'); await pg.waitForTimeout(300);
   console.log('Tras nueva:', (await pg.textContent('.certtot h3')), (await pg.textContent('.certnums')).replace(/\s+/g, ' '));
-  for (const k of ['pdf', 'xlsx', 'bc3']) {
+  console.log('Botón BC3 en certificación:', !!(await pg.$('[data-a="cexp"][data-k="bc3"]')));
+  for (const k of ['pdf', 'xlsx']) {
     const [d] = await Promise.all([pg.waitForEvent('download', { timeout: 5000 }).catch(() => null), pg.click('[data-a="cexp"][data-k="' + k + '"]')]);
     if (d) { const f = path.join(__dirname, 'k_out.' + k); await d.saveAs(f); console.log('Descarga', k, d.suggestedFilename(), require('fs').statSync(f).size, 'bytes'); } else console.log('Sin descarga', k);
     await pg.waitForTimeout(300);
   }
   await sc('k_cert2');
   await pg.click('#btnBack'); await pg.waitForTimeout(300); await sc('k_inicio2');
+  console.log('Inicio:', (await pg.textContent('.inicio')).replace(/\s+/g, ' '), '|', (await pg.textContent('[data-a="misobras"]')).replace(/\s+/g, ' '));
+  await pg.click('[data-a="misobras"]'); await pg.waitForTimeout(300); await sc('k_misobras');
   console.log('Lista:', (await pg.textContent('.obralist')).replace(/\s+/g, ' '));
+  await pg.click('[data-a="fobras"][data-f="cert"]'); await pg.waitForTimeout(200); console.log('Filtro cert:', await pg.$$eval('.obrarow', (x) => x.length));
+  await pg.click('.obraopen >> nth=0'); await pg.waitForTimeout(400); await pg.click('#btnBack'); await pg.waitForTimeout(300);
+  console.log('Al volver de la obra:', await pg.evaluate(() => !!document.querySelector('.obralist') ? 'Tus obras' : 'inicio'));
   console.log('Errores:', errs.length ? errs : 'ninguno');
   await b.close();
 })();
