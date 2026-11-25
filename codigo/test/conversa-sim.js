@@ -5,7 +5,7 @@ const base = B.parseBC3(fs.readFileSync(process.env.BC3), 'Palma');
 const ya = new Set(base.partidas.map((p) => p.c));
 JSON.parse(fs.readFileSync(__dirname + '/../src/partidas-extra.json', 'utf8')).forEach((p) => { if (!ya.has(p.c)) base.partidas.push(p); });
 const cat = E.prepareCatalog(base);
-const ZV = { ref: '', ambito: 'interior', nombre: '', borrar: false, largo: null, ancho: null, superficie: null, perimetro: null, tramos: [], altura: null, huecos_modo: '', huecos: [], cub_tipo: '', remonte: null, pendiente: null, faldones: [], prof_min: null, prof_max: null, fon_tipo: '', agua_fria: null, agua_fria_caliente: null, inodoro: '', ducha: '', mampara: '', bide: '', lavadora: '', lavavajillas: '', cuadro: '', puntos_luz: null, tomas: null, segun_norma: '', horno: '' };
+const ZV = { ref: '', ambito: 'interior', nombre: '', borrar: false, largo: null, ancho: null, superficie: null, perimetro: null, tramos: [], altura: null, huecos_modo: '', descontar: '', huecos: [], cub_tipo: '', remonte: null, pendiente: null, faldones: [], prof_min: null, prof_max: null, fon_tipo: '', agua_fria: null, agua_fria_caliente: null, inodoro: '', ducha: '', mampara: '', bide: '', lavadora: '', lavavajillas: '', cuadro: '', puntos_luz: null, tomas: null, segun_norma: '', horno: '' };
 const TV = { id: '', codigo: '', buscar: '', unidad: '', ambito: '', zonas: [], quitar: false, medidas: [] };
 const completa = (r) => Object.assign({ zonas: [], trabajos: [], contenedores: null, seguridad_pct: null, accion: '', mensaje: '', pregunta: null, opciones: [] }, r, {
   zonas: (r.zonas || []).map((z) => Object.assign({}, ZV, z)), trabajos: (r.trabajos || []).map((t) => Object.assign({}, TV, t))

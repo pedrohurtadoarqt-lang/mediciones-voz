@@ -419,29 +419,40 @@
       lavadora: f.lavadora ? 1 : 0, lavavajillas: f.lavavajillas ? 1 : 0
     };
   }
+  /** ¿Se descuentan los huecos de esta zona? Lo dicho para la zona manda; si no, lo elegido para la obra (por defecto, sí). */
+  const descuenta = (z, obra) => (z.descontar === true || z.descontar === false ? z.descontar : !(obra && obra.descontarHuecos === false));
+  /** «No los descuentes», «sin descontar» / «descuéntalos». Devuelve { valor, resto } (valor null si no se dice nada). */
+  function dichoDescontar(text) {
+    const NO = /,?\s*(?:y\s+)?(?:no\s+(?:quiero\s+|hay\s+que\s+|se\s+|vamos\s+a\s+|me\s+)?(?:descont\w*|descuent\w*|rest\w*|deduc\w*)|sin\s+descontar\w*|no\s+l[oa]s\s+(?:descuentes|restes))[^,.;]*/i;
+    const SI = /,?\s*(?:y\s+)?(?:descu[eé]nta(?:l[oa]s)?|desc[oó]nta(?:l[oa]s)?|que se descuenten|descontar(?:l[oa]s)?|r[eé]sta(?:l[oa]s)?)\b[^,.;]*/i;
+    const n = norm(text);
+    if (/\b(no (quiero |hay que |se |vamos a |me )?(descont|descuent|rest|deduc)\w*|sin descontar|no l[oa]s (descuentes|restes))/.test(n)) return { valor: false, resto: text.replace(NO, '').trim() };
+    if (/\b(descuentalos|descuentalas|descontalas|descontalos|que se descuenten|descontarlas|descontarlos|restalas|restalos)\b/.test(n)) return { valor: true, resto: text.replace(SI, '').trim() };
+    return { valor: null, resto: text };
+  }
   const REGLAS = {
     suelo: (z) => (z.area ? [Object.assign(L('Superficie según planta', 1, z.area), { dePlanta: 'superficie' })] : []),
     techo: (z) => (z.area ? [Object.assign(L('Techo, superficie según planta', 1, z.area), { dePlanta: 'superficie' })] : []),
-    paredes: (z) => {
+    paredes: (z, w, obra) => {
       if (!z.perimetro) return [];
       const out = [Object.assign(L('Perímetro por altura', 1, z.perimetro, null, z.altura || null), { dePlanta: 'perimetro', hPend: !z.altura })];
-      if (z.altura) huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); }); // sin altura aún no se descuenta (saldría negativo)
+      if (z.altura && descuenta(z, obra)) huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); }); // sin altura aún no se descuenta (saldría negativo)
       return out;
     },
-    rodapie: (z) => {
+    rodapie: (z, w, obra) => {
       if (!z.perimetro) return [];
       const out = [Object.assign(L('Perímetro', 1, z.perimetro), { dePlanta: 'perimetro' })];
-      huecosDe(z, 'puerta').forEach((x) => { if (x.an) out.push(L('Deducción ' + (x.bal ? 'balconera' : 'puerta'), -Math.abs(x.uds || 1), x.an)); });
+      if (descuenta(z, obra)) huecosDe(z, 'puerta').forEach((x) => { if (x.an) out.push(L('Deducción ' + (x.bal ? 'balconera' : 'puerta'), -Math.abs(x.uds || 1), x.an)); });
       return out;
     },
     perimetro: (z) => (z.perimetro ? [Object.assign(L('Perímetro', 1, z.perimetro), { dePlanta: 'perimetro' })] : []),
     ud_zona: (z) => [L(z.nombre, 1)],
     ud_puertas: (z) => { const n = huecosDe(z, 'puerta').reduce((a, x) => a + (x.uds || 1), 0); return n ? [L('Puertas', n)] : []; },
     ud_ventanas: (z) => { const n = huecosDe(z, 'ventana').reduce((a, x) => a + (x.uds || 1), 0); return n ? [L('Ventanas', n)] : []; },
-    fachada: (z) => {
+    fachada: (z, w, obra) => {
       if (!z.ancho || !z.alto) return [];
       const out = [L('Fachada', 1, z.ancho, null, z.alto)];
-      if (z.descontar !== false) (z.ventanas || []).forEach((v, i) => { if (v.an && v.al) out.push(L('Deducción ventana tipo ' + (i + 1), -Math.abs(v.uds || 1), v.an, null, v.al)); });
+      if (descuenta(z, obra)) (z.ventanas || []).forEach((v, i) => { if (v.an && v.al) out.push(L('Deducción ventana tipo ' + (i + 1), -Math.abs(v.uds || 1), v.an, null, v.al)); });
       return out;
     },
     fachada_bruta: (z) => (z.ancho && z.alto ? [L('Fachada', 1, z.ancho, null, z.alto)] : []),
@@ -1008,7 +1019,10 @@
         const r = raw && raw.result ? raw.result : raw;
         const txt = respuestaIA(r);
         if (!txt) return r && r.pregunta ? this.ask(r.pregunta, (r.opciones || []).slice(0, 4).map((o) => ({ label: cap(o), value: o })).concat(q.c || []).slice(0, 6)) : fallback();
-        return this.ejecutarIntencion(txt, s, text) || fallback();
+        // null = no se pudo; cualquier otra cosa (también undefined, lo que devuelve ask) = resuelto
+        const res = this.ejecutarIntencion(txt, s, text);
+        if (res === null) fallback();
+        return res;
       }).catch(() => { clearTimeout(timer); fallback(); });
     }
     ejecutarIntencion(txt, s, original) {
@@ -1563,13 +1577,32 @@
       if (h.length) return { t: '¿Alguna puerta o ventana más?', c: CH(['No, ninguna más', 'Otra igual']) };
       // (también vale «la ventana igual que el salón»)
       const prevH = this.toma.zonas.filter((x) => x.ambito === 'interior' && x.id !== d.zid && (x.huecos || []).length).pop();
-      return { t: (z.huecosMencion ? 'Me has dicho que hay huecos. ' : '') + '¿Tiene puertas o ventanas? Dímelas con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «dos ventanas de 1,20 por 1,10»' + (prevH ? ', o «iguales que ' + art(prevH.nombre) + '»' : '') + '. Se descontarán de las paredes.', c: CH(['Ninguna'].concat(prevH ? [{ label: 'Iguales que ' + prevH.nombre, value: 'iguales que ' + prevH.nombre }] : []).concat(['Una puerta de 0,82 por 2,03'])) };
+      return { t: (z.huecosMencion ? 'Me has dicho que hay huecos. ' : '') + '¿Tiene puertas o ventanas? Dímelas con sus medidas, por ejemplo «una puerta de 0,82 por 2,03» o «dos ventanas de 1,20 por 1,10»' + (prevH ? ', o «iguales que ' + art(prevH.nombre) + '»' : '') + '. Se descontarán de las paredes; si no quieres, dime «sin descontar».', c: CH(['Ninguna'].concat(prevH ? [{ label: 'Iguales que ' + prevH.nombre, value: 'iguales que ' + prevH.nombre }] : []).concat(['Una puerta de 0,82 por 2,03'])) };
     },
     ayuda: () => 'Dime cada hueco así: «una puerta de 0,82 por 2,03» o «dos ventanas de 1,20 por 1,10». Si son como los de otra estancia: «la puerta y la ventana iguales que el salón». Si no hay ninguno, di «ninguna».',
     formato: () => 'cada hueco como «N puertas de ANCHO por ALTO» o «N ventanas de ANCHO por ALTO» separados por « y »; o «ninguna» si no hay',
     saltar(d) { return this.siguienteEstancia(d); },
     a(text, n, input, d) {
       const z = this.zona(d.zid); z.huecos = z.huecos || [];
+      // ¿Se descuentan? («una puerta de 0,70 por 2 y una ventana… no quiero descontarlas»)
+      const dd = dichoDescontar(text);
+      if (dd.valor !== null) {
+        z.descontar = dd.valor; this.save();
+        const msg = dd.valor ? 'Vale, los huecos se descuentan de las paredes.' : 'Vale, no descuento los huecos de ' + art(z.nombre) + '.';
+        if (!norm(dd.resto).replace(/\b(y|pero|vale|bueno)\b/g, '').trim()) return this.repetir(msg);
+        this._notaDesc = msg; try { return P.est_huecos.a.call(this, dd.resto, norm(dd.resto), input, d); } finally { this._notaDesc = ''; }
+      }
+      // «Solo hay una de cada», «quita todas y deja una de cada», «has anotado dos y solo hay una»
+      if (!d.pend && z.huecos.length && /(una de cada|uno de cada|solo hay (una|un|uno)\b|solamente hay (una|un|uno)\b|sobra|de mas|duplicad|repetid|has anotado|me has puesto)/.test(n)) {
+        const vistos = new Set();
+        z.huecos = z.huecos.filter((x) => { const k = x.bal ? 'balconera' : x.tipo; if (vistos.has(k)) return false; vistos.add(k); return true; }).map((x) => Object.assign({}, x, { uds: 1 }));
+        this.save();
+        return this.repetir('Vale, dejo ' + z.huecos.map((x) => '1 ' + (x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(' y ') + '.');
+      }
+      if (!d.pend && /^(quita|borra|elimina|olvida)\b.*\b(todas|todos|las puertas|las ventanas|los huecos)\b/.test(n) && !parseHuecos(text).some((x) => x.an)) {
+        z.huecos = []; this.save();
+        return this.ask('Vale, borro las puertas y ventanas ' + deArt(z.nombre) + '. Dímelas otra vez con sus medidas, o «ninguna».', CH(['Ninguna']));
+      }
       if (d.pend && /^(cero|0)$|(no es ninguna|no hay|no es una|ninguna ventana|ninguna puerta|elimina|quita|borra|olvida|no existe|no la|no lo|cancela|eso no es)/.test(n)) {
         const cola = (d.cola || []).slice(); this.g.d = cola.length ? { zid: d.zid, pend: cola[0], cola: cola.slice(1) } : { zid: d.zid }; this.save();
         return this.repetir('Vale, quito ' + (d.pend.tipo === 'puerta' ? 'esa puerta' : 'esa ventana') + '.');
@@ -1610,11 +1643,16 @@
       }
       let notaAlto = '';
       hs.forEach((x) => { if (x.tipo === 'puerta' && x.an && !x.al) { x.al = 2.03; notaAlto = ' A las puertas sin alto les pongo 2,03.'; } });
+      // Repite los mismos huecos que ya están anotados (sin «otra» o «además»): no se duplican
+      const igual = (a, b) => a.tipo === b.tipo && !!a.bal === !!b.bal && Math.abs((a.an || 0) - (b.an || 0)) < 0.011 && Math.abs((a.al || 0) - (b.al || 0)) < 0.011;
+      if (z.huecos.length && hs.every((x) => x.an && x.al && z.huecos.some((y) => igual(x, y))) && !/\b(otra|otro|otras|otros|ademas|tambien|mas)\b/.test(n)) {
+        return this.repetir('Ya lo tenía anotado: ' + z.huecos.map((x) => fmtUds(x.uds) + ' ' + plural(x.uds, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(' y ') + '.' + (this._notaDesc ? ' ' + this._notaDesc : ''));
+      }
       const sinMedida = hs.filter((x) => !(x.an && x.al));
       hs.filter((x) => x.an && x.al).forEach((x) => z.huecos.push(x));
       this.save();
       const hechos = hs.filter((x) => x.an && x.al);
-      const pre = (hechos.length ? 'Anotado: ' + hechos.map((x) => fmtUds(x.uds) + ' ' + plural(x.uds, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(', ') + '.' : '') + notaAlto;
+      const pre = (hechos.length ? 'Anotado: ' + hechos.map((x) => fmtUds(x.uds) + ' ' + plural(x.uds, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(', ') + '.' : '') + notaAlto + (this._notaDesc ? ' ' + (z.descontar === false ? 'Sin descontarlos de las paredes.' : 'Se descuentan de las paredes.') : '');
       if (sinMedida.length) { this.g.d = { zid: d.zid, pend: sinMedida[0], cola: sinMedida.slice(1) }; return this.repetir(pre.trim()); }
       if (hechos.length) return this.repetir(pre.trim());
       return this.repetir('Anotado: ' + hs.map((x) => fmtUds(x.uds) + ' ' + plural(x.uds, x.bal ? 'balconera' : x.tipo) + ' de ' + fmt(x.an) + ' por ' + fmt(x.al)).join(' y ') + '.');
@@ -1622,9 +1660,10 @@
   };
   Guia.prototype.siguienteEstancia = function (d) {
     const z = this.zona(d.zid);
-    const ded = (z.huecos || []).reduce((a, x) => a + (x.uds || 1) * (x.an || 0) * (x.al || 0), 0);
+    const desc = descuenta(z, this.obra), hay = (z.huecos || []).length;
+    const ded = desc ? (z.huecos || []).reduce((a, x) => a + (x.uds || 1) * (x.an || 0) * (x.al || 0), 0) : 0;
     const paredes = z.perimetro && z.altura ? round2(z.perimetro * z.altura - ded) : null;
-    const res = 'Resumen ' + (z.nombre ? (art(z.nombre).startsWith('el ') ? 'del ' + art(z.nombre).slice(3) : 'de ' + art(z.nombre)) : '') + ': suelo ' + fmt(z.area) + ' metros cuadrados' + (paredes != null ? ', paredes ' + fmt(paredes) + ' descontando huecos' : '') + '.';
+    const res = 'Resumen ' + (z.nombre ? (art(z.nombre).startsWith('el ') ? 'del ' + art(z.nombre).slice(3) : 'de ' + art(z.nombre)) : '') + ': suelo ' + fmt(z.area) + ' metros cuadrados' + (paredes != null ? ', paredes ' + fmt(paredes) + (hay ? (desc ? ' descontando huecos' : ' sin descontar huecos') : '') : '') + '.';
     if (this.g.tipo === 'estancia' && !this.g.masEst) return this.say('est_mas', {}, res);
     return this.say('est_mas', {}, res);
   };
@@ -2372,7 +2411,7 @@
     }
   };
 
-  const api = { Guia, numeros, corregirFrase, versionesPalabra, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
+  const api = { Guia, numeros, dichoDescontar, descuenta, corregirFrase, versionesPalabra, detectarIncidencia, anotarIncidencia, incPartidas, anadirPropia, borrarZona, buscarZona, puertasPaso, TRABAJOS, REGLA_LABEL, REGLAS_AMBITO, reglaPara, anadirExtra, resolverDoc, CAP_ORDEN, AMBITO_LABEL, REGLAS, trabajosPara, zonasDe, seleccion, generar, parseWalk, parseHuecos, dims2, rebt, respuestaIA, yesNo, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Guia = api;
 })(typeof self !== 'undefined' ? self : this);

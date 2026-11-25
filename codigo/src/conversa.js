@@ -362,6 +362,7 @@
       if (z.altura) d.push('altura ' + f(z.altura));
       if (z.ambito === 'fachada') { if (z.ancho) d.push('ancho ' + f(z.ancho)); if (z.alto) d.push('alto ' + f(z.alto)); }
       (z.huecos || []).forEach((h) => d.push(h.uds + ' ' + (h.bal ? 'balconera' : h.tipo) + ' ' + (h.an ? f(h.an) : '?') + ' × ' + (h.al ? f(h.al) : '?')));
+      if (((z.huecos || []).length || (z.ventanas || []).length) && G.descuenta && !G.descuenta(z, this.obra)) d.push('sin descontar huecos');
       (z.ventanas || []).forEach((v) => d.push(v.uds + ' ventana ' + f(v.an) + ' × ' + f(v.al)));
       if (z.tipo) d.push(z.tipo);
       if (z.remonte) d.push('remonte ' + f(z.remonte));
@@ -516,8 +517,15 @@
         const nh = (this.nums || []).filter((v) => v > 0.5 && v < 15);
         if (h && !this.textoLargo && /(altura|alto|techo)/.test(this.textoN || '') && nh.length === 1 && !near(h, nh[0])) h = nh[0];
         if (h) { z.altura = h; c.push('altura ' + fmt(h)); }
+        // ¿Se descuentan los huecos? Lo dicho en la frase manda sobre lo que entienda la IA
+        let desc = zr.descontar === 'no' ? false : zr.descontar === 'si' ? true : null;
+        const dl = G.dichoDescontar ? G.dichoDescontar(this.textoOrig || '').valor : null; if (dl !== null) desc = dl;
+        if (desc !== null && desc !== (z.descontar === undefined ? null : z.descontar)) { z.descontar = desc; c.push(desc ? 'los huecos se descuentan' : 'sin descontar los huecos'); }
         const hs = (zr.huecos || []).map((x) => ({ tipo: x.tipo === 'ventana' ? 'ventana' : 'puerta', bal: x.tipo === 'balconera', uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) || (x.tipo === 'puerta' ? 2.03 : null) }));
         const niega = /\b(no hay|no tiene|ninguna|ninguno|sin (puertas|ventanas|huecos)|ni puertas|ni ventanas)\b/.test(this.textoN || '');
+        // Si repite los mismos huecos que ya están anotados (sin decir «otra» o «además»), no se duplican
+        const igual = (a, b) => a.tipo === b.tipo && !!a.bal === !!b.bal && near(a.an || 0, b.an || 0) && near(a.al || 0, b.al || 0);
+        if (zr.huecos_modo !== 'reemplazar' && hs.length && (z.huecos || []).length && hs.every((x) => (z.huecos || []).some((y) => igual(x, y))) && !/\b(otra|otro|otras|otros|ademas|tambien|mas)\b/.test(this.textoN || '')) zr.huecos_modo = 'reemplazar';
         if (hs.length || (zr.huecos_modo === 'reemplazar' && niega)) {
           z.huecos = zr.huecos_modo === 'reemplazar' ? hs : (z.huecos || []).concat(hs);
           z.huecosOk = true;
@@ -535,7 +543,7 @@
         if (an) z.ancho = an; if (al) z.alto = al;
         if (an || al) c.push((z.ancho ? fmt(z.ancho) : '?') + ' por ' + (z.alto ? fmt(z.alto) : '?'));
         const vs = (zr.huecos || []).filter((x) => x.tipo !== 'puerta').map((x) => ({ uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) })).filter((v) => v.an && v.al);
-        if (vs.length || zr.huecos_modo === 'reemplazar') { z.ventanas = zr.huecos_modo === 'reemplazar' ? vs : (z.ventanas || []).concat(vs); z.descontar = true; z.huecosOk = true; const nv = vs.reduce((a, v) => a + v.uds, 0); if (nv) c.push(nv + ' ' + plural(nv, 'ventana')); }
+        if (vs.length || zr.huecos_modo === 'reemplazar') { z.ventanas = zr.huecos_modo === 'reemplazar' ? vs : (z.ventanas || []).concat(vs); z.huecosOk = true; const nv = vs.reduce((a, v) => a + v.uds, 0); if (nv) c.push(nv + ' ' + plural(nv, 'ventana')); }
       }
       if (amb === 'cubierta') {
         if (zr.cub_tipo) z.tipo = zr.cub_tipo;

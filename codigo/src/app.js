@@ -862,6 +862,7 @@
       '<div class="row"><button class="btn' + (S.settings.plan === 'demo' ? ' primary' : '') + '" data-a="plan" data-p="demo">Demo</button><button class="btn' + (S.settings.plan === 'pro' ? ' primary' : '') + '" data-a="plan" data-p="pro">Pro (simulado)</button></div>' +
       (S.obra ? '<div class="row"><button class="btn" data-a="unlock"' + (S.obra.unlocked ? ' disabled' : '') + '>' + (S.obra.unlocked ? 'Obra actual desbloqueada' : 'Desbloquear obra actual (simulado)') + '</button></div>' : '') + '</div>';
     return planCard +
+      '<div class="card"><h3>Mediciones</h3><label class="row" style="gap:10px"><input type="checkbox" id="chkdesc"' + (S.settings.descontarHuecos !== false ? ' checked' : '') + '> Descontar puertas y ventanas en las obras nuevas</label><p class="hint">Se puede cambiar en cada estancia (tocando ✎) o diciéndolo: «sin descontar los huecos».</p></div>' +
       '<div class="card"><h3>Voz</h3><div class="meta">Reconocimiento: ' + ({ native: 'del navegador (es-ES)', claude: 'dictado de Claude', none: 'no disponible, usa el teclado' }[VoiceAdapter.mode]) + '.</div>' +
       '<label class="row" style="gap:10px"><input type="checkbox" id="chkvozn"' + (S.settings.vozNatural !== false ? ' checked' : '') + '> Voz natural (más humana; necesita cuenta y conexión, si tarda usa la del móvil)</label>' +
       '<div class="field"><label for="selvozn">Voz natural</label><select id="selvozn">' + [['Kore', 'Mujer, firme'], ['Aoede', 'Mujer, ligera'], ['Leda', 'Mujer, juvenil'], ['Zephyr', 'Mujer, clara'], ['Puck', 'Hombre, animado'], ['Charon', 'Hombre, informativo'], ['Fenrir', 'Hombre, enérgico'], ['Orus', 'Hombre, firme']].map(([v, l]) => '<option value="' + v + '"' + ((S.settings.vozNombre || 'Kore') === v ? ' selected' : '') + '>' + l + ' (' + v + ')</option>').join('') + '</select></div>' +
@@ -909,7 +910,7 @@
     setTimeout(() => { const i = $('#ftit'); i && i.focus(); }, 50);
     $('#fnew').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const o = { id: 'obra_' + Date.now().toString(36), titulo: $('#ftit').value.trim() || 'Obra sin nombre', cliente: $('#fcli').value.trim(), ubicacion: $('#fubi').value.trim(), ambito: null, estActiva: '', estancias: [], partidas: [], activa: null, catalogo: S.settings.catalogo, created: Date.now(), updated: Date.now() };
+      const o = { id: 'obra_' + Date.now().toString(36), titulo: $('#ftit').value.trim() || 'Obra sin nombre', cliente: $('#fcli').value.trim(), ubicacion: $('#fubi').value.trim(), ambito: null, estActiva: '', estancias: [], partidas: [], activa: null, catalogo: S.settings.catalogo, created: Date.now(), updated: Date.now(), descontarHuecos: S.settings.descontarHuecos !== false };
       S.obras.push(o); await StorageAdapter.put('obras', o);
       const modo = S.nuevoModo; o.modo = modo;
       closeSheet(); await openObra(o.id);
@@ -1785,7 +1786,7 @@
       '<div class="field"><label for="zn">Nombre</label><input id="zn" value="' + esc(z.nombre) + '"></div>' +
       (conPlanta ? '<div class="field"><label for="zm">Medidas (como las dirías)</label><input id="zm" value="' + esc(medidas) + '" placeholder="4 por 3 · o 2 derecha, 1 izquierda, 1 derecha…"></div>' : '') +
       (z.ambito === 'interior' ? '<div class="field"><label for="za">Altura</label><input id="za" inputmode="decimal" value="' + f(z.altura) + '"></div>' +
-        '<div class="field"><label for="zh">Puertas y ventanas</label><input id="zh" value="' + esc(huecos) + '" placeholder="1 puerta de 0,80 por 2,03 y 1 ventana de 1,20 por 1,20 · o «ninguna»"></div>' : '') +
+        '<div class="field"><label for="zh">Puertas y ventanas</label><input id="zh" value="' + esc(huecos) + '" placeholder="1 puerta de 0,80 por 2,03 y 1 ventana de 1,20 por 1,20 · o «ninguna»"></div>' + '<label class="row checkline" style="gap:10px"><input type="checkbox" id="zdesc"' + (Guia.descuenta(z, S.obra) ? ' checked' : '') + '> Descontar puertas y ventanas de las paredes y del rodapié</label>' : '') +
       (z.ambito === 'piscina' ? '<div class="field"><label for="zp">Profundidad (menor y mayor)</label><input id="zp" value="' + (z.prof ? f(z.pmin) + (z.pmin !== z.pmax ? ' y ' + f(z.pmax) : '') : '') + '"></div>' : '') +
       (z.ambito === 'fachada' ? '<div class="grid2"><div class="field"><label for="zfa">Ancho</label><input id="zfa" inputmode="decimal" value="' + f(z.ancho) + '"></div><div class="field"><label for="zfl">Alto</label><input id="zfl" inputmode="decimal" value="' + f(z.alto) + '"></div></div>' : '') +
       '<p class="hint">Al guardar se recalculan todas las mediciones de esta zona.</p>' +
@@ -1806,6 +1807,7 @@
       const al = num('za'); if (al) z.altura = al >= 5 ? al / 100 : al;
       const zh = $('#zh');
       if (zh) { const t = zh.value.trim(); if (!t || /^(no|ninguna|ninguno|sin)/i.test(t)) z.huecos = []; else { const hs = Guia.parseHuecos(t); if (hs.length) z.huecos = hs.map((x) => ({ tipo: x.tipo, uds: x.uds || 1, an: x.an, al: x.al, bal: !!x.bal })); } z.huecosOk = true; }
+      const zd = $('#zdesc'); if (zd && zd.checked !== Guia.descuenta(z, S.obra)) z.descontar = zd.checked;
       const zp = $('#zp'); if (zp && zp.value.trim()) { const v = Guia.numeros(zp.value).map((x) => (x >= 5 ? x / 100 : x)); if (v.length) { z.pmin = Math.min(...v); z.pmax = Math.max(...v); z.prof = Math.round((z.pmin + z.pmax) * 50) / 100; } }
       const fa = num('zfa'), fl = num('zfl'); if (fa) z.ancho = fa; if (fl) z.alto = fl;
       if (C && C.activo) C.regenerar(); else if (S.obra.partidas.some((p) => p.guia)) Guia.generar(S.obra, catFor(S.obra));
@@ -2202,7 +2204,7 @@
       case 'goto': if (dialog.conversa && dialog.conversa.activo) { S.obra.activa = el.dataset.uid; saveObra(); render(); break; } S.obra.activa = el.dataset.uid; S.view = 'obra'; saveObra(); render(); { const p = dialog.active(); dialog.state = { mode: 'idle' }; say('Partida ' + p.r + '. Total ' + E.fmt(E.totalOf(p)) + ' ' + E.unitSpoken(p.u) + '. ' + E.dimsSpec(p).ask, dialog.idleChips()); } break;
       case 'fest': S.filterEst = el.dataset.e; render(); break;
       case 'logodel': S.settings.logo = ''; await saveSettings(); render(); break;
-      case 'guiada': if (dialog.conversa && dialog.conversa.activo) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; render(); dialog.conversa.aGuiado(); } else if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; dialog.guia.start(); render(); } break;
+      case 'guiada': if (dialog.conversa && dialog.conversa.activo) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; render(); const C = dialog.conversa; if (C.aiOk && !C.aiOk()) C.aGuiado(); else { C.g.cLibre = false; C.save(); C.siguiente('Vale, te pregunto yo.'); } } else if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } S.view = 'obra'; dialog.guia.start(); render(); } break;
       case 'trabajos': if (dialog.conversa && dialog.conversa.activo) { S.view = 'trabajos'; render(); break; } if (dialog.guia) { if (!S.session && !S.ended) { VoiceAdapter.unlock(); S.session = true; } dialog.guia.abrirTrabajos(); } break;
       case 'tw': { const sel = Guia.seleccion(S.obra); const s = sel[el.dataset.id]; if (s) { s.on = !s.on; s.todas = false; s.manual = true; if (s.on && !s.zonas.length) { const w = Guia.trabajosPara(S.obra).find((x) => x.id === el.dataset.id); s.zonas = Guia.zonasDe(S.obra, w).map((z) => z.id); } } saveObra(); render(); break; }
       case 'tz': { const s = Guia.seleccion(S.obra)[el.dataset.id]; const z = el.dataset.z; if (s) { s.todas = false; s.manual = true; s.zonas = s.zonas.includes(z) ? s.zonas.filter((x) => x !== z) : s.zonas.concat([z]); if (!s.zonas.length) s.on = false; } saveObra(); render(); break; }
@@ -2260,6 +2262,7 @@
     if (ev.target.id === 'vtxt' && S.obra && S.obra.visita) { S.obra.visita.texto = ev.target.value; saveObra(); }
     if (ev.target.dataset && ev.target.dataset.nota && S.obra && S.obra.visita) { const n = (S.obra.visita.notas || []).find((x) => x.id === ev.target.dataset.nota); if (n) { n.texto = ev.target.value; saveObra(); } }
     if (ev.target.id === 'ctxt' && S.obra && S.obra.visita && S.obra.visita.corr) { S.obra.visita.corr.texto = ev.target.value; saveObra(); }
+    if (ev.target.id === 'chkdesc') { S.settings.descontarHuecos = ev.target.checked; saveSettings(); }
     if (ev.target.id === 'chkvozn') { S.settings.vozNatural = ev.target.checked; saveSettings(); configurarVoz(); VoiceAdapter.speak('Así sueno ahora.'); }
     if (ev.target.id === 'selvozn') { S.settings.vozNombre = ev.target.value; saveSettings(); configurarVoz(); VoiceAdapter.speak('Hola, así suena esta voz. ¿Seguimos midiendo?'); }
     if (ev.target.id === 'selvoice') { S.settings.voice = ev.target.value; VoiceAdapter.setVoice(ev.target.value); saveSettings(); VoiceAdapter.speak('Así sueno ahora.'); }

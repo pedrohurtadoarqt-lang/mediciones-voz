@@ -20,6 +20,7 @@
       tramos: { type: 'array', items: { type: 'object', properties: { largo: { type: 'number' }, giro: { type: 'string', enum: ['izquierda', 'derecha', ''] }, angulo: { type: 'number' } }, required: ['largo', 'giro', 'angulo'], additionalProperties: false } },
       altura: NUM,
       huecos_modo: { type: 'string', enum: ['', 'anadir', 'reemplazar'] },
+      descontar: { type: 'string', enum: ['', 'si', 'no'] },
       huecos: { type: 'array', items: { type: 'object', properties: { tipo: { type: 'string', enum: ['puerta', 'ventana', 'balconera'] }, uds: { type: 'number' }, ancho: NUM, alto: NUM }, required: ['tipo', 'uds', 'ancho', 'alto'], additionalProperties: false } },
       cub_tipo: { type: 'string', enum: ['', 'plana', 'inclinada'] },
       remonte: NUM, pendiente: NUM,
@@ -33,7 +34,7 @@
       cuadro: SN, puntos_luz: NUM, tomas: NUM, segun_norma: SN, horno: SN,
       equipos: { type: 'array', items: { type: 'string' } }
     },
-    required: ['ref', 'ambito', 'nombre', 'borrar', 'largo', 'ancho', 'superficie', 'perimetro', 'tramos', 'altura', 'huecos_modo', 'huecos', 'cub_tipo', 'remonte', 'pendiente', 'faldones', 'prof_min', 'prof_max', 'fon_tipo', 'agua_fria', 'agua_fria_caliente', 'inodoro', 'ducha', 'mampara', 'bide', 'lavadora', 'lavavajillas', 'cuadro', 'puntos_luz', 'tomas', 'segun_norma', 'horno', 'equipos'],
+    required: ['ref', 'ambito', 'nombre', 'borrar', 'largo', 'ancho', 'superficie', 'perimetro', 'tramos', 'altura', 'huecos_modo', 'descontar', 'huecos', 'cub_tipo', 'remonte', 'pendiente', 'faldones', 'prof_min', 'prof_max', 'fon_tipo', 'agua_fria', 'agua_fria_caliente', 'inodoro', 'ducha', 'mampara', 'bide', 'lavadora', 'lavavajillas', 'cuadro', 'puntos_luz', 'tomas', 'segun_norma', 'horno', 'equipos'],
     additionalProperties: false
   };
   const TRABAJO = {
@@ -81,7 +82,8 @@
       '- Planta (interior, cubierta plana, piscina): si es rectangular, "largo" y "ancho" («4 por 3», «las paredes miden 2,50 y 1,93»). Si la describe pared a pared, "tramos" en orden con el giro que hace DESPUÉS de cada pared y el ángulo (90 si no lo dice). "superficie" / "perimetro" SOLO si el usuario dice esos números tal cual. NUNCA calcules áreas ni perímetros tú: la app los calcula.',
       '- Un tercer número tras el largo y el ancho de una estancia («250 por 250 por 2,60») suele ser la altura; pero si luego dice que se ha equivocado, rehaz largo, ancho y altura con lo último que diga.',
       '- "altura": altura libre de una estancia; en fachadas, la altura de la fachada; "largo" es el ancho de la fachada.',
-      '- "huecos": puertas, ventanas y balconeras con "uds", "ancho" y "alto" en metros (si no dice el alto de una puerta, null). En fachadas, las ventanas que se descuentan. "huecos_modo": "anadir" para sumarlos a los anotados, "reemplazar" si corrige los anteriores ("no, son dos puertas, no una").',
+      '- "huecos": puertas, ventanas y balconeras con "uds", "ancho" y "alto" en metros (si no dice el alto de una puerta, null). En fachadas, las ventanas que se descuentan. "huecos_modo": "anadir" para sumarlos a los anotados, "reemplazar" si corrige los anteriores ("no, son dos puertas, no una") o si repite las que ya están anotadas, o dice que sobran o que solo hay una de cada (manda entonces la lista correcta completa).',
+      '- "descontar": "no" si dice que los huecos NO se descuentan de las paredes («no los descuentes», «sin descontar», «no quiero descontarlas»); "si" si pide que se descuenten; vacío si no dice nada.',
       '- Cubierta: "cub_tipo" plana o inclinada; "remonte" de la impermeabilización (m); inclinada: "faldones" (ancho × largo en planta) y "pendiente" en %.',
       '- Piscina: "prof_min" y "prof_max" (si solo hay una profundidad, la misma en las dos).',
       '- Fontanería: "fon_tipo", "agua_fria" (puntos solo de fría), "agua_fria_caliente" (puntos de fría y caliente), "inodoro", "ducha" (plato o bañera), "mampara", "bide", "lavadora", "lavavajillas" ("si"/"no"/"").',
@@ -127,7 +129,7 @@
       '',
       'FORMATO DE LA RESPUESTA: SOLO un objeto JSON, sin texto antes ni después y sin ```. Pon ÚNICAMENTE los campos que tengan valor (omite los vacíos, null, "" y []). Ejemplo:',
       '{"zonas":[{"ambito":"interior","nombre":"Dormitorio","largo":3,"ancho":3,"huecos_modo":"anadir","huecos":[{"tipo":"ventana","uds":1,"ancho":1.2,"alto":1.2},{"tipo":"puerta","uds":1,"ancho":0.8,"alto":2}]}],"trabajos":[{"id":"dem_gres","zonas":["Dormitorio"]},{"buscar":"Recrecido de mortero para nivelación de suelo","unidad":"m2","ambito":"interior","zonas":["Dormitorio"]}],"pregunta":"¿Qué altura tiene el dormitorio?"}',
-      'Campos posibles: zonas[] (ref, ambito, nombre, borrar, largo, ancho, superficie, perimetro, tramos[{largo,giro,angulo}], altura, huecos_modo, huecos[{tipo,uds,ancho,alto}], cub_tipo, remonte, pendiente, faldones[{nombre,largo,ancho}], prof_min, prof_max, fon_tipo, agua_fria, agua_fria_caliente, inodoro, ducha, mampara, bide, lavadora, lavavajillas, cuadro, puntos_luz, tomas, segun_norma, horno, equipos[]); trabajos[] (id, codigo, buscar, unidad, ambito, zonas[], quitar, medidas[{zona,comentario,uds,largo,ancho,alto}]); contenedores; seguridad_pct; accion; mensaje; pregunta; opciones[].',
+      'Campos posibles: zonas[] (ref, ambito, nombre, borrar, largo, ancho, superficie, perimetro, tramos[{largo,giro,angulo}], altura, huecos_modo, descontar, huecos[{tipo,uds,ancho,alto}], cub_tipo, remonte, pendiente, faldones[{nombre,largo,ancho}], prof_min, prof_max, fon_tipo, agua_fria, agua_fria_caliente, inodoro, ducha, mampara, bide, lavadora, lavavajillas, cuadro, puntos_luz, tomas, segun_norma, horno, equipos[]); trabajos[] (id, codigo, buscar, unidad, ambito, zonas[], quitar, medidas[{zona,comentario,uds,largo,ancho,alto}]); contenedores; seguridad_pct; accion; mensaje; pregunta; opciones[].',
       'Números con punto decimal (1.2), en metros. "giro": "izquierda"/"derecha"/"". "tipo" de hueco: puerta, ventana o balconera. Valores si/no: "si" o "no".',
       '',
       'CATÁLOGO DE TRABAJOS (id | ámbito | trabajo | unidad | cómo se mide):',
@@ -161,7 +163,7 @@
     if (a < 0 || b <= a) return null;
     try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
   }
-  const ZV = { equipos: [], ref: '', ambito: 'interior', nombre: '', borrar: false, largo: null, ancho: null, superficie: null, perimetro: null, tramos: [], altura: null, huecos_modo: '', huecos: [], cub_tipo: '', remonte: null, pendiente: null, faldones: [], prof_min: null, prof_max: null, fon_tipo: '', agua_fria: null, agua_fria_caliente: null, inodoro: '', ducha: '', mampara: '', bide: '', lavadora: '', lavavajillas: '', cuadro: '', puntos_luz: null, tomas: null, segun_norma: '', horno: '' };
+  const ZV = { equipos: [], ref: '', ambito: 'interior', nombre: '', borrar: false, largo: null, ancho: null, superficie: null, perimetro: null, tramos: [], altura: null, huecos_modo: '', descontar: '', huecos: [], cub_tipo: '', remonte: null, pendiente: null, faldones: [], prof_min: null, prof_max: null, fon_tipo: '', agua_fria: null, agua_fria_caliente: null, inodoro: '', ducha: '', mampara: '', bide: '', lavadora: '', lavavajillas: '', cuadro: '', puntos_luz: null, tomas: null, segun_norma: '', horno: '' };
   const TV = { id: '', codigo: '', buscar: '', unidad: '', ambito: '', zonas: [], quitar: false, medidas: [] };
   const numOk = (v) => { if (typeof v === 'string') v = parseFloat(v.replace(',', '.')); return typeof v === 'number' && isFinite(v) ? v : null; };
   const arr = (v) => (Array.isArray(v) ? v : []);
@@ -174,7 +176,7 @@
     out = Object.assign({ zonas: [], trabajos: [], contenedores: null, seguridad_pct: null, accion: '', mensaje: '', pregunta: null, opciones: [] }, out);
     out.zonas = arr(out.zonas).filter((z) => z && typeof z === 'object').map((z) => {
       const o = Object.assign({}, ZV, z);
-      ['ref', 'ambito', 'nombre', 'huecos_modo', 'cub_tipo', 'fon_tipo', 'inodoro', 'ducha', 'mampara', 'bide', 'lavadora', 'lavavajillas', 'cuadro', 'segun_norma', 'horno'].forEach((k) => { o[k] = str(o[k]); });
+      ['ref', 'ambito', 'nombre', 'huecos_modo', 'descontar', 'cub_tipo', 'fon_tipo', 'inodoro', 'ducha', 'mampara', 'bide', 'lavadora', 'lavavajillas', 'cuadro', 'segun_norma', 'horno'].forEach((k) => { o[k] = str(o[k]); });
       if (!o.ambito) o.ambito = 'interior';
       o.borrar = o.borrar === true;
       o.tramos = arr(o.tramos).map((t) => ({ largo: numOk(t && t.largo), giro: str(t && t.giro), angulo: numOk(t && t.angulo) || 90 })).filter((t) => t.largo);
