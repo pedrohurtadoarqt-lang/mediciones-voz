@@ -420,7 +420,7 @@
     };
   }
   /** ¿Se descuentan los huecos de esta zona? Lo dicho para la zona manda; si no, lo elegido para la obra (por defecto, sí). */
-  const descuenta = (z, obra) => (z.descontar === true || z.descontar === false ? z.descontar : !(obra && obra.descontarHuecos === false));
+  const descuenta = (z, obra, w) => (w && w.sinDescontar ? false : w && w.conDescontar ? true : z.descontar === true || z.descontar === false ? z.descontar : !(obra && obra.descontarHuecos === false));
   /** «No los descuentes», «sin descontar» / «descuéntalos». Devuelve { valor, resto } (valor null si no se dice nada). */
   function dichoDescontar(text) {
     const NO = /,?\s*(?:y\s+)?(?:no\s+(?:quiero\s+|hay\s+que\s+|se\s+|vamos\s+a\s+|me\s+)?(?:descont\w*|descuent\w*|rest\w*|deduc\w*)|sin\s+descontar\w*|no\s+l[oa]s\s+(?:descuentes|restes))[^,.;]*/i;
@@ -436,13 +436,13 @@
     paredes: (z, w, obra) => {
       if (!z.perimetro) return [];
       const out = [Object.assign(L('Perímetro por altura', 1, z.perimetro, null, z.altura || null), { dePlanta: 'perimetro', hPend: !z.altura })];
-      if (z.altura && descuenta(z, obra)) huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); }); // sin altura aún no se descuenta (saldría negativo)
+      if (z.altura && descuenta(z, obra, w)) huecosDe(z).forEach((x) => { if (x.an && x.al) out.push(L('Deducción ' + (x.bal ? 'balconera' : x.tipo), -Math.abs(x.uds || 1), x.an, null, x.al)); }); // sin altura aún no se descuenta (saldría negativo)
       return out;
     },
     rodapie: (z, w, obra) => {
       if (!z.perimetro) return [];
       const out = [Object.assign(L('Perímetro', 1, z.perimetro), { dePlanta: 'perimetro' })];
-      if (descuenta(z, obra)) huecosDe(z, 'puerta').forEach((x) => { if (x.an) out.push(L('Deducción ' + (x.bal ? 'balconera' : 'puerta'), -Math.abs(x.uds || 1), x.an)); });
+      if (descuenta(z, obra, w)) huecosDe(z, 'puerta').forEach((x) => { if (x.an) out.push(L('Deducción ' + (x.bal ? 'balconera' : 'puerta'), -Math.abs(x.uds || 1), x.an)); });
       return out;
     },
     perimetro: (z) => (z.perimetro ? [Object.assign(L('Perímetro', 1, z.perimetro), { dePlanta: 'perimetro' })] : []),
@@ -452,7 +452,7 @@
     fachada: (z, w, obra) => {
       if (!z.ancho || !z.alto) return [];
       const out = [L('Fachada', 1, z.ancho, null, z.alto)];
-      if (descuenta(z, obra)) (z.ventanas || []).forEach((v, i) => { if (v.an && v.al) out.push(L('Deducción ventana tipo ' + (i + 1), -Math.abs(v.uds || 1), v.an, null, v.al)); });
+      if (descuenta(z, obra, w)) (z.ventanas || []).forEach((v, i) => { if (v.an && v.al) out.push(L('Deducción ventana tipo ' + (i + 1), -Math.abs(v.uds || 1), v.an, null, v.al)); });
       return out;
     },
     fachada_bruta: (z) => (z.ancho && z.alto ? [L('Fachada', 1, z.ancho, null, z.alto)] : []),
@@ -726,7 +726,9 @@
           else if (!prev) preguntas.push({ wid: w.id, zid: z.id });
           continue;
         }
-        const lines = (REGLAS[w.regla] || (() => []))(z, w, obra);
+        // «En la partida del vinilo no descuentes los huecos»: lo dicho para el trabajo manda sobre la estancia
+        const wx = s.descontar === false ? Object.assign({}, w, { sinDescontar: true }) : s.descontar === true ? Object.assign({}, w, { conDescontar: true }) : w;
+        const lines = (REGLAS[w.regla] || (() => []))(z, wx, obra);
         if (lines.length) add(partidaPara(w, w.regla === 'fon_inst' ? CODIGO_INST(z) : null), w, z, lines);
       }
     }

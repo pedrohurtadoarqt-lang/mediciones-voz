@@ -520,12 +520,14 @@
         // ¿Se descuentan los huecos? Lo dicho en la frase manda sobre lo que entienda la IA
         let desc = zr.descontar === 'no' ? false : zr.descontar === 'si' ? true : null;
         const dl = G.dichoDescontar ? G.dichoDescontar(this.textoOrig || '').valor : null; if (dl !== null) desc = dl;
+        if (this.descTrabajo || this.paredSola) desc = null; // es de un trabajo o de una pared, no de toda la estancia
         if (desc !== null && desc !== (z.descontar === undefined ? null : z.descontar)) { z.descontar = desc; c.push(desc ? 'los huecos se descuentan' : 'sin descontar los huecos'); }
         const hs = (zr.huecos || []).map((x) => ({ tipo: x.tipo === 'ventana' ? 'ventana' : 'puerta', bal: x.tipo === 'balconera', uds: Math.max(1, Math.round(x.uds || 1)), an: metros(x.ancho, 10), al: metros(x.alto, 10) || (x.tipo === 'puerta' ? 2.03 : null) }));
         const niega = /\b(no hay|no tiene|ninguna|ninguno|sin (puertas|ventanas|huecos)|ni puertas|ni ventanas)\b/.test(this.textoN || '');
         // Si repite los mismos huecos que ya están anotados (sin decir «otra» o «además»), no se duplican
         const igual = (a, b) => a.tipo === b.tipo && !!a.bal === !!b.bal && near(a.an || 0, b.an || 0) && near(a.al || 0, b.al || 0);
         if (zr.huecos_modo !== 'reemplazar' && hs.length && (z.huecos || []).length && hs.every((x) => (z.huecos || []).some((y) => igual(x, y))) && !/\b(otra|otro|otras|otros|ademas|tambien|mas)\b/.test(this.textoN || '')) zr.huecos_modo = 'reemplazar';
+        if (!hs.length && (this.paredSola || this.descTrabajo || dl !== null)) zr.huecos_modo = ''; // «esa pared no tiene puertas ni ventanas» no quita los huecos de la estancia
         if (hs.length || (zr.huecos_modo === 'reemplazar' && niega)) {
           z.huecos = zr.huecos_modo === 'reemplazar' ? hs : (z.huecos || []).concat(hs);
           z.huecosOk = true;
@@ -618,12 +620,16 @@
       if (w) return w;
       if (tr.codigo) { const wc = G.TRABAJOS.find((t) => t.c === tr.codigo && (!tr.ambito || t.ambito === tr.ambito)); if (wc) return wc; }
       if (/(residu|escombr|contenedor)/.test(norm(tr.buscar || '') + ' ' + norm(tr.id || ''))) return G.TRABAJOS.find((t) => t.id === 'gen_residuos');
+      // Lo que se pide poner nuevo no puede acabar en una demolición («rodapié de madera» ≠ «levantado de rodapié de madera»)
+      const DEM = /^(demolicion|levantado|desmontaje|desmontado|arranque|picado|eliminacion|retirada|derribo)\b/;
+      const pideDem = DEM.test(norm(tr.buscar || '')) || /\b(demol|levant|desmont|arranc|picad|elimin|retir|derrib)\w*/.test(norm(tr.buscar || ''));
       if (tr.buscar) {
         const pal = (t) => norm(t.replace(/\(.*?\)/g, '')).split(' ').filter((x) => x.length > 3);
         const b = pal(tr.buscar);
         let mejor = null, nota = 0;
         G.TRABAJOS.filter((t) => t.ambito !== 'obra' && (!tr.ambito || t.ambito === tr.ambito) && (!tr.unidad || t.u === tr.unidad)).forEach((t) => {
           const l = pal(t.label); if (!l.length || !b.length) return;
+          if (!pideDem && DEM.test(norm(t.label))) return;
           const comun = l.filter((x) => b.some((y) => y.slice(0, 5) === x.slice(0, 5))).length;
           const n = comun / Math.max(l.length, b.length);
           if (n > nota) { nota = n; mejor = t; }
@@ -633,7 +639,7 @@
       let d = tr.codigo && cat ? cat.byCode.get(tr.codigo) : null;
       if (!d && tr.buscar && cat && cat.index) {
         const ajeno = amb === 'interior' ? /CUBIERT|FACHAD|PISCIN|URBANIZ|JARDIN|CIMENTAC|ESTRUCTUR/i : amb === 'fachada' ? /CUBIERT|PISCIN|SOLADO|URBANIZ/i : amb === 'cubierta' ? /PISCIN|FACHAD|URBANIZ/i : /^$/;
-        const res = cat.index.search(tr.buscar).filter((r) => (!tr.unidad || r.doc.u === tr.unidad) && !ajeno.test(r.doc.chapTitle || ''));
+        const res = cat.index.search(tr.buscar).filter((r) => (!tr.unidad || r.doc.u === tr.unidad) && !ajeno.test(r.doc.chapTitle || '') && (pideDem || !DEM.test(norm(r.doc.r || ''))));
         if (res.length && res[0].s >= 0.6) d = res[0].doc;
       }
       const nuevo = (fn) => { const antes = new Set(Object.keys(this.g.sel || {})); const w2 = fn(); if (w2 && !antes.has(w2.id)) this.g.sel[w2.id] = { on: false, zonas: [] }; return w2; };
@@ -694,13 +700,21 @@
       }
       // Medidas propias del trabajo (no salen de la zona): se guardan como respuesta
       const meds = (tr.medidas || []).filter((m) => ok(m.uds) || ok(m.largo) || ok(m.ancho) || ok(m.alto));
-      if (meds.length && w.regla !== 'preguntar') {
+      // Solo en una parte («en una de las paredes»): no se mide con toda la estancia; se piden sus medidas
+      const parcial = !meds.length && PARED_SOLA.test(this.textoN || '') && w.regla !== 'preguntar' && /^(paredes|suelo|techo|rodapie|perimetro)$/.test(w.regla || '');
+      const base = w;
+      if ((meds.length || parcial) && w.regla !== 'preguntar') {
         const id = w.id + '_med';
         g.extra = g.extra || [];
         let wm = g.extra.find((x) => x.id === id);
         if (!wm) { wm = Object.assign({}, w, { id, regla: 'preguntar', capitulo: w.capitulo || 'Otras partidas', q: w.q || w.label }); delete wm.auto; g.extra.push(wm); }
+        const corto = w.label.toLowerCase().replace(/\s*\(.*?\)\s*$/, '').replace(/^(revestimiento( ligero)?|suministro y colocaci[oó]n|aplicaci[oó]n|colocaci[oó]n)\s+(con|de)\s+/, '');
+        if (!wm.pide) wm.pide = w.u === 'm' ? '¿Cuántos metros de ' + corto + ' van en {zona}?' : '¿Cuánto mide la pared donde va ' + corto + ' en {zona}? Dime el largo y el alto.';
         w = wm;
       }
+      // La parte medida sustituye a la medición de toda la estancia
+      const apagarBase = (zids) => { const sb = sel[base.id]; if (base === w || !sb || !sb.on) return; sb.zonas = sb.zonas.filter((id) => !zids.includes(id)); sb.todas = false; if (!sb.zonas.length) sb.on = false; };
+      if (parcial) apagarBase(delAmbito(zonas.length ? zonas : zs.filter((z) => z.id === g.cZona)).map((z) => z.id));
       let ids = delAmbito(zonas).map((z) => z.id);
       if (meds.length) {
         g.resp = g.resp || {};
@@ -719,14 +733,17 @@
           porZona.set(z.id, (porZona.get(z.id) || []).concat([L]));
         });
         porZona.forEach((ls, zid) => { g.resp[w.id + '|' + zid] = ls; if (!ids.includes(zid)) ids.push(zid); });
+        apagarBase([...porZona.keys()]);
+        var medsTxt = 'En ' + w.label.replace(/\s*\(.*?\)\s*$/, '').toLowerCase() + ': ' + [...porZona.values()].flat().map((L) => (L.com ? L.com.toLowerCase() + ' ' : '') + [L.l, L.a, L.h].filter((v) => v != null).map((v) => fmt(v)).join(' por ')).join(', ') + '.';
       }
       const s = sel[w.id] || (g.sel[w.id] = { on: true, zonas: [] });
       if (!s.on) { s.zonas = []; s.todas = false; } // recién marcado: no hereda las zonas por defecto
       s.on = true;
+      if (parcial && !ids.length && g.cZona) ids.push(g.cZona);
       if (!ids.length && !meds.length) { s.todas = true; s.zonas = G.zonasDe(this.obra, w).map((z) => z.id); }
       else s.zonas = [...new Set((s.todas ? [] : s.zonas).concat(ids))].filter((id) => zs.some((z) => z.id === id)), s.todas = false;
       if (w.zonas) s.zonas = s.zonas.filter((id) => { const z = zs.find((x) => x.id === id); return !s.todas || w.zonas.test(norm(z.nombre)); });
-      return { w, zonas: s.zonas.map((id) => zs.find((z) => z.id === id)).filter(Boolean) };
+      return { w, medsTxt: typeof medsTxt === 'string' ? medsTxt : '', zonas: s.zonas.map((id) => zs.find((z) => z.id === id)).filter(Boolean) };
     }
     /** Los trabajos marcados «en todas» se extienden a las zonas nuevas. */
     extender() {
@@ -813,16 +830,30 @@
       const frases = [];
       this.sketch = null;
       const hechas = [];
+      // ¿Lo de descontar es de un trabajo concreto («en la partida del vinilo no descuentes»)? ¿Habla de una sola pared?
+      this.paredSola = PARED_SOLA.test(this.textoN);
+      this.descTrabajo = null;
+      const dd = G.dichoDescontar ? G.dichoDescontar(this.textoOrig || '').valor : null;
+      if (dd !== null) {
+        const GEN = /^(paredes|techos|suelos|interior|plastica|revestimiento|demolicion|colocacion|suministro|metros|ligero|partida)$/;
+        const todos = G.trabajosPara(this.obra), sel0 = G.seleccion(this.obra);
+        const dianas = todos.filter((w) => sel0[w.id] && sel0[w.id].on && norm(w.label).split(' ').filter((x) => x.length >= 5 && !GEN.test(x)).some((x) => this.textoN.includes(x.slice(0, 5))));
+        if (dianas.length || (/\b(partida|trabajo|tarea)\b/.test(this.textoN) && (out.trabajos || []).length)) this.descTrabajo = { valor: dd, dianas };
+      }
       (out.zonas || []).slice(0, 12).forEach((zr) => { try { const r = this.aplicarZona(zr); if (r.txt) hechas.push(r); } catch (e) { /* zona mal formada: se ignora */ } });
       // «Anoto baño.» sobra si en la misma respuesta se dicen datos del baño
       hechas.forEach((r) => { if (/^Anoto /.test(r.txt) && hechas.some((o) => o !== r && norm(o.z.nombre) === norm(r.z.nombre) && !/^Anoto /.test(o.txt))) return; frases.push(r.txt); });
-      const puestos = [], quitados = [], fon = new Set();
+      const puestos = [], quitados = [], fon = new Set(), aplicados = [];
       const pideQuitar = this.textoLargo || /\b(quita|quitar|quitalo|quitala|elimina|eliminar|borra|borrar|no se hace|no hace falta|no hay que|sin|descarta|fuera|cambia|cambiar|en lugar|en vez|mejor|sustituye|no es|no son|no lleva|tampoco)\b/.test(this.textoN);
       (out.trabajos || []).slice(0, 20).forEach((tr) => {
         try {
           if (tr.quitar && !pideQuitar) return; // la IA no puede quitar lo que el usuario no ha pedido quitar
+          // Corregir una partida anotada («quita el vinilo de las cuatro paredes») no es demoler nada en la obra
+          if (!tr.quitar && /^dem_/.test(tr.id || '') && CORRIGE.test(this.textoN) && !DEMOLER.test(this.textoN)) return;
           const rf = this.trabajoFontaneria(tr); if (rf) { if (rf.txt) fon.add(rf.txt); return; }
           const r = this.aplicarTrabajo(tr); if (!r) return;
+          if (!r.quitado) aplicados.push(r.w);
+          if (r.medsTxt && antes.has(r.w.id)) frases.push(r.medsTxt);
           if (r.quitado || !antes.has(r.w.id)) (r.quitado ? quitados : puestos).push(r.w.label.replace(/\s*\(.*?\)\s*$/, '').toLowerCase());
           if (!r.quitado) (r.zonas || []).forEach((z) => { z.trabajosOk = true; });
         } catch (e) { /* trabajo mal formado */ }
@@ -859,6 +890,12 @@
       this.demMaterial(sel2, nuevos, puestos, quitados);
       if (this._demOk && !puestos.length && !quitados.length) frases.push('Queda ' + this._demOk + '.');
       g.cRecientes = (g.cRecientes || []).concat([nuevos]).slice(-4);
+      if (this.descTrabajo) {
+        const ws = this.descTrabajo.dianas.length ? this.descTrabajo.dianas : aplicados, s3 = G.seleccion(this.obra), v = this.descTrabajo.valor;
+        ws.forEach((w) => [w.id.replace(/_med$/, ''), w.id.replace(/_med$/, '') + '_med'].forEach((id) => { if (s3[id]) s3[id].descontar = v; }));
+        const nombres = [...new Set(ws.map((w) => w.label.replace(/\s*\(.*?\)\s*$/, '').toLowerCase()))];
+        if (nombres.length) frases.push((v ? 'Descuento los huecos en ' : 'Sin descontar huecos en ') + lista(nombres) + '.');
+      }
       let voz = null;
       if (puestos.length) { frases.push('Apunto ' + lista(puestos) + '.'); if (puestos.length > 2) voz = 'Apunto ' + puestos.length + ' trabajos.'; }
       if (quitados.length) { frases.push('Quito ' + lista(quitados) + '.'); if (voz) voz += ' Quito ' + lista(quitados) + '.'; }
@@ -909,6 +946,11 @@
     }
   }
   const near = (a, b) => Math.abs(a - b) < 0.011;
+  /** El trabajo va solo en una parte de la estancia («en una de las paredes», «la pared norte», «un paño»). */
+  const PARED_SOLA = /\b(una|esa|sola|unica|otra) (sola )?pared\b|\buna de las paredes\b|\bla pared (norte|sur|este|oeste|del fondo|de enfrente|principal|izquierda|derecha|de la (ventana|puerta|tele|television|cama|entrada))\b|\b(un|ese|el) pano\b|\bsolo (en )?(una|la) pared\b/;
+  /** La frase corrige algo ya anotado (no es un trabajo nuevo de obra). */
+  const CORRIGE = /\b(has puesto|has anotado|esta puesto|esta anotad\w*|estan puest\w*|en las mediciones|en la medicion|duplicad\w*|solo hay que dejar|dejar solo|deja solo|dejar uno|solo (se )?aplica|te (la|lo) has inventado|no es asi|me refiero|de las cuatro paredes)\b/;
+  const DEMOLER = /\b(demol\w*|derrib\w*|picar|pica|picado|arrancar|arranca|levantar|levanta|desmontar|desmonta)\b/;
   function art(nom) { const n = norm(nom), w0 = n.split(' ')[0]; return ((/(a|ion|ad)$/.test(w0) && !/^(dia|sofa|clima|sistema|tema|programa)$/.test(w0)) || /^(cocina|terraza|galeria|entrada|habitacion|escalera|cubierta|fachada|piscina|zona|planta|sala|despensa|bodega|nave|oficina)/.test(n) ? 'la ' : 'el ') + nom.toLowerCase(); }
   /** Pregunta natural para un dato que falta. */
   function preguntaDe(f) {
