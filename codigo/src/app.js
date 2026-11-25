@@ -204,23 +204,54 @@
         } catch (e) { resolve(false); }
       });
     }
-    /** Trozos para empezar a hablar antes: la primera frase y el resto. */
+    /** Trozos por oraciones: las fijas («¿Qué altura tiene el salón?») salen de la caché aunque la anterior sea nueva.
+     *  Los trozos muy cortos («Vale.») se juntan con el siguiente. */
     function trozos(t) {
-      const fr = (t.match(/[^.!?]+[.!?]*/g) || [t]).map((x) => x.trim()).filter(Boolean);
-      if (fr.length <= 1) return [t];
-      let a = fr.shift(); while (fr.length && a.length < 30) a += ' ' + fr.shift();
-      return fr.length ? [a, fr.join(' ')] : [a];
+      const fr = (t.match(/[^.!?]+(?:[.!?]+|$)/g) || [t]).map((x) => x.trim()).filter(Boolean);
+      const out = [];
+      fr.forEach((x) => { if (out.length && out[out.length - 1].length < 12) out[out.length - 1] += ' ' + x; else out.push(x); });
+      return out.length ? out : [t];
+    }
+    /* Caché de voz en el móvil (IndexedDB): las frases ya oídas suenan al instante y sin conexión. */
+    let vozClave = '';
+    const VOZ_MAX = 250;
+    const hashT = (t) => { let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };
+    const idVoz = (t) => 'voz:' + vozClave + ':' + hashT(t.replace(/\s+/g, ' ').trim());
+    function vozIndice(id, quitar) {
+      let ix = []; try { ix = JSON.parse(localStorage.getItem('vozIdx') || '[]'); } catch (e) {}
+      ix = ix.filter((x) => x !== id); if (!quitar) ix.push(id);
+      const fuera = ix.length > VOZ_MAX ? ix.splice(0, ix.length - VOZ_MAX) : [];
+      try { localStorage.setItem('vozIdx', JSON.stringify(ix)); } catch (e) {}
+      fuera.forEach((x) => { try { StorageAdapter.del('audios', x); } catch (e) {} });
+    }
+    async function vozGuardada(t) {
+      try { const r = await StorageAdapter.get('audios', idVoz(t)); if (r && r.audio) { vozIndice(r.id); return r; } } catch (e) {}
+      return null;
     }
     function pedirVoz(t, ms) {
       if (cacheVoz.has(t)) return Promise.resolve(cacheVoz.get(t));
-      return Promise.race([Promise.resolve().then(() => cloudTTS(t)).then((r) => { if (r && r.audio) { cacheVoz.set(t, r); if (cacheVoz.size > 40) cacheVoz.delete(cacheVoz.keys().next().value); } return r; }).catch(() => null), new Promise((res) => setTimeout(() => res(null), ms))]);
+      const red = () => Promise.resolve().then(() => cloudTTS(t)).then((r) => {
+        if (r && r.audio) {
+          cacheVoz.set(t, r); if (cacheVoz.size > 40) cacheVoz.delete(cacheVoz.keys().next().value);
+          const id = idVoz(t); StorageAdapter.put('audios', { id, audio: r.audio, rate: r.rate, mime: r.mime }).then(() => vozIndice(id)).catch(() => {});
+        }
+        return r;
+      }).catch(() => null);
+      return Promise.race([vozGuardada(t).then((g) => { if (g) { cacheVoz.set(t, g); return g; } return red(); }), new Promise((res) => setTimeout(() => res(null), ms))]);
+    }
+    /** Deja una frase lista (en el servidor y en el móvil) sin decirla. */
+    async function preparar(text) {
+      if (!cloudTTS || !text) return 0;
+      const partes = trozos(text.replace(/(\d+),00\b/g, '$1').replace(/«|»/g, ''));
+      let n = 0; for (const t of partes) { if (await pedirVoz(t, 30000)) n++; }
+      return n;
     }
     async function speakCloud(text) {
       const my = ++speakId;
       if (mode === 'native' && listening) { try { rec && rec.abort(); } catch (e) {} listening = false; }
       speaking = true; lastSaid = text; state();
       const partes = trozos(text);
-      const proms = partes.map((t, i) => pedirVoz(t, i ? 12000 : 7000)); // se piden a la vez
+      const proms = partes.map((t, i) => pedirVoz(t, i ? 12000 + i * 2000 : 7000)); // se piden a la vez
       for (let i = 0; i < partes.length; i++) {
         const r = await proms[i];
         if (my !== speakId) return true; // interrumpido
@@ -354,7 +385,7 @@
       get mode() { return mode; }, get listening() { return listening; }, get speaking() { return speaking; },
       get needTap() { return needTap; }, set needTap(v) { needTap = v; state(); },
       get micState() { return micState; }, get inFrame() { return inFrame; },
-      setRate(r) { rate = r; }, setVoice(uri) { pickVoice(uri); }, setCloudTTS(fn) { cloudTTS = fn; cacheVoz.clear(); },
+      setRate(r) { rate = r; }, setVoice(uri) { pickVoice(uri); }, setCloudTTS(fn, clave) { cloudTTS = fn; vozClave = clave || ''; cacheVoz.clear(); }, preparar,
       voices() { return synth ? synth.getVoices().filter((v) => /^es/i.test(v.lang)) : []; },
       get voiceName() { return voice ? voice.name : ''; },
       get voiceURI() { return voice && voice.voiceURI; },
@@ -434,7 +465,7 @@
   /** Voz natural (nube) si hay cuenta y está activada en Ajustes. */
   function configurarVoz() {
     const on = S.settings.vozNatural !== false && window.Cloud && Cloud.user && Cloud.voz;
-    VoiceAdapter.setCloudTTS(on ? (t) => Cloud.voz(t, S.settings.vozNombre || 'Kore') : null);
+    VoiceAdapter.setCloudTTS(on ? (t) => Cloud.voz(t, S.settings.vozNombre || 'Kore') : null, S.settings.vozNombre || 'Kore');
   }
   const vozVista = () => S.view === 'obra' || S.view === 'trabajos';
   async function say(text, chips, opts) {
@@ -2010,9 +2041,14 @@
       '<div class="kpi"><b>' + d.usuarios.reduce((a, u) => a + Number(u.obras_pagadas || 0), 0) + '</b><span>obras pagadas</span></div>' +
       '<div class="kpi"><b>' + nuevas + '</b><span>sugerencias nuevas</span></div>' +
       '<div class="kpi"><b>' + d.ia.length + '</b><span>consultas IA (30 días)</span></div></div>';
-    h += '<div class="chips">' + [['usuarios', 'Usuarios'], ['sugerencias', 'Sugerencias' + (nuevas ? ' (' + nuevas + ')' : '')], ['coste', 'Coste IA'], ['ia', 'Uso de la IA']].map(([k, l]) => '<button class="chip' + (tab === k ? ' primary' : '') + '" data-a="admtab" data-tab="' + k + '">' + l + '</button>').join('') + '<button class="chip ghost" data-a="admin">Actualizar</button></div>';
+    h += '<div class="chips">' + [['usuarios', 'Usuarios'], ['sugerencias', 'Sugerencias' + (nuevas ? ' (' + nuevas + ')' : '')], ['coste', 'Coste IA'], ['ia', 'Uso de la IA'], ['voz', 'Voz']].map(([k, l]) => '<button class="chip' + (tab === k ? ' primary' : '') + '" data-a="admtab" data-tab="' + k + '">' + l + '</button>').join('') + '<button class="chip ghost" data-a="admin">Actualizar</button></div>';
     const fd = (x) => x ? new Date(x).toLocaleDateString('es-ES') : '—';
-    if (tab === 'usuarios') {
+    if (tab === 'voz') {
+      const fr = window.FRASES_VOZ || [], vz = (d.ia || []).filter((x) => x.intent === 'voz'), hit = vz.filter((x) => x.modelo === 'cache').length;
+      h += '<div class="card"><h3>Frases de voz guardadas</h3><p class="hint">Cada frase se genera una sola vez con la voz principal y se guarda en el servidor para todos los usuarios; después suena al instante y no cuesta. La app tiene ' + fr.length + ' frases fijas: prepáralas de una vez para que ningún usuario tenga que esperarlas (coste aproximado: unos céntimos).</p>' +
+        (vz.length ? '<p class="hint">Últimos 30 días: ' + vz.length + ' frases dichas, ' + hit + ' desde la caché (' + Math.round(hit / vz.length * 100) + ' %).</p>' : '') +
+        (Prog.voz ? progHTML('voz') : '<button class="btn primary" data-a="vozprep">Preparar las ' + fr.length + ' frases fijas</button>') + '<p class="hint" id="vozmsg"></p></div>';
+    } else if (tab === 'usuarios') {
       h += '<div class="tablewrap"><table class="lines admin"><thead><tr><th>Usuario</th><th>Empresa · NIF</th><th>Teléfono</th><th>Plan</th><th>Obras</th><th>IA</th><th>Alta</th><th>Actividad</th></tr></thead><tbody>' +
         d.usuarios.map((u) => '<tr><td class="com">' + esc(u.nombre || '—') + '<span class="e">' + esc(u.email) + '</span></td><td class="com">' + esc(u.empresa || '—') + '<span class="e">' + esc(u.nif || '') + '</span></td><td>' + (u.telefono_verificado ? esc(u.telefono) : '—') + '</td><td>' + esc(u.plan) + '</td><td>' + u.obras + (u.obras_pagadas ? ' (' + u.obras_pagadas + ' pag.)' : '') + '</td><td>' + u.consultas_ia + '</td><td>' + fd(u.creado) + '</td><td>' + fd(u.ultima_actividad) + '</td></tr>').join('') + '</tbody></table></div>';
       if (!d.usuarios.length) h += '<p class="hint">Todavía no hay usuarios registrados.</p>';
@@ -2132,6 +2168,18 @@
       case 'login': closeSheet(); accountSheet('login'); break;
       case 'signup': closeSheet(); accountSheet('signup'); break;
       case 'account': closeSheet(); accountSheet(Cloud.user ? 'perfil' : 'login'); break;
+      case 'vozprep': {
+        const fr = window.FRASES_VOZ || []; if (!fr.length) break;
+        if (!(VoiceAdapter.preparar && S.settings.vozNatural !== false && window.Cloud && Cloud.user)) { toast('Activa la voz natural en Ajustes y entra con tu cuenta.'); break; }
+        progIni('voz', 'Preparando frases', fr.length * 4000); render();
+        let ok = 0;
+        for (let i = 0; i < fr.length; i++) {
+          try { if (await VoiceAdapter.preparar(fr[i])) ok++; } catch (e) {}
+          progReal('voz', (i + 1) / fr.length, 'Frase ' + (i + 1) + ' de ' + fr.length);
+        }
+        progFin('voz'); render(); toast('Frases de voz preparadas: ' + ok + ' de ' + fr.length + '.');
+        break;
+      }
       case 'admin': closeSheet(); S.view = 'admin'; S.adminData = null; render(); loadAdmin(); break;
       case 'admtab': S.adminTab = el.dataset.tab; render(); break;
       case 'sgstate': { try { await Cloud.setSuggestionState(+el.dataset.id, el.dataset.st); if (S.sgNew) S.sgNew = Math.max(0, S.sgNew - 1); const s = (S.adminData.sugerencias || []).find((x) => x.id === +el.dataset.id); if (s) s.estado = el.dataset.st; render(); } catch (e) { toast(e.message); } break; }

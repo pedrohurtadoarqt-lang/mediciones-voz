@@ -4,6 +4,8 @@
 // Solo usuarios con sesión. El modelo de voz se elige solo (el más
 // reciente con «tts» en el nombre) para no depender de un nombre fijo.
 // Secretos: GEMINI_API_KEY. Opcionales: TTS_MODELO, TTS_VOZ, TTS_ESTILO.
+// Caché compartida: cada frase se genera una vez (con el modelo principal, para que la voz sea
+// siempre la misma) y se guarda en Storage («voz/<voz>/<sha256>.json»); después sale gratis y al instante.
 // ============================================================
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { cors } from '../_shared/cors.ts';
@@ -14,6 +16,7 @@ const VOCES = ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'O
 // Sin instrucciones de estilo en el texto: el modelo las leía en voz alta (en inglés)
 const ESTILO = Deno.env.get('TTS_ESTILO') || '';
 let modelos: string[] | null = null;
+let principal = '';
 let ultimoError = '';
 const sinIdioma = new Set<string>();
 
@@ -34,6 +37,7 @@ async function modelosTTS(): Promise<string[]> {
   const peso = (n: string) => (/flash/.test(n) ? 0 : 10) + (/preview/.test(n) ? 1 : 0) + (/lite/.test(n) ? 0.5 : 0);
   lista.sort((a, b) => peso(a) - peso(b) || b.localeCompare(a));
   modelos = [...new Set([fijo, ...lista, 'gemini-2.5-flash-preview-tts'].filter(Boolean) as string[])];
+  principal = modelos[0];
   return modelos;
 }
 
@@ -66,6 +70,11 @@ async function sintetiza(texto: string, voz: string) {
   return null;
 }
 
+async function sha256(t: string) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+  return Array.from(new Uint8Array(d)).map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
 Deno.serve(async (req) => {
   const h = { ...cors(req), 'Content-Type': 'application/json' };
   if (req.method === 'OPTIONS') return new Response('ok', { headers: h });
@@ -79,12 +88,30 @@ Deno.serve(async (req) => {
   if (!texto) return new Response(JSON.stringify({ error: 'Falta el texto' }), { status: 400, headers: h });
   const voz = VOCES.includes(b?.voz) ? b.voz : (Deno.env.get('TTS_VOZ') || 'Kore');
   const t0 = Date.now();
+  const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const ER = (globalThis as any).EdgeRuntime;
+  const enFondo = (p: Promise<unknown>) => { if (ER && ER.waitUntil) ER.waitUntil(p); };
+  const ruta = voz + '/' + await sha256(texto.replace(/\s+/g, ' ')) + '.json';
+  // 1) Caché compartida
+  try {
+    const { data } = await admin.storage.from('voz').download(ruta);
+    if (data) {
+      const c = JSON.parse(await data.text());
+      if (c && c.audio) {
+        enFondo((async () => { await admin.from('ia_uso').insert({ user_id: user.id, modelo: 'cache', tokens_entrada: 0, tokens_salida: 0, ms: Date.now() - t0, intent: 'voz' }); })());
+        return new Response(JSON.stringify({ audio: c.audio, rate: c.rate, mime: c.mime, modelo: c.modelo, ms: Date.now() - t0, cache: true }), { headers: h });
+      }
+    }
+  } catch (_) { /* sin caché: se genera */ }
+  // 2) Se genera
   const r = await sintetiza(texto, voz);
   if (!r) return new Response(JSON.stringify({ error: 'La voz natural no está disponible', detalle: ultimoError }), { status: 502, headers: h });
   const ms = Date.now() - t0;
-  const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const registro = (async () => { await admin.from('ia_uso').insert({ user_id: user.id, modelo: r.modelo, tokens_entrada: r.tin, tokens_salida: r.tout, ms, intent: 'voz' }); })();
-  const ER = (globalThis as any).EdgeRuntime;
+  const registro = (async () => {
+    await admin.from('ia_uso').insert({ user_id: user.id, modelo: r.modelo, tokens_entrada: r.tin, tokens_salida: r.tout, ms, intent: 'voz' });
+    // Solo se guarda lo del modelo principal: así todas las frases guardadas suenan con la misma voz
+    if (r.modelo === principal) await admin.storage.from('voz').upload(ruta, JSON.stringify({ audio: r.audio, rate: r.rate, mime: r.mime, modelo: r.modelo, texto }), { contentType: 'application/json', upsert: true });
+  })();
   if (ER && ER.waitUntil) ER.waitUntil(registro); else await registro;
   return new Response(JSON.stringify({ audio: r.audio, rate: r.rate, mime: r.mime, modelo: r.modelo, ms }), { headers: h });
 });
